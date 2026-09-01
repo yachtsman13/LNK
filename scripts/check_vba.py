@@ -157,8 +157,10 @@ def main():
             name, "" if not stack else " (не закрыт %s со строки %d)" % (stack[-1][0], stack[-1][1])))
 
     # ── квалифицированные вызовы modX.Имя ────────────────────────────
+    # Код листа «Меню» и «ЭтаКнига» лежит в .txt (его вставляют руками,
+    # импортировать нельзя), но на модули он ссылается так же.
     bad = []
-    for path in files:
+    for path in files + sorted(glob.glob(os.path.join(MAC, "*.txt"))):
         name = os.path.basename(path)[:-4]
         for ln, raw in read_lines(path):
             for mm in re.finditer(r"\b(mod\w+)\.([А-Яа-яЁё\w]+)", strip_code(raw)):
@@ -176,7 +178,7 @@ def main():
             code = strip_code(raw)
             if RE_DECL.match(code) or RE_LOCAL.match(code):
                 continue
-            for ident in re.findall(r"\b([А-ЯЁ][А-Яа-яЁё_]{3,})\b", code):
+            for ident in re.findall(r"\b([А-ЯЁ][А-Яа-яЁё_]{1,})\b", code):
                 if ident in declared or ident in known_locals or ident in builtins:
                     continue
                 if ident in ("МЕТОДЫ", "ПЕРВАЯ_СТРОКА", "СТРОКА_ЗАГОЛОВКОВ", "ИМЯ_ФАЙЛА_ДАННЫХ"):
@@ -186,6 +188,38 @@ def main():
                 unknown[ident] += 1
     check(not unknown, "нет обращений к необъявленным именам%s" %
           ("" if not unknown else ": " + ", ".join("%s (%d)" % (k, v) for k, v in unknown.most_common(8))))
+
+    # Кириллица и латиница неразличимы на вид: «pусто» с латинской p и
+    # «пусто» — разные имена, а Option Explicit сообщит об этом только при
+    # запуске. Смешанное имя само по себе не ошибка (cФИО — обычный
+    # префикс), ошибка — когда два РАЗНЫХ имени выглядят одинаково.
+    CONFUSABLE = str.maketrans("аеорсухАЕОРСТХВКМН", "aeopcyxAEOPCTXBKMH")
+    skeleton = collections.defaultdict(set)
+    where = {}
+    for path in files:
+        name = os.path.basename(path)[:-4]
+        for ln, raw in read_lines(path):
+            for ident in re.findall(r"\b(\w{2,})\b", strip_code(raw)):
+                skeleton[ident.translate(CONFUSABLE)].add(ident)
+                where.setdefault(ident, "%s:%d" % (name, ln))
+    collisions = ["/".join("%s (%s)" % (i, where[i]) for i in sorted(v))
+                  for v in skeleton.values() if len(v) > 1]
+    check(not collisions, "нет пар имён, различающихся только алфавитом%s" %
+          ("" if not collisions else ": " + "; ".join(collisions[:5])))
+
+    # ── пункты меню и их обработчик ──────────────────────────────────
+    # Пункт запускается сравнением текста строки со списком Case.
+    # Разошлись на один символ — пункт молча ничего не делает.
+    menu = os.path.join(MAC, "modMenu.bas")
+    if os.path.exists(menu):
+        src = io.open(menu, encoding="utf-8").read()
+        items = set(re.findall(r'Пункт\(ws, r, "([^"]+)"', src))
+        cases = set(re.findall(r'Case "([^"]+)":\s*mod', src))
+        check(items == cases,
+              "каждый пункт меню разбирается обработчиком (пунктов %d, ветвей %d)%s"
+              % (len(items), len(cases),
+                 "" if items == cases else
+                 "; без обработчика: %s; лишние ветви: %s" % (sorted(items - cases), sorted(cases - items))))
 
     # ── заголовки колонок существуют в книге ─────────────────────────
     if not os.path.exists(DATA):

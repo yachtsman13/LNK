@@ -68,6 +68,17 @@ Public Function Данные() As Workbook
 End Function
 
 
+' Лист без сообщения об ошибке — для пакетной обработки, где
+' всплывающее окно на каждую дельту только мешает.
+Public Function ЛистТихо(имяЛиста As String) As Worksheet
+    Dim wb As Workbook
+    Set wb = Данные()
+    If wb Is Nothing Then Exit Function
+    On Error Resume Next
+    Set ЛистТихо = wb.Worksheets(имяЛиста)
+End Function
+
+
 Public Function Лист(имяЛиста As String) As Worksheet
     Dim wb As Workbook
     Set wb = Данные()

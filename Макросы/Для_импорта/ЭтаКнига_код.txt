@@ -20,7 +20,9 @@ Private Sub Workbook_Open()
         ПроверитьКодРабочегоМеста
     End If
 
-    НапомнитьПроСрокиИМастера
+    ' Дашборд строится при каждом открытии: сроки меняются каждый день,
+    ' а вчерашняя картинка хуже, чем никакой.
+    modDashboard.ПостроитьДашборд
 End Sub
 
 
@@ -30,33 +32,3 @@ Private Sub Workbook_BeforeClose(Cancel As Boolean)
     modBackup.СделатьЛокальнуюКопию True
     If Not Данные() Is Nothing Then Данные().Close SaveChanges:=True
 End Sub
-
-
-' Короткая сводка при запуске: просроченное и кто сегодня мастер.
-Private Sub НапомнитьПроСрокиИМастера()
-    Dim текст As String
-    Dim мастер As String
-
-    текст = ПроверитьПоверкуСИ(Date)
-
-    мастер = ПрочитатьМастера()
-    If мастер <> "" Then текст = текст & IIf(текст = "", "", vbCrLf & vbCrLf) & мастер
-
-    If текст <> "" Then MsgBox текст, vbInformation, "ЛНК"
-End Sub
-
-
-Private Function ПрочитатьМастера() As String
-    Dim файл As String
-    Dim f As Integer
-    Dim s As String
-
-    файл = ПапкаОбмена() & "Свод" & Application.PathSeparator & "мастер.txt"
-    If Dir(файл) = "" Then Exit Function
-    On Error Resume Next
-    f = FreeFile
-    Open файл For Input As #f
-    If Not EOF(f) Then Line Input #f, s
-    Close #f
-    If Trim$(s) <> "" Then ПрочитатьМастера = "Мастер сегодня: " & s
-End Function

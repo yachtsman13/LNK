@@ -68,6 +68,17 @@ Public Function ƒанные() As Workbook
 End Function
 
 
+' Ћист без сообщени€ об ошибке Ч дл€ пакетной обработки, где
+' всплывающее окно на каждую дельту только мешает.
+Public Function Ћист“ихо(им€Ћиста As String) As Worksheet
+    Dim wb As Workbook
+    Set wb = ƒанные()
+    If wb Is Nothing Then Exit Function
+    On Error Resume Next
+    Set Ћист“ихо = wb.Worksheets(им€Ћиста)
+End Function
+
+
 Public Function Ћист(им€Ћиста As String) As Worksheet
     Dim wb As Workbook
     Set wb = ƒанные()

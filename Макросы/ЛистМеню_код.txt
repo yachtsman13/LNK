@@ -1,0 +1,25 @@
+' ═══════════════════════════════════════════════════════════════════════
+'  Код модуля ЛИСТА «Меню» — не отдельного модуля!
+'
+'  Куда вставлять: Alt+F11 → в дереве слева найдите VBAProject
+'  (ЛНК_Программа.xlsm) → Microsoft Excel Objects → лист «Меню»
+'  → двойной щелчок → вставить в открывшееся окно.
+' ═══════════════════════════════════════════════════════════════════════
+Option Explicit
+
+Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean)
+    If Target.Column <> 2 Then Exit Sub
+    If Left$(Trim$(CStr(Target.Value)), 1) <> "»" Then Exit Sub
+    Cancel = True
+    modMenu.ЗапуститьПунктМеню CStr(Target.Value)
+End Sub
+
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    ' Подсветка строки под курсором — чтобы было видно, что выбрано.
+    Me.Cells.Interior.ColorIndex = xlNone
+    If Target.Column = 2 Then
+        If Left$(Trim$(CStr(Target.Value)), 1) = "»" Then
+            Me.Range(Me.Cells(Target.Row, 2), Me.Cells(Target.Row, 3)).Interior.Color = RGB(226, 234, 246)
+        End If
+    End If
+End Sub

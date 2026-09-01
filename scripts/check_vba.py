@@ -56,6 +56,9 @@ RE_ENDIF = re.compile(r"^\s*End If\b", re.I)
 RE_DECL = re.compile(r"^\s*(?:Public |Private )?(?:Static )?(Sub|Function|Property\s+\w+)\s+([^\s(]+)", re.I)
 RE_LOCAL = re.compile(r"^\s*(?:Dim|Const|ReDim|Static)\s+([^\s,]+)", re.I)
 RE_LABEL = re.compile(r"^\s*([А-Яа-яЁёA-Za-z_]\w*):\s*$")
+# Set ws = Лист("Журнал") / ЛистТихо(Л_СИ) — по этому узнаём, какой лист
+# стоит за переменной, и сверяем заголовок именно с ним.
+RE_SETSHEET = re.compile(r'^\s*Set\s+(\w+)\s*=\s*Лист(?:Тихо)?\(\s*(?:"([^"]+)"|(Л_\w+))\s*\)')
 RE_PARAMS = re.compile(r"\(([^)]*)\)")
 
 
@@ -84,6 +87,10 @@ def main():
     files = sorted(glob.glob(os.path.join(MAC, "*.bas")))
     check(bool(files), "найдены модули: %d" % len(files))
 
+    # Константы имён листов из modConfig
+    cfg = io.open(os.path.join(MAC, "modConfig.bas"), encoding="utf-8").read()
+    SHEET_CONST = dict(re.findall(r'Public Const (Л_\w+) As String = "([^"]+)"', cfg))
+
     declared = {}          # имя процедуры → модуль
     known_locals = set()
     per_module = collections.defaultdict(set)
@@ -99,6 +106,8 @@ def main():
               "%s: Option Explicit на месте" % name)
 
         stack = []
+        var_sheet = {}
+        текущая_процедура = ""
         for ln, raw in lines:
             code = strip_code(raw)
             m = RE_DECL.match(code)
@@ -150,8 +159,16 @@ def main():
                 else:
                     stack.pop()
 
+            m = RE_SETSHEET.match(code)
+            if m:
+                var_sheet[m.group(1)] = m.group(2) or SHEET_CONST.get(m.group(3))
+            d2 = RE_DECL.match(code)
+            if d2:
+                var_sheet.clear()          # новая процедура — свои переменные
+                текущая_процедура = d2.group(2)
             for mm in re.finditer(r"Col(?:Req|ByHeader)\s*\(\s*(\w+)\s*,\s*\"([^\"]+)\"", raw):
-                col_uses.append((name, ln, mm.group(1), mm.group(2)))
+                col_uses.append((name, ln, mm.group(1), var_sheet.get(mm.group(1)),
+                                 mm.group(2), текущая_процедура))
 
         check(not stack, "%s: все блоки закрыты%s" % (
             name, "" if not stack else " (не закрыт %s со строки %d)" % (stack[-1][0], stack[-1][1])))
@@ -207,6 +224,44 @@ def main():
     check(not collisions, "нет пар имён, различающихся только алфавитом%s" %
           ("" if not collisions else ": " + "; ".join(collisions[:5])))
 
+    # ── лист, переданный параметром, узнаём с места вызова ───────────
+    params = {}            # процедура → список имён параметров
+    for path in files:
+        for ln, raw in read_lines(path):
+            code = strip_code(raw)
+            m = RE_DECL.match(code)
+            if m:
+                pp = RE_PARAMS.search(code)
+                names = []
+                if pp:
+                    for arg in pp.group(1).split(","):
+                        a = re.sub(r"^\s*(?:ByVal|ByRef|Optional)\s+", "", arg.strip(), flags=re.I)
+                        names.append(re.split(r"\s+As\s+|\s*=", a)[0].strip())
+                params[m.group(2)] = names
+
+    param_sheet = {}       # (процедура, имя параметра) → лист
+    for path in files:
+        var_sheet, proc = {}, ""
+        for ln, raw in read_lines(path):
+            code = strip_code(raw)
+            m = RE_SETSHEET.match(code)
+            if m:
+                var_sheet[m.group(1)] = m.group(2) or SHEET_CONST.get(m.group(3))
+            d = RE_DECL.match(code)
+            if d:
+                var_sheet, proc = {}, d.group(2)
+                continue
+            for callee, names in params.items():
+                if not names:
+                    continue
+                mm = re.search(r"(?:^|[=\s])" + re.escape(callee) + r"[ (]([^)\n]*)", code)
+                if not mm:
+                    continue
+                for i, arg in enumerate(mm.group(1).split(",")):
+                    a = arg.strip()
+                    if i < len(names) and a in var_sheet and var_sheet[a]:
+                        param_sheet[(callee, names[i])] = var_sheet[a]
+
     # ── пункты меню и их обработчик ──────────────────────────────────
     # Пункт запускается сравнением текста строки со списком Case.
     # Разошлись на один символ — пункт молча ничего не делает.
@@ -235,24 +290,24 @@ def main():
         heads = {}
         for ws in wb.worksheets:
             heads[ws.title] = {norm(c.value) for c in next(ws.iter_rows(min_row=HDR_ROW, max_row=HDR_ROW))}
-        # какой лист стоит за переменной в коде — по имени переменной
-        var2sheet = {"ws": None, "att": "Аттестации", "src": "Журнал"}
         all_heads = set()
         for s in heads.values():
             all_heads |= s
         methods = "ВИК УЗД УЗТ АЭ ТВ ТК ВД МК".split()
-        missing = []
-        for mod, ln, var, title in col_uses:
-            cands = [title]
-            if "метод &" in title or "методы(" in title:
-                continue
-            for h in [title]:
-                if norm(h) in all_heads:
-                    break
-            else:
-                missing.append("%s:%d «%s»" % (mod, ln, title))
-        check(not missing, "все заголовки колонок из ColReq есть в книге%s" %
-              ("" if not missing else ": " + "; ".join(missing)))
+        missing, loose = [], []
+        for mod, ln, var, sheet, title, proc in col_uses:
+            if not sheet:
+                sheet = param_sheet.get((proc, var))
+            if sheet and sheet in heads:
+                if norm(title) not in heads[sheet]:
+                    missing.append("%s:%d %s → «%s» нет на листе «%s»" % (mod, ln, var, title, sheet))
+            elif norm(title) not in all_heads:
+                missing.append("%s:%d «%s» нет ни на одном листе" % (mod, ln, title))
+            elif not sheet:
+                loose.append("%s:%d %s" % (mod, ln, var))
+        check(not missing, "заголовки колонок сверены с конкретным листом%s" %
+              ("" if not missing else ": " + "; ".join(missing[:6])))
+        check(True, "обращений с неизвестным листом (сверены со всеми листами): %d" % len(loose))
         # динамические заголовки вида «<метод> №» / «<метод> исполнитель»
         dyn_missing = [
             "%s %s" % (m, suf) for m in methods for suf in ("№", "исполнитель")

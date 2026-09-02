@@ -227,6 +227,52 @@ def main():
     check(not collisions, "нет пар имён, различающихся только алфавитом%s" %
           ("" if not collisions else ": " + "; ".join(collisions[:5])))
 
+    # ── циклы в вызовах ──────────────────────────────────────────────
+    # «Out of stack space» — это цикл в графе вызовов, и увидеть его
+    # чтением одного модуля нельзя: ПапкаОбмена звала поиск носителя,
+    # тот — чтение списка, а оно снова ПапкаОбмена. Строим граф и ищем
+    # замкнутые пути.
+    edges = collections.defaultdict(set)
+    for path in files + sorted(glob.glob(os.path.join(MAC, "*.txt"))):
+        proc = ""
+        for ln, raw in read_lines(path):
+            code = strip_code(raw)
+            d = RE_DECL.match(code)
+            if d:
+                proc = d.group(2)
+                continue
+            if not proc:
+                continue
+            for callee in declared:
+                if callee == proc:
+                    continue
+                # Вызов бывает и квалифицированным: modMedia.Имя. Без учёта
+                # префикса ребро графа терялось — и петля не находилась.
+                if re.search(r"(?<![\wА-Яа-яЁё])(?:mod\w+\.)?" + re.escape(callee) +
+                             r"(?![\wА-Яа-яЁё])", code):
+                    edges[proc].add(callee)
+
+    cycles, seen_cycle = [], set()
+
+    def walk(node, path_so_far, visiting):
+        if len(cycles) >= 5:
+            return
+        for nxt in sorted(edges.get(node, ())):
+            if nxt in visiting:
+                cyc = path_so_far[path_so_far.index(nxt):] + [nxt]
+                key = tuple(sorted(set(cyc)))
+                if key not in seen_cycle:
+                    seen_cycle.add(key)
+                    cycles.append(" → ".join(cyc))
+            elif len(path_so_far) < 12:
+                walk(nxt, path_so_far + [nxt], visiting | {nxt})
+
+    for start in sorted(edges):
+        walk(start, [start], {start})
+
+    check(not cycles, "нет циклов в вызовах процедур%s" %
+          ("" if not cycles else ": " + "; ".join(cycles[:3])))
+
     # ── Dir для проверки существования — только в modConfig ──────────
     # Dir на недоступном сетевом пути падает с ошибкой 52, а не
     # возвращает пустую строку. Проверки идут через ПапкаСуществует /

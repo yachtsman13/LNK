@@ -169,7 +169,12 @@ def main():
             if d2:
                 var_sheet.clear()          # новая процедура — свои переменные
                 текущая_процедура = d2.group(2)
-            for mm in re.finditer(r"Col(?:Req|ByHeader)\s*\(\s*(\w+)\s*,\s*\"([^\"]+)\"", raw):
+            # Заголовок, склеенный из частей (ColReq(ws, "Замер " & c)),
+            # проверить нельзя: имя известно только в момент выполнения.
+            for mm in re.finditer(
+                    r"Col(?:Req|ByHeader)\s*\(\s*(\w+)\s*,\s*\"([^\"]*)\"([^)]*)\)", raw):
+                if "&" in mm.group(3):
+                    continue
                 col_uses.append((name, ln, mm.group(1), var_sheet.get(mm.group(1)),
                                  mm.group(2), текущая_процедура))
 

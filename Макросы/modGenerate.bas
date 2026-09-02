@@ -75,6 +75,7 @@ Private Function СформироватьОдин(ws As Worksheet, r As Long, м
     Dim wdDoc As Object
     Dim дата As Variant
     Dim год As Long
+    Dim лишних As Long
 
     шаблон = ФайлШаблона(метод)
     If шаблон = "" Then Exit Function
@@ -104,6 +105,29 @@ Private Function СформироватьОдин(ws As Worksheet, r As Long, м
     Подставить wdDoc, "Уровень_квалификации_№_удостоверения_ФИО", ПодписьИсполнителя(ws, r, метод)
     Подставить wdDoc, "Уровень_№_ФИО", ПодписьИсполнителя(ws, r, метод)
     Подставить wdDoc, "Наименование_ЛНК", Настройка("Полное наименование ЛНК")
+    Подставить wdDoc, "Дата_проведения_контроля", _
+               IIf(IsDate(дата), Format$(дата, "dd.mm.yyyy"), "")
+    Подставить wdDoc, "Заводской_номер", _
+               CStr(ws.Cells(r, ColReq(ws, "Заводской № объекта")).Value)
+    Подставить wdDoc, "Место_расположения", МестоРасположения(ws, r)
+    Подставить wdDoc, "Тип_объекта", ПолеОбъекта(ws, r, "Тип / группа")
+
+    ' Паспорт объекта — из справочника, один раз заполненный на объект.
+    ПодставитьПаспортОбъекта wdDoc, ws, r
+    ' Поля этой конкретной работы: заключение, дефекты, НД, средства НК.
+    ' Они же могут переопределить отдельные паспортные значения.
+    лишних = ПодставитьДанныеПротокола(wdDoc, ws, r, метод)
+    ' Точки замеров — пока по УЗТ и ТВ, у остальных методов таблиц в
+    ' шаблонах нет, там результат пишется текстом.
+    лишних = лишних + ПодставитьЗамеры(wdDoc, _
+                 CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value), метод)
+    If лишних > 0 Then
+        MsgBox "По методу " & метод & " заведено на " & лишних & " точек больше, " & _
+               "чем мест в шаблоне." & vbCrLf & vbCrLf & _
+               "В документ попали первые — остальные остались в системе. " & _
+               "Допишите их в документе руками или добавьте строки в таблицу шаблона.", _
+               vbExclamation, "Формирование документов"
+    End If
 
     папка = ПапкаГотовых() & CStr(год) & Application.PathSeparator & метод & Application.PathSeparator
     MkPath папка
@@ -128,6 +152,12 @@ Private Function СформироватьОдин(ws As Worksheet, r As Long, м
 End Function
 
 
+' Публичная: её зовёт и modMeasure, подставляя точки замеров.
+Public Sub ЗаменитьВДокументе(doc As Object, поле As String, значение As String)
+    Подставить doc, поле, значение
+End Sub
+
+
 Private Sub Подставить(doc As Object, поле As String, значение As String)
     Dim rng As Object
     Set rng = doc.Content
@@ -143,6 +173,195 @@ Private Sub Подставить(doc As Object, поле As String, значен
         .Execute Replace:=wdReplaceAll
     End With
 End Sub
+
+
+' ── Паспорт объекта и данные работы ───────────────────────────────────
+
+' Все паспортные поля справочника объектов идут в документ под теми же
+' именами, что стоят в заголовках колонок: «Марка материала» →
+' #Марка_материала. Отдельной таблицы соответствия нет намеренно —
+' её пришлось бы править при каждом новом поле.
+Private Sub ПодставитьПаспортОбъекта(doc As Object, ws As Worksheet, r As Long)
+    Dim об As Worksheet
+    Dim идОбъекта As String
+    Dim строка As Long
+    Dim c As Long, колонок As Long
+    Dim имя As String
+
+    идОбъекта = Trim$(CStr(ws.Cells(r, ColReq(ws, "ID объекта")).Value))
+    If идОбъекта = "" Then Exit Sub
+    Set об = ЛистТихо(Л_ОБЪЕКТЫ)
+    If об Is Nothing Then Exit Sub
+
+    строка = НайтиПоПервойКолонке(об, идОбъекта)
+    If строка = 0 Then Exit Sub
+
+    колонок = об.Cells(СТРОКА_ЗАГОЛОВКОВ, об.Columns.Count).End(xlToLeft).Column
+    For c = 2 To колонок
+        имя = ИмяПоля(CStr(об.Cells(СТРОКА_ЗАГОЛОВКОВ, c).Value))
+        If имя <> "" Then
+            Подставить doc, имя, ЗначениеТекстом(об.Cells(строка, c))
+        End If
+    Next c
+End Sub
+
+
+' Поля конкретной работы с листа «Данные_протоколов». Возвращает 0 —
+' он ничего не переполняет, счёт нужен вызывающему для единообразия.
+Private Function ПодставитьДанныеПротокола(doc As Object, ws As Worksheet, _
+                                           r As Long, метод As String) As Long
+    Dim дп As Worksheet
+    Dim идЗаписи As String
+    Dim i As Long, last As Long
+    Dim c As Long, колонок As Long
+    Dim имя As String
+    Dim строка As Long
+
+    идЗаписи = Trim$(CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value))
+    Set дп = ЛистТихо(Л_ДАННЫЕ_ПРОТОКОЛОВ)
+    If дп Is Nothing Or идЗаписи = "" Then Exit Function
+
+    last = ПоследняяСтрока(дп, 1)
+    For i = ПЕРВАЯ_СТРОКА To last
+        If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "ID записи журнала")).Value)), _
+                   идЗаписи, vbTextCompare) = 0 Then
+            If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "Метод")).Value)), _
+                       метод, vbTextCompare) = 0 Then
+                строка = i
+                Exit For
+            End If
+        End If
+    Next i
+    If строка = 0 Then Exit Function
+
+    колонок = дп.Cells(СТРОКА_ЗАГОЛОВКОВ, дп.Columns.Count).End(xlToLeft).Column
+    For c = 4 To колонок
+        имя = ИмяПоля(CStr(дп.Cells(СТРОКА_ЗАГОЛОВКОВ, c).Value))
+        If имя <> "" Then
+            Подставить doc, имя, ЗначениеТекстом(дп.Cells(строка, c))
+        End If
+    Next c
+
+    ' Руководитель работ идёт в документ одной строкой: должность и ФИО.
+    Подставить doc, "Должность_ФИО", Trim$( _
+        ЗначениеТекстом(дп.Cells(строка, ColReq(дп, "Должность руководителя"))) & " " & _
+        ЗначениеТекстом(дп.Cells(строка, ColReq(дп, "Руководитель работ"))))
+
+    ПодставитьСредстваНК doc, дп, строка
+    ПрименитьПереопределения doc, CStr(дп.Cells(строка, ColReq(дп, "Переопределения паспорта")).Value)
+End Function
+
+
+' Средства НК подставляются целиком: наименование, тип, заводской номер
+' и срок поверки — чтобы их не переписывали в каждый протокол руками,
+' как было в вашем шаблоне акта ВИК.
+Private Sub ПодставитьСредстваНК(doc As Object, дп As Worksheet, строка As Long)
+    Dim k As Long
+    Dim ид As String
+    Dim si As Worksheet
+    Dim r As Long
+
+    Set si = ЛистТихо(Л_СИ)
+    If si Is Nothing Then Exit Sub
+
+    For k = 1 To 2
+        ид = Trim$(CStr(дп.Cells(строка, ColReq(дп, "ID средства НК " & k)).Value))
+        r = 0
+        If ид <> "" Then r = НайтиПоПервойКолонке(si, ид)
+        If r > 0 Then
+            Подставить doc, "СИ" & k & "_Наименование", ЗначениеТекстом(si.Cells(r, ColReq(si, "Наименование")))
+            Подставить doc, "СИ" & k & "_Тип", ЗначениеТекстом(si.Cells(r, ColReq(si, "Тип / обозначение")))
+            Подставить doc, "СИ" & k & "_Зав_номер", ЗначениеТекстом(si.Cells(r, ColReq(si, "Заводской №")))
+            Подставить doc, "СИ" & k & "_Поверка_до", ЗначениеТекстом(si.Cells(r, ColReq(si, "Действительно до")))
+        End If
+    Next k
+End Sub
+
+
+' «Поле=Значение; Поле=Значение» — редкий случай, когда по этой работе
+' паспортное значение другое. Правится только документ, справочник
+' остаётся историей объекта.
+Private Sub ПрименитьПереопределения(doc As Object, текст As String)
+    Dim части As Variant
+    Dim i As Long
+    Dim пара As Variant
+
+    If Trim$(текст) = "" Then Exit Sub
+    части = Split(текст, ";")
+    For i = LBound(части) To UBound(части)
+        If InStr(части(i), "=") > 0 Then
+            пара = Split(части(i), "=")
+            Подставить doc, ИмяПоля(CStr(пара(0))), Trim$(CStr(пара(1)))
+        End If
+    Next i
+End Sub
+
+
+' Заголовок колонки → имя плейсхолдера: пробелы и переносы в
+' подчёркивания. Служебные колонки пропускаются.
+Private Function ИмяПоля(заголовок As String) As String
+    Dim s As String
+    s = Trim$(Replace(Replace(заголовок, vbLf, " "), vbCr, " "))
+    Do While InStr(s, "  ") > 0
+        s = Replace(s, "  ", " ")
+    Loop
+    Select Case True
+        Case s = "": Exit Function
+        Case InStr(1, s, "ID", vbTextCompare) = 1: Exit Function
+        Case InStr(1, s, "Кем внесено", vbTextCompare) > 0: Exit Function
+        Case InStr(1, s, "Изменено", vbTextCompare) > 0: Exit Function
+        Case InStr(1, s, "Работ в журнале", vbTextCompare) > 0: Exit Function
+        Case InStr(1, s, "Переопределения", vbTextCompare) > 0: Exit Function
+        Case InStr(1, s, "Прежние наименования", vbTextCompare) > 0: Exit Function
+    End Select
+    ИмяПоля = Replace(Replace(s, " ", "_"), "-", "_")
+End Function
+
+
+Private Function ЗначениеТекстом(ячейка As Range) As String
+    If IsError(ячейка.Value) Then Exit Function
+    If IsDate(ячейка.Value) Then
+        ЗначениеТекстом = Format$(ячейка.Value, "dd.mm.yyyy")
+    Else
+        ЗначениеТекстом = Trim$(CStr(ячейка.Value))
+    End If
+End Function
+
+
+' Одно поле объекта по строке журнала — для случаев, когда имя
+' плейсхолдера не совпадает с заголовком колонки.
+Private Function ПолеОбъекта(ws As Worksheet, r As Long, заголовок As String) As String
+    Dim об As Worksheet
+    Dim строка As Long
+    Dim c As Long
+
+    Set об = ЛистТихо(Л_ОБЪЕКТЫ)
+    If об Is Nothing Then Exit Function
+    строка = НайтиПоПервойКолонке(об, Trim$(CStr(ws.Cells(r, ColReq(ws, "ID объекта")).Value)))
+    If строка = 0 Then Exit Function
+    c = ColByHeader(об, заголовок)
+    If c > 0 Then ПолеОбъекта = ЗначениеТекстом(об.Cells(строка, c))
+End Function
+
+
+Private Function МестоРасположения(ws As Worksheet, r As Long) As String
+    МестоРасположения = ПолеОбъекта(ws, r, "Место расположения")
+    If МестоРасположения = "" Then
+        МестоРасположения = CStr(ws.Cells(r, ColReq(ws, "Заказывающее подразделение")).Value)
+    End If
+End Function
+
+
+Private Function НайтиПоПервойКолонке(ws As Worksheet, ид As String) As Long
+    Dim r As Long, last As Long
+    last = ПоследняяСтрока(ws, 1)
+    For r = ПЕРВАЯ_СТРОКА To last
+        If StrComp(Trim$(CStr(ws.Cells(r, 1).Value)), ид, vbTextCompare) = 0 Then
+            НайтиПоПервойКолонке = r
+            Exit Function
+        End If
+    Next r
+End Function
 
 
 Public Function ФайлШаблона(метод As String) As String

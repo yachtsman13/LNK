@@ -106,7 +106,7 @@ def main():
         for row in w.iter_rows():
             for c in row:
                 if isinstance(c.value, str) and c.value.startswith("="):
-                    for nm in re.findall(r"([А-Яа-яA-Za-z_][А-Яа-яA-Za-z0-9_]*)!", c.value):
+                    for nm in re.findall(r"([А-Яа-яЁёA-Za-z_][А-Яа-яЁёA-Za-z0-9_]*)!", c.value):
                         refs.add(nm)
     check(not (refs - sheets), "формулы ссылаются только на существующие листы: %s" % (refs - sheets))
 

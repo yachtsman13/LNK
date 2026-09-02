@@ -164,3 +164,52 @@ def build_objects(wide):
     for i, o in enumerate(objects.values(), start=1):
         o["id"] = "ОБ-%04d" % i
     return objects
+
+
+# ── Номера актов из исходного широкого журнала ───────────────────────
+#
+# Акт — отдельный уровень учёта: он один на работу и охватывает
+# несколько объектов, у каждого из которых свои номера протоколов по
+# методам. В плоском журнале, из которого шла первая миграция, этого
+# уровня не было, поэтому номера актов берутся из исходного файла.
+
+МЕТОД_КОЛОНКИ = {9: "ВИК", 11: "УЗТ", 13: "УЗД", 15: "ТВ",
+                 17: "АЭ", 19: "ВД", 21: "ТК", 23: "МК"}
+
+
+def read_acts(path, sheet="2026"):
+    """(дата, ключ объекта) → список номеров актов в порядке файла."""
+    import datetime
+    import openpyxl
+    import collections
+
+    wb = openpyxl.load_workbook(path, data_only=True)
+    ws = wb[sheet]
+    out = collections.defaultdict(list)
+    for r in range(3, ws.max_row + 1):
+        д = ws.cell(r, 3).value
+        if not isinstance(д, (datetime.date, datetime.datetime)):
+            continue
+        if not any(ws.cell(r, c).value not in (None, "") for c in МЕТОД_КОЛОНКИ):
+            continue
+        акт = norm(ws.cell(r, 2).value)
+        объект = parse_object(ws.cell(r, 5).value)
+        ключ = (д.date() if hasattr(д, "date") else д, object_key(*объект))
+        out[ключ].append(акт)
+    return out
+
+
+def attach_acts(wide, acts):
+    """Проставляет номер акта каждой широкой строке. Возвращает счёт."""
+    import collections
+    остаток = {k: list(v) for k, v in acts.items()}
+    нашлось = 0
+    for w in wide:
+        д = w["date"]
+        ключ = (д.date() if hasattr(д, "date") else д, object_key(*w["obj"]))
+        w["act"] = ""
+        if остаток.get(ключ):
+            w["act"] = остаток[ключ].pop(0)
+            if w["act"]:
+                нашлось += 1
+    return нашлось

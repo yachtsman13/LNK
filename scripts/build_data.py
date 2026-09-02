@@ -10,11 +10,13 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill, Font, Alignment
 
 from lnk_common import *
-from migrate import METHODS, read_flat, to_wide, build_objects, parse_object, norm
+from migrate import (METHODS, read_flat, to_wide, build_objects, parse_object, norm,
+                     read_acts, attach_acts)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_V2 = os.path.join(ROOT, "Реестры", "ЛНК_Реестры_v2.xlsx")
 SRC_PPR = os.path.join(ROOT, "Исходники", "План-график_ППР_2026-2030.xlsx")
+SRC_ACTS = os.path.join(ROOT, "Исходники", "Журнал_заключений_2026_исходный.xlsx")
 OUT = os.path.join(ROOT, "Реестры", "ЛНК_Данные.xlsx")
 
 HDR = 3          # строка заголовков таблиц
@@ -121,6 +123,7 @@ SETTINGS = [
     ("Учётный номер журнала ВД", "", ""),
     ("Учётный номер журнала МК", "", ""),
     ("Учётный номер журнала электроинструмента", "", ""),
+    ("Учётный номер журнала актов", "", "Акты нумеруются своей серией: АКТ 01-2026, АКТ 02-2026."),
     ("Паспорт", None, None),
     ("Полное наименование ЛНК", "", "Подставляется в документы Word вместо #Наименование_ЛНК. "
                                      "То же значение — на листе «Паспорт_постоянная»."),
@@ -222,6 +225,7 @@ J = {}  # имя поля → номер колонки
 
 def journal_cols():
     cols = [col("ID записи", 16), col("№ п/п", 7), col("Статус", 15),
+            col("№ акта", 15),
             col("Дата контроля", 13), col("Год", 7),
             col("Заказывающее\nподразделение", 22),
             col("ID объекта", 12), col("Наименование объекта\nв документе", 44),
@@ -243,7 +247,8 @@ def build_journal(wb, wide, objects):
     cols = journal_cols()
     n = len(cols)
     global J
-    names = ["ID", "NP", "STATUS", "DATE", "YEAR", "CUST", "OBJID", "OBJNAME", "OBJZAV", "OBJREG"]
+    names = ["ID", "NP", "STATUS", "ACT", "DATE", "YEAR", "CUST", "OBJID", "OBJNAME",
+             "OBJZAV", "OBJREG"]
     for m in METHODS:
         names += ["N_" + m, "E_" + m]
     names += ["ARCH", "OUT", "SENDER", "GEN", "ORIG", "BY", "CHG", "NOTE"]
@@ -251,8 +256,10 @@ def build_journal(wb, wide, objects):
 
     sheet_head(ws, "Журнал учёта заключений (протоколов, актов) ЛНК",
                "Одна строка — один объект контроля за одну дату; применённые методы стоят колонками. "
-               "Метод считается применённым, если по нему выбран ИСПОЛНИТЕЛЬ. Колонка «№» серая — "
-               "номер туда впишет система при регистрации, руками её не заполнять. "
+               "Метод считается применённым, если по нему выбран ИСПОЛНИТЕЛЬ. Колонки «№ акта» "
+               "и «№» серые — номера туда впишет система, руками их не заполнять. "
+               "Один акт охватывает несколько строк: у него свой номер, у каждого объекта "
+               "внутри акта — свои номера протоколов по методам. "
                "Печатные журналы по методам строятся отсюда макросом. "
                "Мигрировано %d записей из журнала 2026 года (было %d строк плоского вида). "
                "Серым — расчётные колонки, их не трогать." % (len(wide), 1001), n)
@@ -262,6 +269,7 @@ def build_journal(wb, wide, objects):
         r = FIRST + i
         ws.cell(r, J["ID"], "МИГР-2026-%04d" % (i + 1))
         ws.cell(r, J["STATUS"], "Зарегистрирован")
+        ws.cell(r, J["ACT"], w.get("act") or None)
         set_date(ws.cell(r, J["DATE"]), w["date"])
         ws.cell(r, J["CUST"], w["cust"] or None)
         okey = (w["obj"][0].lower(), w["obj"][1].lower(), w["obj"][2].lower(),
@@ -292,6 +300,7 @@ def build_journal(wb, wide, objects):
         ws.row_dimensions[r].height = 28
 
     mark_input(ws, FIRST, MAXR, J["STATUS"], J["OBJID"])
+    mark_calc(ws, FIRST, MAXR, [J["ACT"]])
     mark_input(ws, FIRST, MAXR, J["OBJNAME"], J["OBJNAME"])
     mark_input(ws, FIRST, MAXR, J["ARCH"], n)
     # Исполнитель — поле ввода: именно он отмечает, что метод применялся.
@@ -963,6 +972,12 @@ def collect_issues(flat, wide, objects, ppr, warnings):
                             "Выберите исполнителя из справочника специалистов"))
         if not w["date"]:
             out.append(("Журнал", "Нет даты", "строка %d" % r, "Проставьте дату с бумаги"))
+    без_акта = [w for w in wide if not w.get("act")]
+    if без_акта:
+        out.append(("Журнал", "Нет номера акта",
+                    "%d строк из %d" % (len(без_акта), len(wide)),
+                    "В исходном журнале акт по ним не проставлен. Если работа шла без акта "
+                    "(только протокол по одному методу) — так и оставьте; иначе впишите номер"))
     noid = [o for o in objects.values()
             if not (o["zav"] or o["reg"] or o["uch"] or o["inv"])]
     out.append(("Объекты", "Объект без единого номера",
@@ -1027,6 +1042,9 @@ def main():
     src = openpyxl.load_workbook(SRC_V2, data_only=True)
     flat = read_flat(src["Журнал"])
     wide, warnings = to_wide(flat)
+    актов = 0
+    if os.path.exists(SRC_ACTS):
+        актов = attach_acts(wide, read_acts(SRC_ACTS))
     objects = build_objects(wide)
     ppr = read_ppr()
 
@@ -1057,6 +1075,7 @@ def main():
     print("  средств НК из ППР     : %d" % n_si)
     print("  строк обслуживания    : %d" % len(ppr))
     print("  листов в книге        : %d" % len(wb.sheetnames))
+    print("  строк с номером акта  : %d из %d" % (актов, len(wide)))
     print("  строк в сверке        : %d" % len(issues))
     for w in warnings:
         print("  ! %s" % w)

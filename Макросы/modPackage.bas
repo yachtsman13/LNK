@@ -32,6 +32,8 @@ Public Sub НапечататьПакет()
     Dim ws As Worksheet
     Dim r As Long
     Dim файлы As Collection
+    Dim строки As Collection
+    Dim акт As String
     Dim сканов As Long
     Dim wdApp As Object
     Dim свод As Object
@@ -44,10 +46,17 @@ Public Sub НапечататьПакет()
     r = ТекущаяСтрока(ws)
     If r = 0 Then Exit Sub
 
-    Set файлы = СобратьФайлыРаботы(ws, r)
+    ' Пакет собирается по АКТУ целиком: акт один на работу, а объектов
+    ' в ней несколько, и протоколы по всем из них идут в один пакет.
+    ' Если акта нет — печатается пакет по одной строке.
+    акт = НомерАкта(ws, r)
+    Set строки = СтрокиАкта(ws, r, акт)
+    Set файлы = СобратьФайлыАкта(ws, строки)
     If файлы.Count = 0 Then
-        MsgBox "По этой строке нет сформированных документов." & vbCrLf & vbCrLf & _
-               "Сначала «Сформировать документы» — они появятся в папке «Готовые».", _
+        MsgBox "Нет сформированных документов" & _
+               IIf(акт = "", " по этой строке.", " по акту " & акт & ".") & vbCrLf & vbCrLf & _
+               "Сначала «Сформировать документы» — они появятся в папке «Готовые». " & _
+               "Если в акте несколько объектов, документы нужны по каждому.", _
                vbExclamation, "Печать пакета"
         Exit Sub
     End If
@@ -68,6 +77,8 @@ Public Sub НапечататьПакет()
 
     Application.StatusBar = False
     ответ = MsgBox("Пакет собран." & vbCrLf & vbCrLf & _
+                   IIf(акт = "", "Без акта, одна строка журнала." & vbCrLf, _
+                       акт & ", объектов в нём: " & строки.Count & vbCrLf) & _
                    "Документов Word: " & файлы.Count & vbCrLf & _
                    "Страниц в них (с пустым листом): " & страницСвода & vbCrLf & _
                    "Страниц сканов, вкладываемых вручную: " & сканов & vbCrLf & _
@@ -110,24 +121,46 @@ End Sub
 
 ' ── Сбор файлов ───────────────────────────────────────────────────────
 
-' Акт ВИК идёт первым, остальные протоколы — в порядке методов.
-Private Function СобратьФайлыРаботы(ws As Worksheet, r As Long) As Collection
+' Все строки одного акта. Без номера акта — только текущая строка.
+Private Function СтрокиАкта(ws As Worksheet, r As Long, акт As String) As Collection
+    Dim список As Collection
+    Dim i As Long, last As Long
+
+    Set список = New Collection
+    Set СтрокиАкта = список
+    If акт = "" Then
+        список.Add r
+        Exit Function
+    End If
+
+    last = ПоследняяСтрока(ws, ColReq(ws, "Дата контроля"))
+    For i = ПЕРВАЯ_СТРОКА To last
+        If StrComp(НомерАкта(ws, i), акт, vbTextCompare) = 0 Then список.Add i
+    Next i
+End Function
+
+
+' Порядок в пакете: сначала акт ВИК по всем объектам, затем протоколы
+' остальных методов — как задано в вашем порядке сшива.
+Private Function СобратьФайлыАкта(ws As Worksheet, строки As Collection) As Collection
     Dim список As Collection
     Dim методы As Variant
-    Dim i As Long
+    Dim i As Long, k As Long
     Dim метод As String
     Dim путь As String
 
     Set список = New Collection
-    Set СобратьФайлыРаботы = список
+    Set СобратьФайлыАкта = список
 
     методы = Split(МЕТОДЫ, ",")
     For i = LBound(методы) To UBound(методы)
         метод = CStr(методы(i))
-        If МетодПрименён(ws, r, метод) Then
-            путь = НайтиДокумент(ws, r, метод)
-            If путь <> "" Then список.Add путь
-        End If
+        For k = 1 To строки.Count
+            If МетодПрименён(ws, CLng(строки(k)), метод) Then
+                путь = НайтиДокумент(ws, CLng(строки(k)), метод)
+                If путь <> "" Then список.Add путь
+            End If
+        Next k
     Next i
 End Function
 
@@ -203,8 +236,12 @@ Private Sub СохранитьСвод(свод As Object, ws As Worksheet, r As
     год = IIf(IsDate(дата), Year(CDate(дата)), Year(Date))
     папка = ПапкаГотовых() & CStr(год) & Application.PathSeparator & "Пакеты" & Application.PathSeparator
     MkPath папка
-    имя = ОчиститьДляИмениФайла(CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value)) & " " & _
-          ОчиститьДляИмениФайла(Left$(CStr(ws.Cells(r, ColReq(ws, "Наименование объекта в документе")).Value), 50))
+    имя = НомерАкта(ws, r)
+    If имя = "" Then
+        имя = CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value) & " " & _
+              Left$(CStr(ws.Cells(r, ColReq(ws, "Наименование объекта в документе")).Value), 50)
+    End If
+    имя = ОчиститьДляИмениФайла(имя)
     свод.SaveAs2 fileName:=папка & имя & ".docx"
 End Sub
 

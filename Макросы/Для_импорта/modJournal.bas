@@ -281,6 +281,77 @@ Private Function ВыдатьНомераСтроки(ws As Worksheet, r As Long) As Boolean
 End Function
 
 
+' Открыть новый акт и присвоить его выделенным строкам журнала.
+'
+' Один акт — одна работа, а объектов в ней обычно несколько: выделяете
+' строки этих объектов и жмёте кнопку. Раньше номер акта вписывался
+' руками, и именно на этом акты дублировались.
+Public Sub ОткрытьНовыйАкт()
+    Dim ws As Worksheet
+    Dim строки As Range
+    Dim ячейка As Range
+    Dim номер As String
+    Dim год As Long
+    Dim дата As Variant
+    Dim сколько As Long
+    Dim cАкт As Long
+
+    Set ws = Лист(Л_ЖУРНАЛ)
+    If ws Is Nothing Then Exit Sub
+    If Not ПроверитьКодРабочегоМеста() Then Exit Sub
+    If ActiveSheet.Name <> ws.Name Then
+        MsgBox "Выделите на листе «" & ws.Name & "» строки объектов, которые войдут в акт.", _
+               vbInformation, "Новый акт"
+        Exit Sub
+    End If
+
+    Set строки = Selection
+    cАкт = ColReq(ws, "№ акта")
+    дата = ws.Cells(строки.Row, ColReq(ws, "Дата контроля")).Value
+    год = IIf(IsDate(дата), Year(CDate(дата)), Year(Date))
+
+    For Each ячейка In строки.Columns(1).Cells
+        If ячейка.Row >= ПЕРВАЯ_СТРОКА Then
+            If IsDate(ws.Cells(ячейка.Row, ColReq(ws, "Дата контроля")).Value) Then
+                сколько = сколько + 1
+            End If
+        End If
+    Next ячейка
+
+    If сколько = 0 Then
+        MsgBox "Не выделено ни одной строки с датой контроля.", vbExclamation, "Новый акт"
+        Exit Sub
+    End If
+
+    If MsgBox("Открыть новый акт за " & год & " год и присвоить его " & сколько & _
+              " строкам?" & vbCrLf & vbCrLf & _
+              "Номер выдаст счётчик — он один на всех, поэтому два акта с одним " & _
+              "номером появиться не могут.", vbYesNo + vbQuestion, "Новый акт") = vbNo Then Exit Sub
+
+    номер = ВыдатьНомерАкта(год)
+    If номер = "" Then Exit Sub
+
+    For Each ячейка In строки.Columns(1).Cells
+        If ячейка.Row >= ПЕРВАЯ_СТРОКА Then
+            If IsDate(ws.Cells(ячейка.Row, ColReq(ws, "Дата контроля")).Value) Then
+                ws.Cells(ячейка.Row, cАкт).Value = номер
+                ws.Cells(ячейка.Row, ColReq(ws, "Изменено")).Value = Now
+            End If
+        End If
+    Next ячейка
+
+    MsgBox "Открыт " & номер & ", присвоен " & сколько & " строкам." & vbCrLf & vbCrLf & _
+           "Печать пакета собирает все строки одного акта: акт, затем протоколы " & _
+           "по всем его объектам.", vbInformation, "Новый акт"
+End Sub
+
+
+' Номер акта текущей строки — по нему собирается пакет.
+Public Function НомерАкта(ws As Worksheet, строка As Long) As String
+    НомерАкта = Trim$(CStr(ws.Cells(строка, ColReq(ws, "№ акта")).Value))
+End Function
+
+
 ' Аннулирование по итогам рекламации: строка остаётся на месте,
 ' иначе в журнале появится дыра, а по Правилам аннулированное
 ' заключение должно быть в журнале видно.

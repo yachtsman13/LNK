@@ -32,6 +32,8 @@ Public Sub Ќапечататьѕакет()
     Dim ws As Worksheet
     Dim r As Long
     Dim файлы As Collection
+    Dim строки As Collection
+    Dim акт As String
     Dim сканов As Long
     Dim wdApp As Object
     Dim свод As Object
@@ -44,10 +46,17 @@ Public Sub Ќапечататьѕакет()
     r = “екуща€—трока(ws)
     If r = 0 Then Exit Sub
 
-    Set файлы = —обрать‘айлы–аботы(ws, r)
+    ' ѕакет собираетс€ по ј “” целиком: акт один на работу, а объектов
+    ' в ней несколько, и протоколы по всем из них идут в один пакет.
+    ' ≈сли акта нет Ч печатаетс€ пакет по одной строке.
+    акт = Ќомерјкта(ws, r)
+    Set строки = —трокијкта(ws, r, акт)
+    Set файлы = —обрать‘айлыјкта(ws, строки)
     If файлы.Count = 0 Then
-        MsgBox "ѕо этой строке нет сформированных документов." & vbCrLf & vbCrLf & _
-               "—начала Ђ—формировать документыї Ч они по€в€тс€ в папке Ђ√отовыеї.", _
+        MsgBox "Ќет сформированных документов" & _
+               IIf(акт = "", " по этой строке.", " по акту " & акт & ".") & vbCrLf & vbCrLf & _
+               "—начала Ђ—формировать документыї Ч они по€в€тс€ в папке Ђ√отовыеї. " & _
+               "≈сли в акте несколько объектов, документы нужны по каждому.", _
                vbExclamation, "ѕечать пакета"
         Exit Sub
     End If
@@ -68,6 +77,8 @@ Public Sub Ќапечататьѕакет()
 
     Application.StatusBar = False
     ответ = MsgBox("ѕакет собран." & vbCrLf & vbCrLf & _
+                   IIf(акт = "", "Ѕез акта, одна строка журнала." & vbCrLf, _
+                       акт & ", объектов в нЄм: " & строки.Count & vbCrLf) & _
                    "ƒокументов Word: " & файлы.Count & vbCrLf & _
                    "—траниц в них (с пустым листом): " & страниц—вода & vbCrLf & _
                    "—траниц сканов, вкладываемых вручную: " & сканов & vbCrLf & _
@@ -110,24 +121,46 @@ End Sub
 
 ' -- —бор файлов -------------------------------------------------------
 
-' јкт ¬»  идЄт первым, остальные протоколы Ч в пор€дке методов.
-Private Function —обрать‘айлы–аботы(ws As Worksheet, r As Long) As Collection
+' ¬се строки одного акта. Ѕез номера акта Ч только текуща€ строка.
+Private Function —трокијкта(ws As Worksheet, r As Long, акт As String) As Collection
+    Dim список As Collection
+    Dim i As Long, last As Long
+
+    Set список = New Collection
+    Set —трокијкта = список
+    If акт = "" Then
+        список.Add r
+        Exit Function
+    End If
+
+    last = ѕоследн€€—трока(ws, ColReq(ws, "ƒата контрол€"))
+    For i = ѕ≈–¬јя_—“–ќ ј To last
+        If StrComp(Ќомерјкта(ws, i), акт, vbTextCompare) = 0 Then список.Add i
+    Next i
+End Function
+
+
+' ѕор€док в пакете: сначала акт ¬»  по всем объектам, затем протоколы
+' остальных методов Ч как задано в вашем пор€дке сшива.
+Private Function —обрать‘айлыјкта(ws As Worksheet, строки As Collection) As Collection
     Dim список As Collection
     Dim методы As Variant
-    Dim i As Long
+    Dim i As Long, k As Long
     Dim метод As String
     Dim путь As String
 
     Set список = New Collection
-    Set —обрать‘айлы–аботы = список
+    Set —обрать‘айлыјкта = список
 
     методы = Split(ћ≈“ќƒџ, ",")
     For i = LBound(методы) To UBound(методы)
         метод = CStr(методы(i))
-        If ћетодѕрименЄн(ws, r, метод) Then
-            путь = Ќайтиƒокумент(ws, r, метод)
-            If путь <> "" Then список.Add путь
-        End If
+        For k = 1 To строки.Count
+            If ћетодѕрименЄн(ws, CLng(строки(k)), метод) Then
+                путь = Ќайтиƒокумент(ws, CLng(строки(k)), метод)
+                If путь <> "" Then список.Add путь
+            End If
+        Next k
     Next i
 End Function
 
@@ -203,8 +236,12 @@ Private Sub —охранить—вод(свод As Object, ws As Worksheet, r As Long)
     год = IIf(IsDate(дата), Year(CDate(дата)), Year(Date))
     папка = ѕапка√отовых() & CStr(год) & Application.PathSeparator & "ѕакеты" & Application.PathSeparator
     MkPath папка
-    им€ = ќчиститьƒл€»мени‘айла(CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value)) & " " & _
-          ќчиститьƒл€»мени‘айла(Left$(CStr(ws.Cells(r, ColReq(ws, "Ќаименование объекта в документе")).Value), 50))
+    им€ = Ќомерјкта(ws, r)
+    If им€ = "" Then
+        им€ = CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value) & " " & _
+              Left$(CStr(ws.Cells(r, ColReq(ws, "Ќаименование объекта в документе")).Value), 50)
+    End If
+    им€ = ќчиститьƒл€»мени‘айла(им€)
     свод.SaveAs2 fileName:=папка & им€ & ".docx"
 End Sub
 

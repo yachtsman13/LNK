@@ -112,6 +112,9 @@ def main():
             code = strip_code(raw)
             m = RE_DECL.match(code)
             if m:
+                if m.group(2) in per_module[name]:
+                    errors.append("ОШИБКА %s:%d процедура %s объявлена дважды в одном модуле"
+                                  % (name, ln, m.group(2)))
                 declared[m.group(2)] = name
                 per_module[name].add(m.group(2))
                 p = RE_PARAMS.search(code)

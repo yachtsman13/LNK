@@ -138,6 +138,149 @@ Public Sub ЗарегистрироватьЗапись()
 End Sub
 
 
+' Регистрация всех черновиков разом.
+'
+' Пока сети нет, носитель ходит по рукам: он оказывается у вас на
+' несколько минут, и за это время надо зарегистрировать всё
+' накопившееся. По одной записи это делать неудобно, а неудобное
+' перестают делать — и записи копятся черновиками.
+Public Sub ЗарегистрироватьВсеЧерновики()
+    Dim ws As Worksheet
+    Dim r As Long, last As Long
+    Dim cСтатус As Long, cДата As Long
+    Dim черновиков As Long
+    Dim готово As Long
+    Dim пропущено As Long
+    Dim перечень As String
+    Dim предупреждения As String
+
+    Set ws = Лист(Л_ЖУРНАЛ)
+    If ws Is Nothing Then Exit Sub
+    If Not ПроверитьКодРабочегоМеста() Then Exit Sub
+    If ПапкаОбмена() = "" Then
+        MsgBox "Общая папка недоступна — номера выдавать неоткуда." & vbCrLf & vbCrLf & _
+               "Подключите штатную флешку и повторите. Черновики никуда не денутся.", _
+               vbExclamation, "Регистрация черновиков"
+        Exit Sub
+    End If
+
+    cСтатус = ColReq(ws, "Статус")
+    cДата = ColReq(ws, "Дата контроля")
+    last = ПоследняяСтрока(ws, cДата)
+
+    For r = ПЕРВАЯ_СТРОКА To last
+        If StrComp(CStr(ws.Cells(r, cСтатус).Value), "Черновик", vbTextCompare) = 0 Then
+            черновиков = черновиков + 1
+            If Len(перечень) < 500 Then
+                перечень = перечень & vbCrLf & "  строка " & r & ": " & _
+                           Format$(ws.Cells(r, cДата).Value, "dd.mm.yyyy") & ", " & _
+                           Left$(CStr(ws.Cells(r, ColReq(ws, "Наименование объекта в документе")).Value), 44)
+            End If
+        End If
+    Next r
+
+    If черновиков = 0 Then
+        MsgBox "Черновиков нет — регистрировать нечего.", vbInformation, "Регистрация черновиков"
+        Exit Sub
+    End If
+
+    If MsgBox("Черновиков к регистрации: " & черновиков & перечень & _
+              IIf(черновиков > 8, vbCrLf & "  …", "") & vbCrLf & vbCrLf & _
+              "Номера будут выданы через " & ОписаниеОбмена() & "." & vbCrLf & _
+              "Записи с замечаниями будут пропущены и названы в конце." & vbCrLf & vbCrLf & _
+              "Зарегистрировать всё?", vbYesNo + vbQuestion, "Регистрация черновиков") = vbNo Then
+        Exit Sub
+    End If
+
+    Application.ScreenUpdating = False
+    перечень = ""
+    For r = ПЕРВАЯ_СТРОКА To last
+        If StrComp(CStr(ws.Cells(r, cСтатус).Value), "Черновик", vbTextCompare) = 0 Then
+            предупреждения = ПричинаНеРегистрировать(ws, r)
+            If предупреждения <> "" Then
+                пропущено = пропущено + 1
+                If Len(перечень) < 700 Then
+                    перечень = перечень & vbCrLf & "  строка " & r & ": " & предупреждения
+                End If
+            ElseIf ВыдатьНомераСтроки(ws, r) Then
+                готово = готово + 1
+            Else
+                пропущено = пропущено + 1
+                перечень = перечень & vbCrLf & "  строка " & r & ": не удалось выдать номер"
+                Exit For                  ' носитель отвалился — дальше бессмысленно
+            End If
+        End If
+    Next r
+    Application.ScreenUpdating = True
+
+    MsgBox "Зарегистрировано: " & готово & " из " & черновиков & "." & _
+           IIf(пропущено = 0, "", vbCrLf & vbCrLf & "Пропущено " & пропущено & ":" & перечень & _
+               vbCrLf & vbCrLf & "Эти записи остались черновиками — поправьте и повторите.") , _
+           vbInformation, "Регистрация черновиков"
+End Sub
+
+
+' Что мешает зарегистрировать строку. Пусто — можно регистрировать.
+Private Function ПричинаНеРегистрировать(ws As Worksheet, r As Long) As String
+    Dim методы As Variant
+    Dim i As Long
+    Dim заполнено As Long
+
+    If Not IsDate(ws.Cells(r, ColReq(ws, "Дата контроля")).Value) Then
+        ПричинаНеРегистрировать = "не заполнена дата контроля"
+        Exit Function
+    End If
+    If Trim$(CStr(ws.Cells(r, ColReq(ws, "ID объекта")).Value)) = "" Then
+        ПричинаНеРегистрировать = "не выбран объект контроля"
+        Exit Function
+    End If
+
+    методы = Split(МЕТОДЫ, ",")
+    For i = LBound(методы) To UBound(методы)
+        If Trim$(CStr(ws.Cells(r, ColReq(ws, методы(i) & " №")).Value)) <> "" Then
+            заполнено = заполнено + 1
+            If Trim$(CStr(ws.Cells(r, ColReq(ws, методы(i) & " исполнитель")).Value)) = "" Then
+                ПричинаНеРегистрировать = "метод " & методы(i) & " без исполнителя"
+                Exit Function
+            End If
+        End If
+    Next i
+    If заполнено = 0 Then ПричинаНеРегистрировать = "не отмечен ни один метод"
+End Function
+
+
+' Выдаёт номера по всем отмеченным методам строки. False — если
+' носитель пропал на середине; уже выданные номера при этом
+' остаются в строке и вторично не запрашиваются.
+Private Function ВыдатьНомераСтроки(ws As Worksheet, r As Long) As Boolean
+    Dim методы As Variant
+    Dim i As Long
+    Dim год As Long
+    Dim номер As Long
+    Dim cНомер As Long
+
+    год = Year(CDate(ws.Cells(r, ColReq(ws, "Дата контроля")).Value))
+    методы = Split(МЕТОДЫ, ",")
+    For i = LBound(методы) To UBound(методы)
+        cНомер = ColReq(ws, методы(i) & " №")
+        If Trim$(CStr(ws.Cells(r, cНомер).Value)) <> "" Then
+            If Not IsNumeric(ws.Cells(r, cНомер).Value) Then
+                номер = ВыдатьНомер(CStr(методы(i)), год)
+                If номер = 0 Then Exit Function
+                ws.Cells(r, cНомер).Value = номер
+            End If
+        End If
+    Next i
+
+    ws.Cells(r, ColReq(ws, "Статус")).Value = "Зарегистрирован"
+    ws.Cells(r, ColReq(ws, "Изменено")).Value = Now
+    If Trim$(CStr(ws.Cells(r, ColReq(ws, "Кем внесено")).Value)) = "" Then
+        ws.Cells(r, ColReq(ws, "Кем внесено")).Value = ТекущийСотрудник()
+    End If
+    ВыдатьНомераСтроки = True
+End Function
+
+
 ' Аннулирование по итогам рекламации: строка остаётся на месте,
 ' иначе в журнале появится дыра, а по Правилам аннулированное
 ' заключение должно быть в журнале видно.

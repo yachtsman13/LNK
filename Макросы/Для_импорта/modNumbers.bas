@@ -50,7 +50,7 @@ Public Function ¬ыдатьЌомер(метод As String, год As Long) As Long
     Dim попытка As Long
 
     папка = ѕапка—чЄтчиков()
-    If Dir(ѕапкаќбмена(), vbDirectory) = "" Then
+    If Not ѕапка—уществует(ѕапкаќбмена()) Then
         MsgBox "ќбща€ папка недоступна:" & vbCrLf & ѕапкаќбмена() & vbCrLf & vbCrLf & _
                "Ќомер можно выдать только через неЄ Ч иначе два человека получат один и тот же. " & _
                "–аботайте с черновым номером, зарегистрируете, когда по€витс€ сеть.", _
@@ -122,7 +122,7 @@ Private Function «ахватитьЅлокировку(файл As String, мо€ћетка As String) As Bool
     Dim ждЄм As Double
 
     ждЄм = Timer
-    Do While Dir(файл) <> ""
+    Do While ‘айл—уществует(файл)
         If Ѕлокировка”старела(файл) Then
             On Error Resume Next
             Kill файл
@@ -152,7 +152,7 @@ End Function
 
 Private Sub —н€тьЅлокировку(файл As String)
     On Error Resume Next
-    If Dir(файл) <> "" Then Kill файл
+    If ‘айл—уществует(файл) Then Kill файл
 End Sub
 
 
@@ -190,7 +190,7 @@ End Sub
 Private Function ѕрочитать—троку(файл As String) As String
     Dim f As Integer
     Dim s As String
-    If Dir(файл) = "" Then Exit Function
+    If Not ‘айл—уществует(файл) Then Exit Function
     On Error GoTo —бой
     f = FreeFile
     Open файл For Input As #f

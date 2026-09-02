@@ -243,6 +243,45 @@ Public Function ѕапка—чЄтчиков() As String
 End Function
 
 
+' Dir на недоступном пути не возвращает пустую строку, а падает с
+' ошибкой 52 ЂBad file name or numberї. —етева€ папка может быть
+' недоступна в любой момент Ч это здесь норма, а не исключительный
+' случай, поэтому все проверки существовани€ идут через эти две
+' функции, а Dir напр€мую дл€ проверки нигде не вызываетс€.
+Public Function ѕапка—уществует(путь As String) As Boolean
+    On Error Resume Next
+    If Trim$(путь) = "" Then Exit Function
+    ѕапка—уществует = (Dir(путь, vbDirectory) <> "")
+    If Err.Number <> 0 Then
+        Err.Clear
+        ѕапка—уществует = False
+    End If
+End Function
+
+
+Public Function ‘айл—уществует(путь As String) As Boolean
+    On Error Resume Next
+    If Trim$(путь) = "" Then Exit Function
+    ‘айл—уществует = (Dir(путь) <> "")
+    If Err.Number <> 0 Then
+        Err.Clear
+        ‘айл—уществует = False
+    End If
+End Function
+
+
+' ѕервый файл по маске; на недоступном пути Ч пуста€ строка, а не сбой.
+' ƒальше по списку идут обычным Dir без аргументов.
+Public Function ѕервый‘айл(маска As String) As String
+    On Error Resume Next
+    ѕервый‘айл = Dir(маска)
+    If Err.Number <> 0 Then
+        Err.Clear
+        ѕервый‘айл = ""
+    End If
+End Function
+
+
 ' —оздаЄт путь целиком, включа€ промежуточные папки.
 Public Sub MkPath(ByVal п As String)
     Dim части() As String

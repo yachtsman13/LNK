@@ -276,7 +276,7 @@ End Function
 ' ── Снимок ────────────────────────────────────────────────────────────
 
 Private Function ОткрытьСнимок(путь As String) As Workbook
-    If Dir(путь) = "" Then Exit Function      ' первая отправка — сравнивать не с чем
+    If Not ФайлСуществует(путь) Then Exit Function      ' первая отправка — сравнивать не с чем
     On Error Resume Next
     Set ОткрытьСнимок = Application.Workbooks.Open(fileName:=путь, ReadOnly:=True, UpdateLinks:=0)
 End Function
@@ -292,7 +292,7 @@ Private Sub СохранитьСнимок(путь As String)
     On Error Resume Next
     MkPath ПапкаКопий()
     Данные().Save
-    If Dir(путь) <> "" Then Kill путь
+    If ФайлСуществует(путь) Then Kill путь
     FileCopy Данные().FullName, путь
 End Sub
 
@@ -337,14 +337,14 @@ Public Sub СобратьСвод()
     If Not ОбщаяПапкаДоступна() Then Exit Sub
 
     папка = ПапкаОбмена() & "Входящие" & Application.PathSeparator
-    If Dir(папка, vbDirectory) = "" Then
+    If Not ПапкаСуществует(папка) Then
         MsgBox "Папка «Входящие» пуста — собирать нечего.", vbInformation, "Свод"
         Exit Sub
     End If
 
     Set конфликты = New Collection
     Set список = New Collection
-    файл = Dir(папка & "*.csv")
+    файл = ПервыйФайл(папка & "*.csv")
     Do While файл <> ""
         список.Add папка & файл
         файл = Dir
@@ -597,7 +597,7 @@ Private Sub СохранитьСостояниеСвода()
     On Error Resume Next
     папка = ПапкаОбмена() & "Свод" & Application.PathSeparator & "История" & Application.PathSeparator
     MkPath папка
-    If Dir(ПапкаОбмена() & "Свод" & Application.PathSeparator & "ЛНК_Свод.xlsx") = "" Then Exit Sub
+    If Not ФайлСуществует(ПапкаОбмена() & "Свод" & Application.PathSeparator & "ЛНК_Свод.xlsx") Then Exit Sub
     цель = папка & "ЛНК_Свод_" & Format$(Now, "yyyymmdd-hhnn") & ".xlsx"
     FileCopy ПапкаОбмена() & "Свод" & Application.PathSeparator & "ЛНК_Свод.xlsx", цель
     ПочиститьИсторию папка
@@ -613,7 +613,7 @@ Private Sub ПочиститьИсторию(папка As String)
     держать = CLng(Val(Настройка("Хранить состояний свода")))
     If держать <= 0 Then держать = 60
     Set файлы = New Collection
-    файл = Dir(папка & "ЛНК_Свод_*.xlsx")
+    файл = ПервыйФайл(папка & "ЛНК_Свод_*.xlsx")
     Do While файл <> ""
         файлы.Add файл
         файл = Dir
@@ -644,7 +644,7 @@ Private Sub ОпубликоватьСвод()
     папка = ПапкаОбмена() & "Свод" & Application.PathSeparator
     MkPath папка
     Данные().Save
-    If Dir(папка & "ЛНК_Свод.xlsx") <> "" Then Kill папка & "ЛНК_Свод.xlsx"
+    If ФайлСуществует(папка & "ЛНК_Свод.xlsx") Then Kill папка & "ЛНК_Свод.xlsx"
     FileCopy Данные().FullName, папка & "ЛНК_Свод.xlsx"
     ЗеркалоОбщейПапки
     Exit Sub
@@ -684,7 +684,7 @@ Public Sub ПолучитьСвод()
     If Данные() Is Nothing Then Exit Sub
     If Not ОбщаяПапкаДоступна() Then Exit Sub
     источник = ПапкаОбмена() & "Свод" & Application.PathSeparator & "ЛНК_Свод.xlsx"
-    If Dir(источник) = "" Then
+    If Not ФайлСуществует(источник) Then
         MsgBox "Свод ещё не опубликован — мастер его не собирал.", vbInformation, "Обмен"
         Exit Sub
     End If
@@ -721,7 +721,7 @@ Private Function ЕстьНеотправленное() As Boolean
     Dim ид As String
 
     путь = ПапкаКопий() & ФАЙЛ_СНИМКА
-    If Dir(путь) = "" Then
+    If Not ФайлСуществует(путь) Then
         ЕстьНеотправленное = True         ' ни разу не отправляли
         Exit Function
     End If
@@ -791,7 +791,7 @@ Public Function КтоМастер() As String
     Dim s As String
 
     файл = ПапкаОбмена() & "Свод" & Application.PathSeparator & "мастер.txt"
-    If Dir(файл) = "" Then Exit Function
+    If Not ФайлСуществует(файл) Then Exit Function
     On Error Resume Next
     f = FreeFile
     Open файл For Input As #f
@@ -819,7 +819,7 @@ End Function
 Private Function ОбщаяПапкаДоступна() As Boolean
     Dim п As String
     п = ПапкаОбмена()
-    If Dir(п, vbDirectory) <> "" Then
+    If ПапкаСуществует(п) Then
         ОбщаяПапкаДоступна = True
         Exit Function
     End If

@@ -224,6 +224,22 @@ def main():
     check(not collisions, "нет пар имён, различающихся только алфавитом%s" %
           ("" if not collisions else ": " + "; ".join(collisions[:5])))
 
+    # ── Dir для проверки существования — только в modConfig ──────────
+    # Dir на недоступном сетевом пути падает с ошибкой 52, а не
+    # возвращает пустую строку. Проверки идут через ПапкаСуществует /
+    # ФайлСуществует / ПервыйФайл, которые эту ошибку гасят.
+    bare = []
+    for path in files:
+        name = os.path.basename(path)[:-4]
+        if name == "modConfig":
+            continue
+        for ln, raw in read_lines(path):
+            code = strip_code(raw)
+            if re.search(r'Dir\([^)]*\)\s*(?:=|<>)\s*""', code) or "vbDirectory" in code:
+                bare.append("%s:%d" % (name, ln))
+    check(not bare, "Dir для проверки путей вызывается только в modConfig%s" %
+          ("" if not bare else ": " + ", ".join(bare[:8])))
+
     # ── лист, переданный параметром, узнаём с места вызова ───────────
     params = {}            # процедура → список имён параметров
     for path in files:

@@ -27,7 +27,7 @@ Public Sub ПроверитьОбновление(Optional молча As Boolean = True)
 
     On Error Resume Next
     папка = ПапкаОбмена() & "Версия" & Application.PathSeparator
-    If Dir(папка & ФАЙЛ_ВЕРСИИ) = "" Then
+    If Not ФайлСуществует(папка & ФАЙЛ_ВЕРСИИ) Then
         If Not молча Then
             MsgBox "В общей папке нет файла версии — обновлений не публиковали.", _
                    vbInformation, "Обновление"
@@ -64,7 +64,7 @@ Private Sub УстановитьОбновление(папка As String, номер As String)
     Dim архив As String
 
     источник = папка & ФАЙЛ_ПРОГРАММЫ
-    If Dir(источник) = "" Then
+    If Not ФайлСуществует(источник) Then
         MsgBox "Файл версии есть, а самой программы в общей папке нет:" & vbCrLf & источник, _
                vbExclamation, "Обновление"
         Exit Sub
@@ -74,7 +74,7 @@ Private Sub УстановитьОбновление(папка As String, номер As String)
     ' Сначала копируем во временный файл и проверяем — работающую
     ' программу заменяем только тем, что заведомо доехало целиком.
     врем = ThisWorkbook.Path & Application.PathSeparator & "~обновление.xlsm"
-    If Dir(врем) <> "" Then Kill врем
+    If ФайлСуществует(врем) Then Kill врем
     FileCopy источник, врем
 
     ожидаемая = ПолеВерсии(папка & ФАЙЛ_ВЕРСИИ, 4)
@@ -116,7 +116,7 @@ Private Sub УстановитьОбновление(папка As String, номер As String)
 
 Сбой:
     On Error Resume Next
-    If Dir(врем) <> "" Then Kill врем
+    If ФайлСуществует(врем) Then Kill врем
     MsgBox "Обновление не установлено." & vbCrLf & "Ошибка: " & Err.Description & vbCrLf & vbCrLf & _
            "Старая версия осталась на месте, работать можно.", vbCritical, "Обновление"
 End Sub
@@ -140,7 +140,7 @@ Public Sub ОпубликоватьВерсию()
     MkPath папка
 
     ThisWorkbook.Save
-    If Dir(папка & ФАЙЛ_ПРОГРАММЫ) <> "" Then Kill папка & ФАЙЛ_ПРОГРАММЫ
+    If ФайлСуществует(папка & ФАЙЛ_ПРОГРАММЫ) Then Kill папка & ФАЙЛ_ПРОГРАММЫ
     FileCopy ThisWorkbook.FullName, папка & ФАЙЛ_ПРОГРАММЫ
     сумма = SHA256(папка & ФАЙЛ_ПРОГРАММЫ)
 
@@ -183,7 +183,7 @@ Public Function SHA256(путь As String) As String
     Set wsh = CreateObject("WScript.Shell")
     wsh.Run "cmd /c certutil -hashfile """ & путь & """ SHA256 > """ & врем & """", 0, True
 
-    If Dir(врем) = "" Then Exit Function
+    If Not ФайлСуществует(врем) Then Exit Function
     f = FreeFile
     Open врем For Input As #f
     Do While Not EOF(f)
@@ -222,7 +222,7 @@ Private Function ПолеВерсии(файл As String, номерСтроки As Long) As String
     Dim i As Long
     Dim s As String
 
-    If Dir(файл) = "" Then Exit Function
+    If Not ФайлСуществует(файл) Then Exit Function
     On Error Resume Next
     f = FreeFile
     Open файл For Input As #f
@@ -273,7 +273,7 @@ End Function
 
 
 Private Function ОбщаяПапкаЕсть() As Boolean
-    If Dir(ПапкаОбмена(), vbDirectory) <> "" Then
+    If ПапкаСуществует(ПапкаОбмена()) Then
         ОбщаяПапкаЕсть = True
         Exit Function
     End If

@@ -142,10 +142,10 @@ Private Function НайтиДокумент(ws As Worksheet, r As Long, мето
     дата = ws.Cells(r, ColReq(ws, "Дата контроля")).Value
     год = IIf(IsDate(дата), Year(CDate(дата)), Year(Date))
     папка = ПапкаГотовых() & CStr(год) & Application.PathSeparator & метод & Application.PathSeparator
-    If Dir(папка, vbDirectory) = "" Then Exit Function
+    If Not ПапкаСуществует(папка) Then Exit Function
 
     маска = ОчиститьДляИмениФайла(РегНомер(ws, r, метод)) & "*.docx"
-    файл = Dir(папка & маска)
+    файл = ПервыйФайл(папка & маска)
     If файл <> "" Then НайтиДокумент = папка & файл
 End Function
 

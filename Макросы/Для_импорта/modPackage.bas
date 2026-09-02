@@ -142,10 +142,10 @@ Private Function Ќайтиƒокумент(ws As Worksheet, r As Long, метод As String) As S
     дата = ws.Cells(r, ColReq(ws, "ƒата контрол€")).Value
     год = IIf(IsDate(дата), Year(CDate(дата)), Year(Date))
     папка = ѕапка√отовых() & CStr(год) & Application.PathSeparator & метод & Application.PathSeparator
-    If Dir(папка, vbDirectory) = "" Then Exit Function
+    If Not ѕапка—уществует(папка) Then Exit Function
 
     маска = ќчиститьƒл€»мени‘айла(–егЌомер(ws, r, метод)) & "*.docx"
-    файл = Dir(папка & маска)
+    файл = ѕервый‘айл(папка & маска)
     If файл <> "" Then Ќайтиƒокумент = папка & файл
 End Function
 

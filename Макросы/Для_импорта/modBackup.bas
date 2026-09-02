@@ -58,11 +58,11 @@ Public Sub —копировать—чЄтчики()
 
     On Error Resume Next
     откуда = ѕапка—чЄтчиков()
-    If Dir(откуда, vbDirectory) = "" Then Exit Sub
+    If Not ѕапка—уществует(откуда) Then Exit Sub
     куда = ѕапка опий() & "—чЄтчики" & Application.PathSeparator
     MkPath куда
 
-    файл = Dir(откуда & "*.txt")
+    файл = ѕервый‘айл(откуда & "*.txt")
     Do While файл <> ""
         FileCopy откуда & файл, куда & файл
         файл = Dir
@@ -86,7 +86,7 @@ Private Sub ѕочистить—тарые опии(папка As String)
     If держатьћес€цев <= 0 Then держатьћес€цев = 12
 
     On Error Resume Next
-    файл = Dir(папка & "ЋЌ _ƒанные_*.xlsx")
+    файл = ѕервый‘айл(папка & "ЋЌ _ƒанные_*.xlsx")
     Do While файл <> ""
         s = Mid$(файл, Len("ЋЌ _ƒанные_") + 1, 10)
         If IsDate(s) Then

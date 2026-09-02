@@ -58,11 +58,11 @@ Public Sub СкопироватьСчётчики()
 
     On Error Resume Next
     откуда = ПапкаСчётчиков()
-    If Dir(откуда, vbDirectory) = "" Then Exit Sub
+    If Not ПапкаСуществует(откуда) Then Exit Sub
     куда = ПапкаКопий() & "Счётчики" & Application.PathSeparator
     MkPath куда
 
-    файл = Dir(откуда & "*.txt")
+    файл = ПервыйФайл(откуда & "*.txt")
     Do While файл <> ""
         FileCopy откуда & файл, куда & файл
         файл = Dir
@@ -86,7 +86,7 @@ Private Sub ПочиститьСтарыеКопии(папка As String)
     If держатьМесяцев <= 0 Then держатьМесяцев = 12
 
     On Error Resume Next
-    файл = Dir(папка & "ЛНК_Данные_*.xlsx")
+    файл = ПервыйФайл(папка & "ЛНК_Данные_*.xlsx")
     Do While файл <> ""
         s = Mid$(файл, Len("ЛНК_Данные_") + 1, 10)
         If IsDate(s) Then

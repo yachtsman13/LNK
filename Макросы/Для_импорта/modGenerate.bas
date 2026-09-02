@@ -79,7 +79,7 @@ Private Function —формироватьќдин(ws As Worksheet, r As Long, метод As String) A
     шаблон = ‘айлЎаблона(метод)
     If шаблон = "" Then Exit Function
     путьЎаблона = ѕапкаЎаблонов() & шаблон
-    If Dir(путьЎаблона) = "" Then
+    If Not ‘айл—уществует(путьЎаблона) Then
         MsgBox "Ќе найден шаблон дл€ метода " & метод & ":" & vbCrLf & путьЎаблона, _
                vbExclamation, "‘ормирование документов"
         Exit Function

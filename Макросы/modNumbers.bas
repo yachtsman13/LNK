@@ -50,7 +50,7 @@ Public Function ВыдатьНомер(метод As String, год As Long) As 
     Dim попытка As Long
 
     папка = ПапкаСчётчиков()
-    If Dir(ПапкаОбмена(), vbDirectory) = "" Then
+    If Not ПапкаСуществует(ПапкаОбмена()) Then
         MsgBox "Общая папка недоступна:" & vbCrLf & ПапкаОбмена() & vbCrLf & vbCrLf & _
                "Номер можно выдать только через неё — иначе два человека получат один и тот же. " & _
                "Работайте с черновым номером, зарегистрируете, когда появится сеть.", _
@@ -122,7 +122,7 @@ Private Function ЗахватитьБлокировку(файл As String, мо
     Dim ждём As Double
 
     ждём = Timer
-    Do While Dir(файл) <> ""
+    Do While ФайлСуществует(файл)
         If БлокировкаУстарела(файл) Then
             On Error Resume Next
             Kill файл
@@ -152,7 +152,7 @@ End Function
 
 Private Sub СнятьБлокировку(файл As String)
     On Error Resume Next
-    If Dir(файл) <> "" Then Kill файл
+    If ФайлСуществует(файл) Then Kill файл
 End Sub
 
 
@@ -190,7 +190,7 @@ End Sub
 Private Function ПрочитатьСтроку(файл As String) As String
     Dim f As Integer
     Dim s As String
-    If Dir(файл) = "" Then Exit Function
+    If Not ФайлСуществует(файл) Then Exit Function
     On Error GoTo Сбой
     f = FreeFile
     Open файл For Input As #f

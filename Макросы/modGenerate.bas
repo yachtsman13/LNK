@@ -79,7 +79,7 @@ Private Function СформироватьОдин(ws As Worksheet, r As Long, м
     шаблон = ФайлШаблона(метод)
     If шаблон = "" Then Exit Function
     путьШаблона = ПапкаШаблонов() & шаблон
-    If Dir(путьШаблона) = "" Then
+    If Not ФайлСуществует(путьШаблона) Then
         MsgBox "Не найден шаблон для метода " & метод & ":" & vbCrLf & путьШаблона, _
                vbExclamation, "Формирование документов"
         Exit Function

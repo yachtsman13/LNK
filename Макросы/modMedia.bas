@@ -189,7 +189,7 @@ Private Function ПрочитатьФайлНосителей() As String
     Dim s As String
 
     файл = ПапкаОбмена() & "Версия" & Application.PathSeparator & "носители.txt"
-    If Dir(файл) = "" Then Exit Function
+    If Not ФайлСуществует(файл) Then Exit Function
     On Error Resume Next
     f = FreeFile
     Open файл For Input As #f

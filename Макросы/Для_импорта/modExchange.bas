@@ -276,7 +276,7 @@ End Function
 ' -- —нимок ------------------------------------------------------------
 
 Private Function ќткрыть—нимок(путь As String) As Workbook
-    If Dir(путь) = "" Then Exit Function      ' перва€ отправка Ч сравнивать не с чем
+    If Not ‘айл—уществует(путь) Then Exit Function      ' перва€ отправка Ч сравнивать не с чем
     On Error Resume Next
     Set ќткрыть—нимок = Application.Workbooks.Open(fileName:=путь, ReadOnly:=True, UpdateLinks:=0)
 End Function
@@ -292,7 +292,7 @@ Private Sub —охранить—нимок(путь As String)
     On Error Resume Next
     MkPath ѕапка опий()
     ƒанные().Save
-    If Dir(путь) <> "" Then Kill путь
+    If ‘айл—уществует(путь) Then Kill путь
     FileCopy ƒанные().FullName, путь
 End Sub
 
@@ -337,14 +337,14 @@ Public Sub —обрать—вод()
     If Not ќбща€ѕапкаƒоступна() Then Exit Sub
 
     папка = ѕапкаќбмена() & "¬ход€щие" & Application.PathSeparator
-    If Dir(папка, vbDirectory) = "" Then
+    If Not ѕапка—уществует(папка) Then
         MsgBox "ѕапка Ђ¬ход€щиеї пуста Ч собирать нечего.", vbInformation, "—вод"
         Exit Sub
     End If
 
     Set конфликты = New Collection
     Set список = New Collection
-    файл = Dir(папка & "*.csv")
+    файл = ѕервый‘айл(папка & "*.csv")
     Do While файл <> ""
         список.Add папка & файл
         файл = Dir
@@ -597,7 +597,7 @@ Private Sub —охранить—осто€ние—вода()
     On Error Resume Next
     папка = ѕапкаќбмена() & "—вод" & Application.PathSeparator & "»стори€" & Application.PathSeparator
     MkPath папка
-    If Dir(ѕапкаќбмена() & "—вод" & Application.PathSeparator & "ЋЌ _—вод.xlsx") = "" Then Exit Sub
+    If Not ‘айл—уществует(ѕапкаќбмена() & "—вод" & Application.PathSeparator & "ЋЌ _—вод.xlsx") Then Exit Sub
     цель = папка & "ЋЌ _—вод_" & Format$(Now, "yyyymmdd-hhnn") & ".xlsx"
     FileCopy ѕапкаќбмена() & "—вод" & Application.PathSeparator & "ЋЌ _—вод.xlsx", цель
     ѕочистить»сторию папка
@@ -613,7 +613,7 @@ Private Sub ѕочистить»сторию(папка As String)
     держать = CLng(Val(Ќастройка("’ранить состо€ний свода")))
     If держать <= 0 Then держать = 60
     Set файлы = New Collection
-    файл = Dir(папка & "ЋЌ _—вод_*.xlsx")
+    файл = ѕервый‘айл(папка & "ЋЌ _—вод_*.xlsx")
     Do While файл <> ""
         файлы.Add файл
         файл = Dir
@@ -644,7 +644,7 @@ Private Sub ќпубликовать—вод()
     папка = ѕапкаќбмена() & "—вод" & Application.PathSeparator
     MkPath папка
     ƒанные().Save
-    If Dir(папка & "ЋЌ _—вод.xlsx") <> "" Then Kill папка & "ЋЌ _—вод.xlsx"
+    If ‘айл—уществует(папка & "ЋЌ _—вод.xlsx") Then Kill папка & "ЋЌ _—вод.xlsx"
     FileCopy ƒанные().FullName, папка & "ЋЌ _—вод.xlsx"
     «еркалоќбщейѕапки
     Exit Sub
@@ -684,7 +684,7 @@ Public Sub ѕолучить—вод()
     If ƒанные() Is Nothing Then Exit Sub
     If Not ќбща€ѕапкаƒоступна() Then Exit Sub
     источник = ѕапкаќбмена() & "—вод" & Application.PathSeparator & "ЋЌ _—вод.xlsx"
-    If Dir(источник) = "" Then
+    If Not ‘айл—уществует(источник) Then
         MsgBox "—вод ещЄ не опубликован Ч мастер его не собирал.", vbInformation, "ќбмен"
         Exit Sub
     End If
@@ -721,7 +721,7 @@ Private Function ≈стьЌеотправленное() As Boolean
     Dim ид As String
 
     путь = ѕапка опий() & ‘ј…Ћ_—Ќ»ћ ј
-    If Dir(путь) = "" Then
+    If Not ‘айл—уществует(путь) Then
         ≈стьЌеотправленное = True         ' ни разу не отправл€ли
         Exit Function
     End If
@@ -791,7 +791,7 @@ Public Function  тоћастер() As String
     Dim s As String
 
     файл = ѕапкаќбмена() & "—вод" & Application.PathSeparator & "мастер.txt"
-    If Dir(файл) = "" Then Exit Function
+    If Not ‘айл—уществует(файл) Then Exit Function
     On Error Resume Next
     f = FreeFile
     Open файл For Input As #f
@@ -819,7 +819,7 @@ End Function
 Private Function ќбща€ѕапкаƒоступна() As Boolean
     Dim п As String
     п = ѕапкаќбмена()
-    If Dir(п, vbDirectory) <> "" Then
+    If ѕапка—уществует(п) Then
         ќбща€ѕапкаƒоступна = True
         Exit Function
     End If

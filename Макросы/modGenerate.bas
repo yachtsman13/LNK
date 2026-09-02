@@ -40,7 +40,7 @@ Public Sub СформироватьДокументы()
     методы = Split(МЕТОДЫ, ",")
     For i = LBound(методы) To UBound(методы)
         метод = методы(i)
-        If Trim$(CStr(ws.Cells(r, ColReq(ws, метод & " №")).Value)) <> "" Then
+        If МетодПрименён(ws, r, метод) Then
             If ФайлШаблона(метод) = "" Then
                 безШаблона = безШаблона & IIf(безШаблона = "", "", ", ") & метод
             Else

@@ -36,8 +36,11 @@ Public Sub НоваяЗапись()
     ws.Activate
     ws.Cells(r, ColReq(ws, "Дата контроля")).Select
     MsgBox "Заведена черновая запись " & ws.Cells(r, ColReq(ws, "ID записи")).Value & "." & vbCrLf & vbCrLf & _
-           "Заполните объект и методы, затем нажмите «Зарегистрировать» — тогда будут " & _
-           "выданы настоящие номера. До регистрации запись в бумажный журнал не идёт.", _
+           "Заполните дату, объект и по каждому применённому методу — ИСПОЛНИТЕЛЯ. " & _
+           "Именно исполнитель отмечает, что метод применялся; колонку «№» не трогайте, " & _
+           "номер туда впишет система." & vbCrLf & vbCrLf & _
+           "Потом «Зарегистрировать» — тогда будут выданы настоящие номера. " & _
+           "До регистрации запись в бумажный журнал не идёт.", _
            vbInformation, "Новая запись"
 End Sub
 
@@ -89,7 +92,7 @@ Public Sub ЗарегистрироватьЗапись()
 
     методы = Split(МЕТОДЫ, ",")
     For i = LBound(методы) To UBound(методы)
-        If Trim$(CStr(ws.Cells(r, ColReq(ws, методы(i) & " №")).Value)) <> "" Then
+        If МетодПрименён(ws, r, CStr(методы(i))) Then
             заполнено = заполнено + 1
         End If
     Next i
@@ -112,19 +115,18 @@ Public Sub ЗарегистрироватьЗапись()
     For i = LBound(методы) To UBound(методы)
         метод = методы(i)
         cНомер = ColReq(ws, метод & " №")
-        If Trim$(CStr(ws.Cells(r, cНомер).Value)) <> "" Then
-            If Not IsNumeric(ws.Cells(r, cНомер).Value) Then
-                номер = ВыдатьНомер(метод, год)
-                If номер = 0 Then
-                    MsgBox "Регистрация прервана на методе " & метод & "." & vbCrLf & _
-                           "Выданные до него номера сохранены в строке — повторите " & _
-                           "регистрацию, недостающие номера доберутся.", _
-                           vbExclamation, "Регистрация"
-                    Exit Sub
-                End If
-                ws.Cells(r, cНомер).Value = номер
-                выдано = выдано & vbCrLf & "  " & ФорматНомера(номер, год, метод)
+        ' Номер нужен там, где метод применялся, а числа в клетке ещё нет.
+        If МетодПрименён(ws, r, метод) And Not IsNumeric(ws.Cells(r, cНомер).Value) Then
+            номер = ВыдатьНомер(метод, год)
+            If номер = 0 Then
+                MsgBox "Регистрация прервана на методе " & метод & "." & vbCrLf & _
+                       "Выданные до него номера сохранены в строке — повторите " & _
+                       "регистрацию, недостающие номера доберутся.", _
+                       vbExclamation, "Регистрация"
+                Exit Sub
             End If
+            ws.Cells(r, cНомер).Value = номер
+            выдано = выдано & vbCrLf & "  " & ФорматНомера(номер, год, метод)
         End If
     Next i
 
@@ -237,7 +239,7 @@ Private Function ПричинаНеРегистрировать(ws As Worksheet, r As Long) As String
 
     методы = Split(МЕТОДЫ, ",")
     For i = LBound(методы) To UBound(методы)
-        If Trim$(CStr(ws.Cells(r, ColReq(ws, методы(i) & " №")).Value)) <> "" Then
+        If МетодПрименён(ws, r, CStr(методы(i))) Then
             заполнено = заполнено + 1
             If Trim$(CStr(ws.Cells(r, ColReq(ws, методы(i) & " исполнитель")).Value)) = "" Then
                 ПричинаНеРегистрировать = "метод " & методы(i) & " без исполнителя"
@@ -263,12 +265,10 @@ Private Function ВыдатьНомераСтроки(ws As Worksheet, r As Long) As Boolean
     методы = Split(МЕТОДЫ, ",")
     For i = LBound(методы) To UBound(методы)
         cНомер = ColReq(ws, методы(i) & " №")
-        If Trim$(CStr(ws.Cells(r, cНомер).Value)) <> "" Then
-            If Not IsNumeric(ws.Cells(r, cНомер).Value) Then
-                номер = ВыдатьНомер(CStr(методы(i)), год)
-                If номер = 0 Then Exit Function
-                ws.Cells(r, cНомер).Value = номер
-            End If
+        If МетодПрименён(ws, r, CStr(методы(i))) And Not IsNumeric(ws.Cells(r, cНомер).Value) Then
+            номер = ВыдатьНомер(CStr(методы(i)), год)
+            If номер = 0 Then Exit Function
+            ws.Cells(r, cНомер).Value = номер
         End If
     Next i
 
@@ -337,7 +337,12 @@ Public Function РегНомер(ws As Worksheet, строка As Long, метод As String) As St
     Dim v As Variant
     Dim дата As Variant
     v = ws.Cells(строка, ColReq(ws, метод & " №")).Value
-    If Trim$(CStr(v)) = "" Then Exit Function
+    If Trim$(CStr(v)) = "" Then
+        ' Метод применялся, но номер ещё не выдан: в печатном журнале
+        ' такая строка должна быть видна, а не пропасть.
+        If МетодПрименён(ws, строка, метод) Then РегНомер = "не зарегистрирован"
+        Exit Function
+    End If
     дата = ws.Cells(строка, ColReq(ws, "Дата контроля")).Value
     If Not IsNumeric(v) Then
         РегНомер = CStr(v)          ' черновик или «?» из миграции

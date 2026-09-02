@@ -40,7 +40,7 @@ Public Sub —формироватьƒокументы()
     методы = Split(ћ≈“ќƒџ, ",")
     For i = LBound(методы) To UBound(методы)
         метод = методы(i)
-        If Trim$(CStr(ws.Cells(r, ColReq(ws, метод & " є")).Value)) <> "" Then
+        If ћетодѕрименЄн(ws, r, метод) Then
             If ‘айлЎаблона(метод) = "" Then
                 безЎаблона = безЎаблона & IIf(безЎаблона = "", "", ", ") & метод
             Else

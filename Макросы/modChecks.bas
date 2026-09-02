@@ -169,7 +169,7 @@ Public Function ПроверитьСтрокуЖурнала(строка As Lon
 
     For i = LBound(методы) To UBound(методы)
         метод = методы(i)
-        If Trim$(CStr(ws.Cells(строка, ColReq(ws, метод & " №")).Value)) <> "" Then
+        If МетодПрименён(ws, строка, метод) Then
             фио = Trim$(CStr(ws.Cells(строка, ColReq(ws, метод & " исполнитель")).Value))
             If фио = "" Then
                 текст = текст & vbCrLf & "• " & метод & ": не указан исполнитель."

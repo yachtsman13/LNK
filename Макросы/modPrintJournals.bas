@@ -19,6 +19,9 @@ Public Sub ПостроитьВсеПечатныеЖурналы()
     Dim i As Long
     Dim год As Long
     Dim всего As Long
+    Dim черновиков As Long
+    Dim подробно As String
+    Dim записей As Long
 
     год = СпроситьГод()
     If год = 0 Then Exit Sub
@@ -27,12 +30,29 @@ Public Sub ПостроитьВсеПечатныеЖурналы()
     On Error GoTo Сбой
     методы = Split(МЕТОДЫ, ",")
     For i = LBound(методы) To UBound(методы)
-        всего = всего + ПостроитьЖурналМетода(CStr(методы(i)), год)
+        записей = ПостроитьЖурналМетода(CStr(методы(i)), год)
+        всего = всего + записей
+        If записей > 0 Then подробно = подробно & vbCrLf & "  " & методы(i) & ": " & записей
     Next i
+    черновиков = СколькоЧерновиков(год)
     Application.ScreenUpdating = True
 
-    MsgBox "Печатные журналы за " & год & " год перестроены." & vbCrLf & _
-           "Всего записей: " & всего & ".", vbInformation, "Печатные журналы"
+    If всего = 0 Then
+        MsgBox "За " & год & " год записей не нашлось." & vbCrLf & vbCrLf & _
+               "Проверьте: тот ли год (дата контроля в журнале), и указан ли " & _
+               "исполнитель хотя бы по одному методу — именно он отмечает, " & _
+               "что метод применялся." & vbCrLf & vbCrLf & _
+               "Листы «Печать_*» создаются в книге ПРОГРАММЫ (ЛНК_Программа.xlsm), " & _
+               "а не в книге данных.", vbExclamation, "Печатные журналы"
+        Exit Sub
+    End If
+
+    MsgBox "Печатные журналы за " & год & " год перестроены." & подробно & vbCrLf & _
+           "Всего записей: " & всего & "." & _
+           IIf(черновиков = 0, "", vbCrLf & vbCrLf & "Из них незарегистрированных: " & _
+               черновиков & " — они помечены в примечании. До печати журнала их " & _
+               "нужно зарегистрировать, иначе останутся без номеров.") & vbCrLf & vbCrLf & _
+           "Листы «Печать_*» — в этой книге, внизу.", vbInformation, "Печатные журналы"
     Exit Sub
 Сбой:
     Application.ScreenUpdating = True
@@ -64,7 +84,7 @@ Public Function ПостроитьЖурналМетода(метод As String,
     ReDim записи(1 To 10, 1 To WorksheetFunction.Max(last - ПЕРВАЯ_СТРОКА + 1, 1))
 
     For r = ПЕРВАЯ_СТРОКА To last
-        If Trim$(CStr(src.Cells(r, cНомер).Value)) <> "" Then
+        If МетодПрименён(src, r, метод) Then
             If IsDate(src.Cells(r, cДата).Value) Then
                 If Year(CDate(src.Cells(r, cДата).Value)) = год Then
                     n = n + 1
@@ -108,6 +128,28 @@ Public Function ПостроитьЖурналМетода(метод As String,
     ОформитьТаблицу ws, 5, 4 + n, 10
     НастроитьПечать ws, метод, год
     ПостроитьЖурналМетода = n
+End Function
+
+
+Private Function СколькоЧерновиков(год As Long) As Long
+    Dim src As Worksheet
+    Dim r As Long, last As Long
+    Dim cСтатус As Long, cДата As Long
+
+    Set src = ЛистТихо(Л_ЖУРНАЛ)
+    If src Is Nothing Then Exit Function
+    cСтатус = ColReq(src, "Статус")
+    cДата = ColReq(src, "Дата контроля")
+    last = ПоследняяСтрока(src, cДата)
+    For r = ПЕРВАЯ_СТРОКА To last
+        If StrComp(CStr(src.Cells(r, cСтатус).Value), "Черновик", vbTextCompare) = 0 Then
+            If IsDate(src.Cells(r, cДата).Value) Then
+                If Year(CDate(src.Cells(r, cДата).Value)) = год Then
+                    СколькоЧерновиков = СколькоЧерновиков + 1
+                End If
+            End If
+        End If
+    Next r
 End Function
 
 

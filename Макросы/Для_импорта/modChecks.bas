@@ -169,7 +169,7 @@ Public Function ѕроверить—троку∆урнала(строка As Long) As String
 
     For i = LBound(методы) To UBound(методы)
         метод = методы(i)
-        If Trim$(CStr(ws.Cells(строка, ColReq(ws, метод & " є")).Value)) <> "" Then
+        If ћетодѕрименЄн(ws, строка, метод) Then
             фио = Trim$(CStr(ws.Cells(строка, ColReq(ws, метод & " исполнитель")).Value))
             If фио = "" Then
                 текст = текст & vbCrLf & "- " & метод & ": не указан исполнитель."

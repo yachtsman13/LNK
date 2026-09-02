@@ -124,7 +124,7 @@ Private Function СобратьФайлыРаботы(ws As Worksheet, r As Long
     методы = Split(МЕТОДЫ, ",")
     For i = LBound(методы) To UBound(методы)
         метод = CStr(методы(i))
-        If Trim$(CStr(ws.Cells(r, ColReq(ws, метод & " №")).Value)) <> "" Then
+        If МетодПрименён(ws, r, метод) Then
             путь = НайтиДокумент(ws, r, метод)
             If путь <> "" Then список.Add путь
         End If

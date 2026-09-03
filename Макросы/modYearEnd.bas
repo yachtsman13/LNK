@@ -39,6 +39,7 @@ Public Sub ЗакрытьГод()
         If записей > 0 Then
             ДобавитьТитулИЗаверение CStr(методы(i)), год, записей
             опись.Add Array("Журнал " & методы(i), записей)
+            ЗаписатьВЖурналЖурналов CStr(методы(i)), год, записей
         End If
     Next i
 
@@ -71,6 +72,236 @@ End Sub
 
 ' Титульный лист и лист заверения добавляются к уже построенному
 ' журналу метода: первый — перед таблицей, второй — после неё.
+' Строка в «Журнал журналов» на этот метод и год — если уже есть
+' (повторное закрытие того же года), обновляется она же, а не заводится
+' вторая: иначе один и тот же журнал числился бы дважды в собственном
+' учёте журналов, что для документа учёта документов особенно нелепо.
+Private Sub ЗаписатьВЖурналЖурналов(метод As String, год As Long, записей As Long)
+    Dim жж As Worksheet
+    Dim i As Long, last As Long
+    Dim строка As Long
+
+    Set жж = ЛистТихо("Журнал_журналов")
+    If жж Is Nothing Then Exit Sub
+
+    last = ПоследняяСтрока(жж, ColReq(жж, "Метод"))
+    For i = ПЕРВАЯ_СТРОКА To last
+        If StrComp(Trim$(CStr(жж.Cells(i, ColReq(жж, "Метод")).Value)), метод, vbTextCompare) = 0 Then
+            If CLng(Val(жж.Cells(i, ColReq(жж, "Год")).Value)) = год Then
+                строка = i
+                Exit For
+            End If
+        End If
+    Next i
+    If строка = 0 Then строка = last + 1
+
+    жж.Cells(строка, ColReq(жж, "ID")).Value = "ЖЖ-" & метод & "-" & год
+    жж.Cells(строка, ColReq(жж, "Наименование журнала")).Value = _
+        "Журнал учёта заключений " & метод
+    жж.Cells(строка, ColReq(жж, "Метод")).Value = метод
+    жж.Cells(строка, ColReq(жж, "Год")).Value = год
+    жж.Cells(строка, ColReq(жж, "Учётный номер")).Value = _
+        Настройка("Учётный номер журнала " & метод)
+    жж.Cells(строка, ColReq(жж, "Записей за год")).Value = записей
+    жж.Cells(строка, ColReq(жж, "Дата закрытия")).Value = Date
+    жж.Cells(строка, ColReq(жж, "Кем закрыт")).Value = ТекущийСотрудник()
+End Sub
+
+
+' ── Передача в архив ────────────────────────────────────────────────
+
+' Отмечает выделенные строки журнала как переданные в архив: пишет
+' в саму строку журнала (там для этого есть колонка «№ экз., дата
+' передачи в архив ЛНК») и заводит по строке в «Архивное_хранение»,
+' Приложение №5 к Правилам учёта документации. Строки, уже отмеченные
+' раньше, пропускаются молча — по счётчику пропусков видно, что часть
+' выделенного уже была в архиве, а не задваивается.
+Public Sub ОтметитьПередачуВАрхив()
+    Dim ж As Worksheet
+    Dim ар As Worksheet
+    Dim строки As Range
+    Dim ячейка As Range
+    Dim номерЭкз As String
+    Dim строкаАр As Long
+    Dim cПоле As Long
+    Dim заведено As Long, пропущено As Long
+
+    Set ж = Лист(Л_ЖУРНАЛ)
+    Set ар = Лист("Архивное_хранение")
+    If ж Is Nothing Or ар Is Nothing Then Exit Sub
+    If ActiveSheet.Name <> ж.Name Then
+        MsgBox "Выделите на листе «" & ж.Name & "» строки, которые передаёте в архив.", _
+               vbInformation, "Передача в архив"
+        Exit Sub
+    End If
+
+    номерЭкз = Trim$(InputBox("Номер переданного экземпляра:", "Передача в архив", "1"))
+    If StrPtr(номерЭкз) = 0 Then Exit Sub
+
+    Set строки = Selection
+    cПоле = ColReq(ж, "№ экз., дата передачи в архив ЛНК")
+    строкаАр = ПоследняяСтрока(ар, 1) + 1
+
+    For Each ячейка In строки.Columns(1).Cells
+        If ячейка.Row >= ПЕРВАЯ_СТРОКА Then
+            If Trim$(CStr(ж.Cells(ячейка.Row, ColReq(ж, "ID записи")).Value)) <> "" Then
+                If Trim$(CStr(ж.Cells(ячейка.Row, cПоле).Value)) <> "" Then
+                    пропущено = пропущено + 1
+                Else
+                    ж.Cells(ячейка.Row, cПоле).Value = _
+                        "№" & номерЭкз & ", " & Format$(Date, "dd.mm.yyyy")
+
+                    ар.Cells(строкаАр, ColReq(ар, "ID")).Value = НовыйIDАрхива(ар)
+                    ар.Cells(строкаАр, ColReq(ар, "ID записи журнала")).Value = _
+                        ж.Cells(ячейка.Row, ColReq(ж, "ID записи")).Value
+                    ар.Cells(строкаАр, ColReq(ар, "Обозначение записи")).Value = _
+                        ж.Cells(ячейка.Row, ColReq(ж, "Обозначение записи (для выбора)")).Value
+                    ар.Cells(строкаАр, ColReq(ар, "Дата передачи в архив")).Value = Date
+                    ар.Cells(строкаАр, ColReq(ар, "Кем передано")).Value = ТекущийСотрудник()
+                    строкаАр = строкаАр + 1
+                    заведено = заведено + 1
+                End If
+            End If
+        End If
+    Next ячейка
+
+    If заведено = 0 And пропущено = 0 Then
+        MsgBox "Не выделено ни одной строки записи.", vbExclamation, "Передача в архив"
+        Exit Sub
+    End If
+
+    MsgBox "Передано в архив: " & заведено & "." & _
+           IIf(пропущено > 0, vbCrLf & "Пропущено (были отмечены раньше): " & пропущено & ".", ""), _
+           vbInformation, "Передача в архив"
+End Sub
+
+
+' ── Опись хранения ────────────────────────────────────────────────────
+
+' Опись, которая вкладывается в папку с результатами контроля —
+' Приложение №4 к Правилам учёта документации. Собирается из журнала
+' заключений за период, который физически лёг в одну папку: не «за
+' год», как закрытие журналов, а «что в этой конкретной папке» —
+' диапазон может быть любым, от недели до нескольких лет.
+Public Sub ПостроитьОписьХранения()
+    Dim ж As Worksheet
+    Dim ws As Worksheet
+    Dim сНач As String, сКон As String
+    Dim дНач As Date, дКон As Date
+    Dim i As Long, last As Long, n As Long
+    Dim cДата As Long, cАкт As Long, cОбъект As Long, cАрхив As Long
+    Dim методы As Variant, m As Long
+    Dim список As String
+    Dim д As Date
+
+    Set ж = Лист(Л_ЖУРНАЛ)
+    If ж Is Nothing Then Exit Sub
+
+    сНач = Trim$(InputBox("Опись за какой период? Дата начала, ДД.ММ.ГГГГ:", _
+                          "Опись хранения", Format$(DateSerial(Year(Date), 1, 1), "dd.mm.yyyy")))
+    If сНач = "" Or Not IsDate(сНач) Then Exit Sub
+    дНач = CDate(сНач)
+    сКон = Trim$(InputBox("Дата окончания, ДД.ММ.ГГГГ:", "Опись хранения", _
+                          Format$(Date, "dd.mm.yyyy")))
+    If сКон = "" Or Not IsDate(сКон) Then Exit Sub
+    дКон = CDate(сКон)
+
+    cДата = ColReq(ж, "Дата контроля")
+    cАкт = ColReq(ж, "№ акта")
+    cОбъект = ColReq(ж, "Наименование объекта в документе")
+    cАрхив = ColReq(ж, "№ экз., дата передачи в архив ЛНК")
+    методы = Split(МЕТОДЫ, ",")
+
+    Application.ScreenUpdating = False
+    Set ws = ПересоздатьЛистОписи()
+    ws.Cells(1, 1).Value = "ОПИСЬ ХРАНЕНИЯ"
+    ws.Cells(2, 1).Value = Настройка("Полное наименование ЛНК")
+    ws.Cells(3, 1).Value = "за период с " & Format$(дНач, "dd.mm.yyyy") & _
+                           " по " & Format$(дКон, "dd.mm.yyyy")
+    ws.Range("A1:F1").Merge: ws.Range("A2:F2").Merge: ws.Range("A3:F3").Merge
+    ws.Cells(1, 1).Font.Size = 13: ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(3, 1).Font.Italic = True
+    ws.Range("A1:A3").HorizontalAlignment = xlCenter
+
+    n = 5
+    ws.Cells(n, 1).Value = "№ п/п": ws.Cells(n, 2).Value = "Дата"
+    ws.Cells(n, 3).Value = "№ акта": ws.Cells(n, 4).Value = "Объект"
+    ws.Cells(n, 5).Value = "Методы": ws.Cells(n, 6).Value = "Передано в архив"
+    With ws.Range(ws.Cells(n, 1), ws.Cells(n, 6))
+        .Font.Bold = True: .Interior.Color = RGB(31, 56, 100)
+        .Font.Color = RGB(255, 255, 255): .Borders.LineStyle = xlContinuous
+    End With
+    n = n + 1
+
+    last = ПоследняяСтрока(ж, cДата)
+    For i = ПЕРВАЯ_СТРОКА To last
+        If IsDate(ж.Cells(i, cДата).Value) Then
+            д = CDate(ж.Cells(i, cДата).Value)
+            If д >= дНач And д <= дКон Then
+                список = ""
+                For m = LBound(методы) To UBound(методы)
+                    If МетодПрименён(ж, i, CStr(методы(m))) Then
+                        список = список & IIf(список = "", "", ", ") & методы(m)
+                    End If
+                Next m
+                ws.Cells(n, 1).Value = n - 5
+                ws.Cells(n, 2).Value = д: ws.Cells(n, 2).NumberFormat = "dd.mm.yyyy"
+                ws.Cells(n, 3).Value = ж.Cells(i, cАкт).Value
+                ws.Cells(n, 4).Value = ж.Cells(i, cОбъект).Value
+                ws.Cells(n, 5).Value = список
+                ws.Cells(n, 6).Value = ж.Cells(i, cАрхив).Value
+                n = n + 1
+            End If
+        End If
+    Next i
+
+    ws.Columns(1).ColumnWidth = 7: ws.Columns(2).ColumnWidth = 13
+    ws.Columns(3).ColumnWidth = 16: ws.Columns(4).ColumnWidth = 44
+    ws.Columns(5).ColumnWidth = 20: ws.Columns(6).ColumnWidth = 20
+    ws.PageSetup.Orientation = xlLandscape
+    ws.PageSetup.Zoom = False
+    ws.PageSetup.FitToPagesWide = 1
+    ws.PageSetup.FitToPagesTall = False
+    ws.Activate: ws.Range("A1").Select
+    Application.ScreenUpdating = True
+
+    If n = 6 Then
+        MsgBox "За этот период в журнале нет записей.", vbInformation, "Опись хранения"
+    Else
+        MsgBox "Опись построена, строк: " & (n - 6) & ".", vbInformation, "Опись хранения"
+    End If
+End Sub
+
+
+Private Function ПересоздатьЛистОписи() As Worksheet
+    Dim ws As Worksheet
+    On Error Resume Next
+    Application.DisplayAlerts = False
+    ThisWorkbook.Worksheets("Опись_хранения").Delete
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+    Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+    ws.Name = "Опись_хранения"
+    ws.Tab.Color = RGB(128, 128, 128)
+    Set ПересоздатьЛистОписи = ws
+End Function
+
+
+Private Function НовыйIDАрхива(ар As Worksheet) As String
+    Dim r As Long, last As Long, n As Long, m As Long
+    Dim s As String
+    last = ПоследняяСтрока(ар, 1)
+    For r = ПЕРВАЯ_СТРОКА To last
+        s = Trim$(CStr(ар.Cells(r, 1).Value))
+        If InStr(1, s, "АРХ-", vbTextCompare) = 1 Then
+            m = CLng(Val(Mid$(s, 5)))
+            If m > n Then n = m
+        End If
+    Next r
+    НовыйIDАрхива = "АРХ-" & Format$(n + 1, "0000")
+End Function
+
+
 Private Sub ДобавитьТитулИЗаверение(метод As String, год As Long, записей As Long)
     Dim ws As Worksheet
     Dim последняя As Long

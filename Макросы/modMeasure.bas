@@ -16,6 +16,7 @@ Option Explicit
 
 Public Const Л_ЗАМЕРЫ As String = "Замеры"
 Public Const Л_ДАННЫЕ_ПРОТОКОЛОВ As String = "Данные_протоколов"
+Public Const Л_ДАННЫЕ_АЭ As String = "Данные_АЭ"
 Private Const МЕСТ_В_ШАБЛОНЕ As Long = 4
 
 
@@ -118,6 +119,108 @@ Public Sub ПоказатьЗамерыЗаписи()
     ws.Cells(перваяСтрока, 1).Select
     ActiveWindow.ScrollRow = WorksheetFunction.Max(перваяСтрока - 3, 1)
 End Sub
+
+
+' Настройки аппаратуры АЭ от работы к работе меняются мало: те же
+' преобразователи, та же полоса частот, то же усиление. Переписывать
+' двенадцать полей каждый раз — верный способ ошибиться в одном из них,
+' поэтому они копируются из последней заполненной работы, а потом
+' правится только то, что действительно изменилось.
+Public Sub СкопироватьНастройкиАЭ()
+    Dim ж As Worksheet
+    Dim ws As Worksheet
+    Dim r As Long
+    Dim идЗаписи As String
+    Dim строка As Long
+    Dim источник As Long
+    Dim c As Long, колонок As Long
+    Dim скопировано As Long
+
+    Set ж = Лист(Л_ЖУРНАЛ)
+    If ж Is Nothing Then Exit Sub
+    r = ТекущаяСтрока(ж)
+    If r = 0 Then Exit Sub
+
+    If Not МетодПрименён(ж, r, "АЭ") Then
+        MsgBox "В этой строке журнала не отмечен метод АЭ.", vbExclamation, "Настройки АЭ"
+        Exit Sub
+    End If
+
+    идЗаписи = Trim$(CStr(ж.Cells(r, ColReq(ж, "ID записи")).Value))
+    Set ws = Лист(Л_ДАННЫЕ_АЭ)
+    If ws Is Nothing Then Exit Sub
+
+    строка = НайтиПоЗаписи(ws, идЗаписи)
+    источник = ПоследняяЗаполненная(ws, строка)
+    If источник = 0 Then
+        If строка = 0 Then строка = ЗавестиСтрокуАЭ(ws, идЗаписи)
+        ws.Activate
+        ws.Cells(строка, 3).Select
+        MsgBox "Копировать пока не с чего — это первая работа по АЭ." & vbCrLf & vbCrLf & _
+               "Заполните настройки здесь; в следующий раз они скопируются сами.", _
+               vbInformation, "Настройки АЭ"
+        Exit Sub
+    End If
+
+    If строка = 0 Then строка = ЗавестиСтрокуАЭ(ws, идЗаписи)
+    колонок = ws.Cells(СТРОКА_ЗАГОЛОВКОВ, ws.Columns.Count).End(xlToLeft).Column
+    For c = 3 To колонок - 3          ' до служебных «Кем внесено», «Изменено», «Примечание»
+        If Trim$(CStr(ws.Cells(строка, c).Value)) = "" Then
+            If Trim$(CStr(ws.Cells(источник, c).Value)) <> "" Then
+                ws.Cells(строка, c).Value = ws.Cells(источник, c).Value
+                скопировано = скопировано + 1
+            End If
+        End If
+    Next c
+    ws.Cells(строка, ColReq(ws, "Изменено")).Value = Now
+
+    ws.Activate
+    ws.Cells(строка, 3).Select
+    MsgBox "Скопировано полей: " & скопировано & " из работы " & _
+           CStr(ws.Cells(источник, ColReq(ws, "ID записи журнала")).Value) & "." & vbCrLf & vbCrLf & _
+           "Уже заполненные поля не затирались. Проверьте, что настройки " & _
+           "действительно те же, и поправьте расхождения.", _
+           vbInformation, "Настройки АЭ"
+End Sub
+
+
+Private Function НайтиПоЗаписи(ws As Worksheet, идЗаписи As String) As Long
+    Dim i As Long, last As Long
+    last = ПоследняяСтрока(ws, 1)
+    For i = ПЕРВАЯ_СТРОКА To last
+        If StrComp(Trim$(CStr(ws.Cells(i, ColReq(ws, "ID записи журнала")).Value)), _
+                   идЗаписи, vbTextCompare) = 0 Then
+            НайтиПоЗаписи = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+
+' Последняя строка с настройками, кроме текущей: из неё и копируем.
+Private Function ПоследняяЗаполненная(ws As Worksheet, кроме As Long) As Long
+    Dim i As Long, last As Long
+    last = ПоследняяСтрока(ws, 1)
+    For i = last To ПЕРВАЯ_СТРОКА Step -1
+        If i <> кроме Then
+            If Trim$(CStr(ws.Cells(i, 3).Value)) <> "" Then
+                ПоследняяЗаполненная = i
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+
+Private Function ЗавестиСтрокуАЭ(ws As Worksheet, идЗаписи As String) As Long
+    Dim r As Long
+    r = ПоследняяСтрока(ws, 1) + 1
+    ws.Cells(r, 1).Value = НовыйID(ws, "АЭ-")
+    ws.Cells(r, ColReq(ws, "ID записи журнала")).Value = идЗаписи
+    ws.Cells(r, ColReq(ws, "Кем внесено")).Value = ТекущийСотрудник()
+    ws.Cells(r, ColReq(ws, "Изменено")).Value = Now
+    ЗавестиСтрокуАЭ = r
+End Function
 
 
 ' ── Чтение замеров для подстановки в документ ─────────────────────────

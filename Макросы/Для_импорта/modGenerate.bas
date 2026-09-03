@@ -117,6 +117,12 @@ Private Function СформироватьОдин(ws As Worksheet, r As Long, метод As String) A
     ' Поля этой конкретной работы: заключение, дефекты, НД, средства НК.
     ' Они же могут переопределить отдельные паспортные значения.
     лишних = ПодставитьДанныеПротокола(wdDoc, ws, r, метод)
+    ' Настройки аппаратуры АЭ — свой лист: двенадцать полей, и в других
+    ' методах они пустуют, поэтому в общий лист их класть незачем.
+    If StrComp(метод, "АЭ", vbTextCompare) = 0 Then
+        ПодставитьИзЛиста wdDoc, Л_ДАННЫЕ_АЭ, _
+                          CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value), 3
+    End If
     ' Точки замеров — пока по УЗТ и ТВ, у остальных методов таблиц в
     ' шаблонах нет, там результат пишется текстом.
     лишних = лишних + ПодставитьЗамеры(wdDoc, _
@@ -202,6 +208,38 @@ Private Sub ПодставитьПаспортОбъекта(doc As Object, ws As Worksheet, r As Long)
         If имя <> "" Then
             Подставить doc, имя, ЗначениеТекстом(об.Cells(строка, c))
         End If
+    Next c
+End Sub
+
+
+' Подставляет все колонки строки листа, найденной по ID записи журнала,
+' начиная с указанной. Имя плейсхолдера берётся из заголовка колонки.
+Public Sub ПодставитьИзЛиста(doc As Object, имяЛиста As String, _
+                             идЗаписи As String, перваяКолонка As Long)
+    Dim ws As Worksheet
+    Dim i As Long, last As Long
+    Dim c As Long, колонок As Long
+    Dim строка As Long
+    Dim имя As String
+
+    If Trim$(идЗаписи) = "" Then Exit Sub
+    Set ws = ЛистТихо(имяЛиста)
+    If ws Is Nothing Then Exit Sub
+
+    last = ПоследняяСтрока(ws, 1)
+    For i = ПЕРВАЯ_СТРОКА To last
+        If StrComp(Trim$(CStr(ws.Cells(i, ColReq(ws, "ID записи журнала")).Value)), _
+                   Trim$(идЗаписи), vbTextCompare) = 0 Then
+            строка = i
+            Exit For
+        End If
+    Next i
+    If строка = 0 Then Exit Sub
+
+    колонок = ws.Cells(СТРОКА_ЗАГОЛОВКОВ, ws.Columns.Count).End(xlToLeft).Column
+    For c = перваяКолонка To колонок
+        имя = ИмяПоля(CStr(ws.Cells(СТРОКА_ЗАГОЛОВКОВ, c).Value))
+        If имя <> "" Then Подставить doc, имя, ЗначениеТекстом(ws.Cells(строка, c))
     Next c
 End Sub
 

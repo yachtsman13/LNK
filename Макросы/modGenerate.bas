@@ -77,11 +77,16 @@ Private Function СформироватьОдин(ws As Worksheet, r As Long, м
     Dim год As Long
     Dim лишних As Long
 
-    шаблон = ФайлШаблона(метод)
-    If шаблон = "" Then Exit Function
-    путьШаблона = ПапкаШаблонов() & шаблон
-    If Not ФайлСуществует(путьШаблона) Then
-        MsgBox "Не найден шаблон для метода " & метод & ":" & vbCrLf & путьШаблона, _
+    ' Шаблон выбирается по паре «метод + вариант». Вариант — это тип
+    ' объекта или явно заданный в «Данных протоколов»: у баллона и
+    ' трубопровода схемы разные, и удобнее держать их вставленными в
+    ' шаблон, чем вставлять картинку в готовый документ.
+    путьШаблона = НайтиШаблон(метод, ВариантШаблона(ws, r, метод))
+    If путьШаблона = "" Then
+        If ФайлШаблона(метод) = "" Then Exit Function
+        MsgBox "Не найден шаблон для метода " & метод & "." & vbCrLf & vbCrLf & _
+               "Ожидался файл " & ПапкаШаблонов() & ФайлШаблона(метод) & _
+               " или его вариант с суффиксом после двух подчёркиваний.", _
                vbExclamation, "Формирование документов"
         Exit Function
     End If
@@ -121,7 +126,7 @@ Private Function СформироватьОдин(ws As Worksheet, r As Long, м
     ' методах они пустуют, поэтому в общий лист их класть незачем.
     If StrComp(метод, "АЭ", vbTextCompare) = 0 Then
         ПодставитьИзЛиста wdDoc, Л_ДАННЫЕ_АЭ, _
-                          CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value), 3
+                          CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value), 4
     End If
     ' Точки замеров — пока по УЗТ и ТВ, у остальных методов таблиц в
     ' шаблонах нет, там результат пишется текстом.
@@ -246,6 +251,24 @@ End Sub
 
 ' Поля конкретной работы с листа «Данные_протоколов». Возвращает 0 —
 ' он ничего не переполняет, счёт нужен вызывающему для единообразия.
+Public Function СтрокаДанныхПротокола(дп As Worksheet, идЗаписи As String, _
+                                      метод As String) As Long
+    Dim i As Long, last As Long
+    If Trim$(идЗаписи) = "" Then Exit Function
+    last = ПоследняяСтрока(дп, 1)
+    For i = ПЕРВАЯ_СТРОКА To last
+        If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "ID записи журнала")).Value)), _
+                   идЗаписи, vbTextCompare) = 0 Then
+            If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "Метод")).Value)), _
+                       метод, vbTextCompare) = 0 Then
+                СтрокаДанныхПротокола = i
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+
 Private Function ПодставитьДанныеПротокола(doc As Object, ws As Worksheet, _
                                            r As Long, метод As String) As Long
     Dim дп As Worksheet
@@ -259,21 +282,12 @@ Private Function ПодставитьДанныеПротокола(doc As Objec
     Set дп = ЛистТихо(Л_ДАННЫЕ_ПРОТОКОЛОВ)
     If дп Is Nothing Or идЗаписи = "" Then Exit Function
 
-    last = ПоследняяСтрока(дп, 1)
-    For i = ПЕРВАЯ_СТРОКА To last
-        If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "ID записи журнала")).Value)), _
-                   идЗаписи, vbTextCompare) = 0 Then
-            If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "Метод")).Value)), _
-                       метод, vbTextCompare) = 0 Then
-                строка = i
-                Exit For
-            End If
-        End If
-    Next i
+    строка = СтрокаДанныхПротокола(дп, идЗаписи, метод)
     If строка = 0 Then Exit Function
 
     колонок = дп.Cells(СТРОКА_ЗАГОЛОВКОВ, дп.Columns.Count).End(xlToLeft).Column
-    For c = 4 To колонок
+    ' С пятой: до неё идут ID, выбор записи и метод — это не поля документа.
+    For c = 5 To колонок
         имя = ИмяПоля(CStr(дп.Cells(СТРОКА_ЗАГОЛОВКОВ, c).Value))
         If имя <> "" Then
             Подставить doc, имя, ЗначениеТекстом(дп.Cells(строка, c))
@@ -399,6 +413,53 @@ Private Function НайтиПоПервойКолонке(ws As Worksheet, ид 
             Exit Function
         End If
     Next r
+End Function
+
+
+' Ищет шаблон «Протокол_УЗТ__Баллон.docx», при неудаче — общий
+' «Протокол_УЗТ.docx». Так набор шаблонов со вставленными схемами
+' расширяется добавлением файла, без правки кода.
+Public Function НайтиШаблон(метод As String, вариант As String) As String
+    Dim базовый As String
+    Dim путь As String
+
+    базовый = ФайлШаблона(метод)
+    If базовый = "" Then Exit Function
+    базовый = Left$(базовый, Len(базовый) - 5)          ' без «.docx»
+
+    If Trim$(вариант) <> "" Then
+        путь = ПапкаШаблонов() & базовый & "__" & ОчиститьДляИмениФайла(вариант) & ".docx"
+        If ФайлСуществует(путь) Then
+            НайтиШаблон = путь
+            Exit Function
+        End If
+    End If
+
+    путь = ПапкаШаблонов() & базовый & ".docx"
+    If ФайлСуществует(путь) Then НайтиШаблон = путь
+End Function
+
+
+' Вариант шаблона: явно заданный в «Данных протоколов» важнее, иначе —
+' тип объекта из справочника.
+Private Function ВариантШаблона(ws As Worksheet, r As Long, метод As String) As String
+    Dim дп As Worksheet
+    Dim c As Long
+    Dim строка As Long
+
+    Set дп = ЛистТихо(Л_ДАННЫЕ_ПРОТОКОЛОВ)
+    If Not дп Is Nothing Then
+        c = ColByHeader(дп, "Вариант шаблона")
+        If c > 0 Then
+            строка = СтрокаДанныхПротокола(дп, _
+                        CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value), метод)
+            If строка > 0 Then
+                ВариантШаблона = Trim$(CStr(дп.Cells(строка, c).Value))
+                If ВариантШаблона <> "" Then Exit Function
+            End If
+        End If
+    End If
+    ВариантШаблона = ПолеОбъекта(ws, r, "Тип / группа")
 End Function
 
 

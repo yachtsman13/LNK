@@ -161,15 +161,21 @@ Public Function ПроверитьСтрокуЖурнала(строка As Long) As String
     Dim дата As Variant
     Dim текст As String
     Dim ответ As String
+    Dim идЗаписи As String
 
     Set ws = Лист(Л_ЖУРНАЛ)
     If ws Is Nothing Then Exit Function
     дата = ws.Cells(строка, ColReq(ws, "Дата контроля")).Value
+    идЗаписи = Trim$(CStr(ws.Cells(строка, ColReq(ws, "ID записи")).Value))
     методы = Split(МЕТОДЫ, ",")
 
     For i = LBound(методы) To UBound(методы)
         метод = методы(i)
         If МетодПрименён(ws, строка, метод) Then
+            ответ = modKit.ПроверитьКомплект(идЗаписи, метод)
+            If ответ <> "" Then текст = текст & vbCrLf & "- " & Replace(ответ, vbCrLf, vbCrLf & "  ")
+            ответ = modKit.ПроверитьПоверкуПрименённых(идЗаписи, метод)
+            If ответ <> "" Then текст = текст & vbCrLf & "- " & Replace(ответ, vbCrLf, vbCrLf & "  ")
             фио = Trim$(CStr(ws.Cells(строка, ColReq(ws, метод & " исполнитель")).Value))
             If фио = "" Then
                 текст = текст & vbCrLf & "- " & метод & ": не указан исполнитель."
@@ -182,7 +188,7 @@ Public Function ПроверитьСтрокуЖурнала(строка As Long) As String
         End If
     Next i
 
-    If Trim$(CStr(ws.Cells(строка, ColReq(ws, "ID объекта")).Value)) = "" Then
+    If Trim$(CStr(ws.Cells(строка, ColReq(ws, "Объект контроля (выбор из справочника)")).Value)) = "" Then
         текст = текст & vbCrLf & "- Не выбран объект контроля."
     End If
     If Not IsDate(дата) Then

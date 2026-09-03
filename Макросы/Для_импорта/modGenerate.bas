@@ -77,11 +77,16 @@ Private Function —формироватьќдин(ws As Worksheet, r As Long, метод As String) A
     Dim год As Long
     Dim лишних As Long
 
-    шаблон = ‘айлЎаблона(метод)
-    If шаблон = "" Then Exit Function
-    путьЎаблона = ѕапкаЎаблонов() & шаблон
-    If Not ‘айл—уществует(путьЎаблона) Then
-        MsgBox "Ќе найден шаблон дл€ метода " & метод & ":" & vbCrLf & путьЎаблона, _
+    ' Ўаблон выбираетс€ по паре Ђметод + вариантї. ¬ариант Ч это тип
+    ' объекта или €вно заданный в Ђƒанных протоколовї: у баллона и
+    ' трубопровода схемы разные, и удобнее держать их вставленными в
+    ' шаблон, чем вставл€ть картинку в готовый документ.
+    путьЎаблона = ЌайтиЎаблон(метод, ¬ариантЎаблона(ws, r, метод))
+    If путьЎаблона = "" Then
+        If ‘айлЎаблона(метод) = "" Then Exit Function
+        MsgBox "Ќе найден шаблон дл€ метода " & метод & "." & vbCrLf & vbCrLf & _
+               "ќжидалс€ файл " & ѕапкаЎаблонов() & ‘айлЎаблона(метод) & _
+               " или его вариант с суффиксом после двух подчЄркиваний.", _
                vbExclamation, "‘ормирование документов"
         Exit Function
     End If
@@ -121,7 +126,7 @@ Private Function —формироватьќдин(ws As Worksheet, r As Long, метод As String) A
     ' методах они пустуют, поэтому в общий лист их класть незачем.
     If StrComp(метод, "јЁ", vbTextCompare) = 0 Then
         ѕодставить»зЋиста wdDoc, Ћ_ƒјЌЌџ≈_јЁ, _
-                          CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value), 3
+                          CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value), 4
     End If
     ' “очки замеров Ч пока по ”«“ и “¬, у остальных методов таблиц в
     ' шаблонах нет, там результат пишетс€ текстом.
@@ -246,6 +251,24 @@ End Sub
 
 ' ѕол€ конкретной работы с листа Ђƒанные_протоколовї. ¬озвращает 0 Ч
 ' он ничего не переполн€ет, счЄт нужен вызывающему дл€ единообрази€.
+Public Function —трокаƒанныхѕротокола(дп As Worksheet, ид«аписи As String, _
+                                      метод As String) As Long
+    Dim i As Long, last As Long
+    If Trim$(ид«аписи) = "" Then Exit Function
+    last = ѕоследн€€—трока(дп, 1)
+    For i = ѕ≈–¬јя_—“–ќ ј To last
+        If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "ID записи журнала")).Value)), _
+                   ид«аписи, vbTextCompare) = 0 Then
+            If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "ћетод")).Value)), _
+                       метод, vbTextCompare) = 0 Then
+                —трокаƒанныхѕротокола = i
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+
 Private Function ѕодставитьƒанныеѕротокола(doc As Object, ws As Worksheet, _
                                            r As Long, метод As String) As Long
     Dim дп As Worksheet
@@ -259,21 +282,12 @@ Private Function ѕодставитьƒанныеѕротокола(doc As Object, ws As Worksheet, _
     Set дп = Ћист“ихо(Ћ_ƒјЌЌџ≈_ѕ–ќ“ќ ќЋќ¬)
     If дп Is Nothing Or ид«аписи = "" Then Exit Function
 
-    last = ѕоследн€€—трока(дп, 1)
-    For i = ѕ≈–¬јя_—“–ќ ј To last
-        If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "ID записи журнала")).Value)), _
-                   ид«аписи, vbTextCompare) = 0 Then
-            If StrComp(Trim$(CStr(дп.Cells(i, ColReq(дп, "ћетод")).Value)), _
-                       метод, vbTextCompare) = 0 Then
-                строка = i
-                Exit For
-            End If
-        End If
-    Next i
+    строка = —трокаƒанныхѕротокола(дп, ид«аписи, метод)
     If строка = 0 Then Exit Function
 
     колонок = дп.Cells(—“–ќ ј_«ј√ќЋќ¬ ќ¬, дп.Columns.Count).End(xlToLeft).Column
-    For c = 4 To колонок
+    ' — п€той: до неЄ идут ID, выбор записи и метод Ч это не пол€ документа.
+    For c = 5 To колонок
         им€ = »м€ѕол€(CStr(дп.Cells(—“–ќ ј_«ј√ќЋќ¬ ќ¬, c).Value))
         If им€ <> "" Then
             ѕодставить doc, им€, «начение“екстом(дп.Cells(строка, c))
@@ -399,6 +413,53 @@ Private Function Ќайтиѕоѕервой олонке(ws As Worksheet, ид As String) As Long
             Exit Function
         End If
     Next r
+End Function
+
+
+' »щет шаблон Ђѕротокол_”«“__Ѕаллон.docxї, при неудаче Ч общий
+' Ђѕротокол_”«“.docxї. “ак набор шаблонов со вставленными схемами
+' расшир€етс€ добавлением файла, без правки кода.
+Public Function ЌайтиЎаблон(метод As String, вариант As String) As String
+    Dim базовый As String
+    Dim путь As String
+
+    базовый = ‘айлЎаблона(метод)
+    If базовый = "" Then Exit Function
+    базовый = Left$(базовый, Len(базовый) - 5)          ' без Ђ.docxї
+
+    If Trim$(вариант) <> "" Then
+        путь = ѕапкаЎаблонов() & базовый & "__" & ќчиститьƒл€»мени‘айла(вариант) & ".docx"
+        If ‘айл—уществует(путь) Then
+            ЌайтиЎаблон = путь
+            Exit Function
+        End If
+    End If
+
+    путь = ѕапкаЎаблонов() & базовый & ".docx"
+    If ‘айл—уществует(путь) Then ЌайтиЎаблон = путь
+End Function
+
+
+' ¬ариант шаблона: €вно заданный в Ђƒанных протоколовї важнее, иначе Ч
+' тип объекта из справочника.
+Private Function ¬ариантЎаблона(ws As Worksheet, r As Long, метод As String) As String
+    Dim дп As Worksheet
+    Dim c As Long
+    Dim строка As Long
+
+    Set дп = Ћист“ихо(Ћ_ƒјЌЌџ≈_ѕ–ќ“ќ ќЋќ¬)
+    If Not дп Is Nothing Then
+        c = ColByHeader(дп, "¬ариант шаблона")
+        If c > 0 Then
+            строка = —трокаƒанныхѕротокола(дп, _
+                        CStr(ws.Cells(r, ColReq(ws, "ID записи")).Value), метод)
+            If строка > 0 Then
+                ¬ариантЎаблона = Trim$(CStr(дп.Cells(строка, c).Value))
+                If ¬ариантЎаблона <> "" Then Exit Function
+            End If
+        End If
+    End If
+    ¬ариантЎаблона = ѕолеќбъекта(ws, r, "“ип / группа")
 End Function
 
 

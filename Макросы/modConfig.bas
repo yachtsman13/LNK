@@ -366,6 +366,20 @@ Public Function ПервыйФайл(маска As String) As String
 End Function
 
 
+' Следующий файл по той же маске. Dir без аргумента продолжает
+' перебор, начатый ПервыйФайл, и живёт только здесь — по той же
+' причине, по которой здесь живёт и сам Dir: недоступный путь
+' обрывает его ошибкой 52, и ловить её надо в одном месте.
+Public Function СледующийФайл() As String
+    On Error Resume Next
+    СледующийФайл = Dir
+    If Err.Number <> 0 Then
+        Err.Clear
+        СледующийФайл = ""
+    End If
+End Function
+
+
 ' Создаёт путь целиком, включая промежуточные папки.
 Public Sub MkPath(ByVal п As String)
     Dim части() As String

@@ -366,6 +366,20 @@ Public Function ѕервый‘айл(маска As String) As String
 End Function
 
 
+' —ледующий файл по той же маске. Dir без аргумента продолжает
+' перебор, начатый ѕервый‘айл, и живЄт только здесь Ч по той же
+' причине, по которой здесь живЄт и сам Dir: недоступный путь
+' обрывает его ошибкой 52, и ловить еЄ надо в одном месте.
+Public Function —ледующий‘айл() As String
+    On Error Resume Next
+    —ледующий‘айл = Dir
+    If Err.Number <> 0 Then
+        Err.Clear
+        —ледующий‘айл = ""
+    End If
+End Function
+
+
 ' —оздаЄт путь целиком, включа€ промежуточные папки.
 Public Sub MkPath(ByVal п As String)
     Dim части() As String

@@ -140,6 +140,12 @@ Private Function —формироватьќдин(ws As Worksheet, r As Long, метод As String) A
                vbExclamation, "‘ормирование документов"
     End If
 
+    ' —хема контрол€ Ч картинкой на место #—хема_контрол€, в рамку
+    ' заданного размера. –исовать еЄ кодом было бы отдельной программой
+    ' на каждый тип объекта; готова€ картинка в рамке фиксированного
+    ' размера ничего в документе не сдвигает.
+    ¬ставить—хемы wdDoc, ws, r, метод
+
     папка = ѕапка√отовых() & CStr(год) & Application.PathSeparator & метод & Application.PathSeparator
     MkPath папка
     файл = папка & ќчиститьƒл€»мени‘айла(–егЌомер(ws, r, метод)) & " " & _
@@ -531,4 +537,157 @@ Private Function ѕодпись»сполнител€(ws As Worksheet, r As Long, метод As String)
 
     ѕодпись»сполнител€ = Trim$(IIf(уровень = "", "", уровень & " уровень, ") & _
                                IIf(удост = "", "", "уд. є " & удост & ", ") & фио)
+End Function
+
+
+' -- —хемы контрол€ ----------------------------------------------------
+'
+'  ƒва способа дать протоколу схему, и оба нужны:
+'
+'  Ј схема уже вставлена в шаблон Ч тогда достаточно своего файла
+'    шаблона: Ђѕротокол_”«“__Ѕаллон.docxї;
+'  Ј схема вставл€етс€ программой на место #—хема_контрол€ Ч тогда
+'    шаблон один на метод, а схем под него сколько угодно.
+'
+'  ¬торой способ дешевле там, где схем много: добавить схему Ч значит
+'  положить картинку в папку и дописать строку в реестр, а не заводить
+'  ещЄ один файл шаблона и следить, чтобы правки шапки попали во все.
+'
+'  –азмер задаЄтс€ рамкой, а не самой картинкой: картинка вписываетс€
+'  в рамку целиком, с сохранением пропорций. ѕоэтому скан схемы,
+'  сн€тый в другом разрешении, не раст€нет таблицу и не сдвинет текст.
+Private Sub ¬ставить—хемы(док As Object, ws As Worksheet, r As Long, метод As String)
+    Dim вариант As String
+    Dim путь As String
+    Dim подпись As String
+    Dim ширина As Single, высота As Single
+    Dim rng As Object
+    Dim картинка As Object
+    Dim защита As Long
+
+    вариант = ¬ариантЎаблона(ws, r, метод)
+    путь = Ќайти—хему(метод, вариант, подпись, ширина, высота)
+    If путь = "" Then Exit Sub
+
+    On Error Resume Next
+    Do
+        защита = защита + 1
+        If защита > 20 Then Exit Do            ' схем в одном протоколе столько не бывает
+        Set rng = док.Content
+        With rng.Find
+            .Text = "#—хема_контрол€"
+            .Forward = True
+            .Wrap = 0
+            .MatchCase = False
+            .Execute
+        End With
+        If Not rng.Find.Found Then Exit Do
+
+        rng.Text = ""
+        Set картинка = rng.InlineShapes.AddPicture(fileName:=путь, _
+                          LinkToFile:=False, SaveWithDocument:=True, Range:=rng)
+        If картинка Is Nothing Then Exit Do
+        modScans.¬писать¬–амку картинка, ширина, высота
+        If подпись <> "" Then картинка.Range.InsertAfter vbCr & подпись
+    Loop
+End Sub
+
+
+' ‘айл схемы дл€ пары Ђметод + вариантї. —начала строка реестра
+' Ђ—хемы контрол€ї Ч она же несЄт размер рамки и подпись; если строки
+' нет, ищетс€ файл Ђћетод__¬ариантї и затем Ђћетодї в папке схем.
+Private Function Ќайти—хему(метод As String, вариант As String, _
+                            ByRef подпись As String, _
+                            ByRef ширина As Single, ByRef высота As Single) As String
+    Dim сх As Worksheet
+    Dim i As Long, last As Long
+    Dim строка As Long
+    Dim файл As String
+
+    ширина = —м¬ѕункты(Ќастройка("Ўирина схемы, см"), 15)
+    высота = —м¬ѕункты(Ќастройка("¬ысота схемы, см"), 10)
+    подпись = ""
+
+    Set сх = Ћист“ихо("—хемы_контрол€")
+    If Not сх Is Nothing Then
+        last = ѕоследн€€—трока(сх, ColReq(сх, "‘айл схемы"))
+        For i = ѕ≈–¬јя_—“–ќ ј To last
+            If StrComp(Trim$(CStr(сх.Cells(i, ColReq(сх, "ћетод")).Value)), метод, vbTextCompare) = 0 Then
+                If StrComp(Trim$(CStr(сх.Cells(i, ColReq(сх, "¬ариант (тип объекта)")).Value)), _
+                           Trim$(вариант), vbTextCompare) = 0 Then
+                    строка = i
+                    Exit For
+                ElseIf Trim$(CStr(сх.Cells(i, ColReq(сх, "¬ариант (тип объекта)")).Value)) = "" Then
+                    If строка = 0 Then строка = i        ' обща€ строка метода Ч запасной вариант
+                End If
+            End If
+        Next i
+    End If
+
+    If строка > 0 Then
+        файл = Trim$(CStr(сх.Cells(строка, ColReq(сх, "‘айл схемы")).Value))
+        подпись = Trim$(CStr(сх.Cells(строка, ColReq(сх, "ѕодпись под схемой")).Value))
+        If Val(сх.Cells(строка, ColReq(сх, "Ўирина рамки, см")).Value) > 0 Then
+            ширина = —м¬ѕункты(CStr(сх.Cells(строка, ColReq(сх, "Ўирина рамки, см")).Value), 15)
+        End If
+        If Val(сх.Cells(строка, ColReq(сх, "¬ысота рамки, см")).Value) > 0 Then
+            высота = —м¬ѕункты(CStr(сх.Cells(строка, ColReq(сх, "¬ысота рамки, см")).Value), 10)
+        End If
+    End If
+
+    If файл <> "" Then
+        If InStr(файл, Application.PathSeparator) = 0 Then файл = ѕапка—хем() & файл
+        If ‘айл—уществует(файл) Then
+            Ќайти—хему = файл
+            Exit Function
+        End If
+    End If
+
+    ' –еестр не заполнен или файл переименовали Ч ищем по имени.
+    Ќайти—хему = ‘айл—хемыѕо»мени(метод, вариант)
+End Function
+
+
+Private Function ‘айл—хемыѕо»мени(метод As String, вариант As String) As String
+    Dim расширени€ As Variant
+    Dim i As Long
+    Dim путь As String
+
+    If ѕапка—хем() = "" Then Exit Function
+    расширени€ = Split("png,jpg,jpeg,emf,wmf,tif,bmp", ",")
+    For i = LBound(расширени€) To UBound(расширени€)
+        If Trim$(вариант) <> "" Then
+            путь = ѕапка—хем() & метод & "__" & ќчиститьƒл€»мени‘айла(вариант) & "." & расширени€(i)
+            If ‘айл—уществует(путь) Then
+                ‘айл—хемыѕо»мени = путь
+                Exit Function
+            End If
+        End If
+    Next i
+    For i = LBound(расширени€) To UBound(расширени€)
+        путь = ѕапка—хем() & метод & "." & расширени€(i)
+        If ‘айл—уществует(путь) Then
+            ‘айл—хемыѕо»мени = путь
+            Exit Function
+        End If
+    Next i
+End Function
+
+
+Private Function ѕапка—хем() As String
+    Dim п As String
+    п = Ќастройка("ѕапка схем контрол€")
+    If п = "" Then Exit Function
+    If Right$(п, 1) <> Application.PathSeparator Then п = п & Application.PathSeparator
+    ѕапка—хем = п
+End Function
+
+
+' —антиметры в пункты Word: 1 см = 28,35 пт. CentimetersToPoints есть
+' только у объекта Word, а он здесь позднего св€зывани€.
+Private Function —м¬ѕункты(значение As String, поумолчанию As Single) As Single
+    Dim v As Double
+    v = Val(Replace(Trim$(значение), ",", "."))
+    If v <= 0 Then v = поумолчанию
+    —м¬ѕункты = CSng(v * 28.3464566929134)
 End Function

@@ -140,6 +140,12 @@ Private Function СформироватьОдин(ws As Worksheet, r As Long, м
                vbExclamation, "Формирование документов"
     End If
 
+    ' Схема контроля — картинкой на место #Схема_контроля, в рамку
+    ' заданного размера. Рисовать её кодом было бы отдельной программой
+    ' на каждый тип объекта; готовая картинка в рамке фиксированного
+    ' размера ничего в документе не сдвигает.
+    ВставитьСхемы wdDoc, ws, r, метод
+
     папка = ПапкаГотовых() & CStr(год) & Application.PathSeparator & метод & Application.PathSeparator
     MkPath папка
     файл = папка & ОчиститьДляИмениФайла(РегНомер(ws, r, метод)) & " " & _
@@ -531,4 +537,157 @@ Private Function ПодписьИсполнителя(ws As Worksheet, r As Long
 
     ПодписьИсполнителя = Trim$(IIf(уровень = "", "", уровень & " уровень, ") & _
                                IIf(удост = "", "", "уд. № " & удост & ", ") & фио)
+End Function
+
+
+' ── Схемы контроля ────────────────────────────────────────────────────
+'
+'  Два способа дать протоколу схему, и оба нужны:
+'
+'  · схема уже вставлена в шаблон — тогда достаточно своего файла
+'    шаблона: «Протокол_УЗТ__Баллон.docx»;
+'  · схема вставляется программой на место #Схема_контроля — тогда
+'    шаблон один на метод, а схем под него сколько угодно.
+'
+'  Второй способ дешевле там, где схем много: добавить схему — значит
+'  положить картинку в папку и дописать строку в реестр, а не заводить
+'  ещё один файл шаблона и следить, чтобы правки шапки попали во все.
+'
+'  Размер задаётся рамкой, а не самой картинкой: картинка вписывается
+'  в рамку целиком, с сохранением пропорций. Поэтому скан схемы,
+'  снятый в другом разрешении, не растянет таблицу и не сдвинет текст.
+Private Sub ВставитьСхемы(док As Object, ws As Worksheet, r As Long, метод As String)
+    Dim вариант As String
+    Dim путь As String
+    Dim подпись As String
+    Dim ширина As Single, высота As Single
+    Dim rng As Object
+    Dim картинка As Object
+    Dim защита As Long
+
+    вариант = ВариантШаблона(ws, r, метод)
+    путь = НайтиСхему(метод, вариант, подпись, ширина, высота)
+    If путь = "" Then Exit Sub
+
+    On Error Resume Next
+    Do
+        защита = защита + 1
+        If защита > 20 Then Exit Do            ' схем в одном протоколе столько не бывает
+        Set rng = док.Content
+        With rng.Find
+            .Text = "#Схема_контроля"
+            .Forward = True
+            .Wrap = 0
+            .MatchCase = False
+            .Execute
+        End With
+        If Not rng.Find.Found Then Exit Do
+
+        rng.Text = ""
+        Set картинка = rng.InlineShapes.AddPicture(fileName:=путь, _
+                          LinkToFile:=False, SaveWithDocument:=True, Range:=rng)
+        If картинка Is Nothing Then Exit Do
+        modScans.ВписатьВРамку картинка, ширина, высота
+        If подпись <> "" Then картинка.Range.InsertAfter vbCr & подпись
+    Loop
+End Sub
+
+
+' Файл схемы для пары «метод + вариант». Сначала строка реестра
+' «Схемы контроля» — она же несёт размер рамки и подпись; если строки
+' нет, ищется файл «Метод__Вариант» и затем «Метод» в папке схем.
+Private Function НайтиСхему(метод As String, вариант As String, _
+                            ByRef подпись As String, _
+                            ByRef ширина As Single, ByRef высота As Single) As String
+    Dim сх As Worksheet
+    Dim i As Long, last As Long
+    Dim строка As Long
+    Dim файл As String
+
+    ширина = СмВПункты(Настройка("Ширина схемы, см"), 15)
+    высота = СмВПункты(Настройка("Высота схемы, см"), 10)
+    подпись = ""
+
+    Set сх = ЛистТихо("Схемы_контроля")
+    If Not сх Is Nothing Then
+        last = ПоследняяСтрока(сх, ColReq(сх, "Файл схемы"))
+        For i = ПЕРВАЯ_СТРОКА To last
+            If StrComp(Trim$(CStr(сх.Cells(i, ColReq(сх, "Метод")).Value)), метод, vbTextCompare) = 0 Then
+                If StrComp(Trim$(CStr(сх.Cells(i, ColReq(сх, "Вариант (тип объекта)")).Value)), _
+                           Trim$(вариант), vbTextCompare) = 0 Then
+                    строка = i
+                    Exit For
+                ElseIf Trim$(CStr(сх.Cells(i, ColReq(сх, "Вариант (тип объекта)")).Value)) = "" Then
+                    If строка = 0 Then строка = i        ' общая строка метода — запасной вариант
+                End If
+            End If
+        Next i
+    End If
+
+    If строка > 0 Then
+        файл = Trim$(CStr(сх.Cells(строка, ColReq(сх, "Файл схемы")).Value))
+        подпись = Trim$(CStr(сх.Cells(строка, ColReq(сх, "Подпись под схемой")).Value))
+        If Val(сх.Cells(строка, ColReq(сх, "Ширина рамки, см")).Value) > 0 Then
+            ширина = СмВПункты(CStr(сх.Cells(строка, ColReq(сх, "Ширина рамки, см")).Value), 15)
+        End If
+        If Val(сх.Cells(строка, ColReq(сх, "Высота рамки, см")).Value) > 0 Then
+            высота = СмВПункты(CStr(сх.Cells(строка, ColReq(сх, "Высота рамки, см")).Value), 10)
+        End If
+    End If
+
+    If файл <> "" Then
+        If InStr(файл, Application.PathSeparator) = 0 Then файл = ПапкаСхем() & файл
+        If ФайлСуществует(файл) Then
+            НайтиСхему = файл
+            Exit Function
+        End If
+    End If
+
+    ' Реестр не заполнен или файл переименовали — ищем по имени.
+    НайтиСхему = ФайлСхемыПоИмени(метод, вариант)
+End Function
+
+
+Private Function ФайлСхемыПоИмени(метод As String, вариант As String) As String
+    Dim расширения As Variant
+    Dim i As Long
+    Dim путь As String
+
+    If ПапкаСхем() = "" Then Exit Function
+    расширения = Split("png,jpg,jpeg,emf,wmf,tif,bmp", ",")
+    For i = LBound(расширения) To UBound(расширения)
+        If Trim$(вариант) <> "" Then
+            путь = ПапкаСхем() & метод & "__" & ОчиститьДляИмениФайла(вариант) & "." & расширения(i)
+            If ФайлСуществует(путь) Then
+                ФайлСхемыПоИмени = путь
+                Exit Function
+            End If
+        End If
+    Next i
+    For i = LBound(расширения) To UBound(расширения)
+        путь = ПапкаСхем() & метод & "." & расширения(i)
+        If ФайлСуществует(путь) Then
+            ФайлСхемыПоИмени = путь
+            Exit Function
+        End If
+    Next i
+End Function
+
+
+Private Function ПапкаСхем() As String
+    Dim п As String
+    п = Настройка("Папка схем контроля")
+    If п = "" Then Exit Function
+    If Right$(п, 1) <> Application.PathSeparator Then п = п & Application.PathSeparator
+    ПапкаСхем = п
+End Function
+
+
+' Сантиметры в пункты Word: 1 см = 28,35 пт. CentimetersToPoints есть
+' только у объекта Word, а он здесь позднего связывания.
+Private Function СмВПункты(значение As String, поумолчанию As Single) As Single
+    Dim v As Double
+    v = Val(Replace(Trim$(значение), ",", "."))
+    If v <= 0 Then v = поумолчанию
+    СмВПункты = CSng(v * 28.3464566929134)
 End Function

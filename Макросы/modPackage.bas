@@ -26,6 +26,11 @@ Private Const wdHeaderFooterPrimary As Long = 1
 Private Const wdAlignPageNumberCenter As Long = 1
 Private Const wdFieldNumPages As Long = 26
 Private Const wdStatisticPages As Long = 2
+Private Const wdFieldEmpty As Long = -1
+Private Const wdFieldPage As Long = 33
+Private Const wdReplaceOne As Long = 1
+Private Const wdFindStop As Long = 0
+Private Const wdAlignParagraphCenter As Long = 1
 
 
 Public Sub НапечататьПакет()
@@ -38,6 +43,9 @@ Public Sub НапечататьПакет()
     Dim wdApp As Object
     Dim свод As Object
     Dim страницСвода As Long
+    Dim страницСканов As Long
+    Dim путьСканов As String
+    Dim поЛистам As Boolean
     Dim всего As Long
     Dim ответ As VbMsgBoxResult
 
@@ -68,12 +76,27 @@ Public Sub НапечататьПакет()
     On Error GoTo Сбой
     Set wdApp = CreateObject("Word.Application")
     wdApp.Visible = False
+
+    ' Сканы-картинки идут в свод как обычные страницы: свидетельства
+    ' лаборатории, удостоверения, свидетельства о поверке — в этом
+    ' порядке, после протоколов. Вкладывать их руками и держать вне
+    ' нумерации больше не нужно.
+    путьСканов = modScans.СобратьСканыПакета(wdApp, строки, страницСканов)
+    If путьСканов <> "" Then файлы.Add путьСканов
+
     Set свод = СклеитьДокументы(wdApp, файлы)
 
     ДобавитьПустойЛист свод
     страницСвода = свод.ComputeStatistics(wdStatisticPages)
-    ПроставитьНомера свод, сканов
-    всего = страницСвода + сканов
+    поЛистам = ПоЛистам()
+    ПроставитьНомера свод, поЛистам
+    If поЛистам Then
+        ' Двусторонняя печать: лист — это две страницы, и последняя
+        ' нечётная страница всё равно занимает целый лист.
+        всего = (страницСвода + 1) \ 2 + сканов
+    Else
+        всего = страницСвода + сканов
+    End If
 
     Application.StatusBar = False
     ответ = MsgBox("Пакет собран." & vbCrLf & vbCrLf & _
@@ -81,7 +104,11 @@ Public Sub НапечататьПакет()
                        акт & ", объектов в нём: " & строки.Count & vbCrLf) & _
                    "Документов Word: " & файлы.Count & vbCrLf & _
                    "Страниц в них (с пустым листом): " & страницСвода & vbCrLf & _
-                   "Страниц сканов, вкладываемых вручную: " & сканов & vbCrLf & _
+                   IIf(страницСканов = 0, "", "Из них страниц сканов: " & страницСканов & _
+                       " — они уже в своде и в общей нумерации" & vbCrLf) & _
+                   IIf(сканов = 0, "", "Страниц PDF, вкладываемых вручную: " & сканов & vbCrLf) & _
+                   "Нумерация: " & IIf(поЛистам, "по листам, номер на лицевой стороне", _
+                                       "по страницам, сквозная") & vbCrLf & _
                    "Всего листов в экземпляре: " & всего & vbCrLf & vbCrLf & _
                    "Печатать три экземпляра?" & vbCrLf & _
                    "Двусторонний режим включается в свойствах принтера — из макроса " & _
@@ -104,9 +131,12 @@ Public Sub НапечататьПакет()
 
     wdApp.Visible = True
     MsgBox "Готово." & vbCrLf & vbCrLf & _
-           "Осталось вручную: напечатать сканы (свидетельства лаборатории, " & _
-           "удостоверения, свидетельства о поверке) и вложить их в пакет " & _
-           "между протоколами и пустым листом.", vbInformation, "Печать пакета"
+           IIf(страницСканов > 0, "Сканы-картинки вошли в пакет и пронумерованы вместе " & _
+               "со всем остальным." & vbCrLf & vbCrLf, _
+               "Сканов не нашлось — проверьте папку сканов в настройках." & vbCrLf & vbCrLf) & _
+           IIf(сканов > 0, "Осталось вручную вложить " & сканов & " стр. в PDF: " & _
+               "объединить PDF без Acrobat нельзя.", _
+               "Вручную вкладывать нечего."), vbInformation, "Печать пакета"
     Exit Sub
 
 Сбой:
@@ -122,7 +152,7 @@ End Sub
 ' ── Сбор файлов ───────────────────────────────────────────────────────
 
 ' Все строки одного акта. Без номера акта — только текущая строка.
-Private Function СтрокиАкта(ws As Worksheet, r As Long, акт As String) As Collection
+Public Function СтрокиАкта(ws As Worksheet, r As Long, акт As String) As Collection
     Dim список As Collection
     Dim i As Long, last As Long
 
@@ -211,18 +241,98 @@ Private Sub ДобавитьПустойЛист(свод As Object)
 End Sub
 
 
-' Номера страниц по центру нижнего колонтитула, на первой странице
-' номера нет — как в ваших правилах оформления.
-Private Sub ПроставитьНомера(свод As Object, сканов As Long)
+Private Function ПоЛистам() As Boolean
+    Dim s As String
+    s = Настройка("Нумеровать")
+    ПоЛистам = (s = "" Or StrComp(Left$(s, 4), "Лист", vbTextCompare) = 0)
+End Function
+
+
+' Номер по центру нижнего колонтитула, на первой странице номера нет.
+'
+' По листам — это нумерация подшивки, а не документа: при двусторонней
+' печати лист бумаги несёт две страницы, а номер у него один. Поэтому
+' номер ставится только на нечётных (лицевых) страницах и считает не
+' страницы, а листы: 1, 3, 5-я страницы получают 1, 2, 3.
+'
+' Считает это поле {=INT((PAGE+1)/2)} — вложенное поле внутри формулы.
+' Собрать его из VBA одной строкой нельзя, поэтому собирается в два
+' приёма и результат проверяется: если Word его не понял, ставится
+' обычная нумерация страниц и об этом говорится вслух — молча
+' напечатать пакет не с той нумерацией хуже, чем сказать.
+Private Sub ПроставитьНомера(свод As Object, поЛистам As Boolean)
     Dim s As Object
+    Dim получилось As Boolean
+
+    получилось = поЛистам
+    If поЛистам Then
+        For Each s In свод.Sections
+            s.PageSetup.DifferentFirstPageHeaderFooter = True
+            s.PageSetup.OddAndEvenPagesHeaderFooter = True
+            ' Primary при включённых чётных/нечётных — это нечётные, то
+            ' есть лицевые стороны листов. Чётный колонтитул пуст.
+            If Not НомерЛиста(s.Footers(wdHeaderFooterPrimary)) Then
+                получилось = False
+                Exit For
+            End If
+        Next s
+    End If
+
+    If получилось Then Exit Sub
+
     For Each s In свод.Sections
         s.PageSetup.DifferentFirstPageHeaderFooter = True
+        s.PageSetup.OddAndEvenPagesHeaderFooter = False
         With s.Footers(wdHeaderFooterPrimary)
+            .Range.Text = ""
             .PageNumbers.RestartNumberingAtSection = False
             .PageNumbers.Add PageNumberAlignment:=wdAlignPageNumberCenter, FirstPage:=False
         End With
     Next s
+
+    If поЛистам Then
+        MsgBox "Нумерация по листам не собралась — Word не принял поле " & _
+               "{=INT((PAGE+1)/2)}." & vbCrLf & vbCrLf & _
+               "Пакет пронумерован по страницам: печатать так можно, но это " & _
+               "не то, что просили. Скажите — разберёмся, почему Word отказался.", _
+               vbExclamation, "Печать пакета"
+    End If
 End Sub
+
+
+' Вкладывает поле PAGE внутрь формулы. True — получилось.
+Private Function НомерЛиста(колонтитул As Object) As Boolean
+    Dim rng As Object
+    Dim поле As Object
+    Dim код As Object
+    Dim результат As String
+
+    On Error GoTo Нет
+    Set rng = колонтитул.Range
+    rng.Text = ""
+    Set rng = колонтитул.Range
+    Set поле = rng.Fields.Add(rng, wdFieldEmpty, "=INT((СТРАНИЦА+1)/2)", False)
+
+    Set код = поле.Code
+    With код.Find
+        .Text = "СТРАНИЦА"
+        .Replacement.Text = ""
+        .Forward = True
+        .Wrap = wdFindStop
+        .Execute Replace:=wdReplaceOne
+    End With
+    ' После замены диапазон схлопнулся там, где стояло слово, — туда и
+    ' вкладывается настоящее поле PAGE.
+    код.Fields.Add код, wdFieldPage, , False
+    поле.Update
+
+    колонтитул.Range.ParagraphFormat.Alignment = wdAlignParagraphCenter
+    результат = Trim$(поле.Result.Text)
+    НомерЛиста = (результат <> "" And IsNumeric(результат))
+    Exit Function
+Нет:
+    колонтитул.Range.Text = ""
+End Function
 
 
 Private Sub СохранитьСвод(свод As Object, ws As Worksheet, r As Long)
@@ -333,9 +443,10 @@ End Function
 
 Private Function СпроситьЧислоСканов() As Long
     Dim s As String
-    s = InputBox("Сколько страниц сканов вкладывается в пакет вручную?" & vbCrLf & vbCrLf & _
-                 "Считаются свидетельства лаборатории, квалификационные удостоверения " & _
-                 "исполнителей и свидетельства о поверке применённого оборудования." & vbCrLf & vbCrLf & _
+    s = InputBox("Сколько листов вкладывается в пакет ВРУЧНУЮ?" & vbCrLf & vbCrLf & _
+                 "Сканы-картинки (JPG, PNG, TIFF) программа вставляет в пакет сама — " & _
+                 "их здесь считать не надо. Руками остаются только сканы в PDF: " & _
+                 "объединить PDF без Acrobat нельзя." & vbCrLf & vbCrLf & _
                  "Это число нужно, чтобы на бирке сошлось количество листов.", _
                  "Печать пакета", "0")
     If StrPtr(s) = 0 Then                ' нажали «Отмена»

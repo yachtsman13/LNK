@@ -2,14 +2,16 @@ Attribute VB_Name = "modDashboard"
 Option Explicit
 
 ' =======================================================================
-'  Дашборд: что требует внимания сегодня.
+'  Плитки пульта: что требует внимания сегодня.
 '
 '  Правило одно — плитка показывается, только если по ней есть что
 '  делать. Дашборд, на котором всегда всё зелёное, перестают читать
 '  через неделю.
+'
+'  Своего листа у плиток больше нет: они живут в верхней части пульта,
+'  над кнопками, — чтобы увиденное и действие по нему были на одном
+'  экране.
 ' =======================================================================
-
-Private Const Л_ДАШБОРД As String = "Дашборд"
 
 Private Const ЦВ_ОК As Long = 12379352        ' спокойный зелёный
 Private Const ЦВ_ВНИМАНИЕ As Long = 10284031  ' жёлтый
@@ -19,27 +21,19 @@ Private Const ЦВ_ТЕКСТ_ВН As Long = 26012
 Private Const ЦВ_ТЕКСТ_СР As Long = 2500
 
 
-Public Sub ПостроитьДашборд()
-    Dim ws As Worksheet
-    Dim r As Long
+' Плитки в столбцах B, C, D начиная со строки r. Возвращает первую
+' свободную строку — под ней пульт рисует кнопки.
+'
+' Дашборд больше не отдельный лист: смотреть на одном экране, что
+' горит, и тут же нажимать нужную кнопку — это одно действие, а не
+' два, и переключаться между листами ради него незачем.
+Public Function ПлиткиНа(ws As Worksheet, ByVal r As Long) As Long
+    Dim начало As Long
 
-    Application.ScreenUpdating = False
-    On Error GoTo Сбой
-    Set ws = ПересоздатьДашборд()
-
-    ws.Range("B2").Value = "ЧТО ТРЕБУЕТ ВНИМАНИЯ"
-    ws.Range("B3").Value = "на " & Format$(Date, "dd.mm.yyyy") & _
-                           IIf(КтоМастер() = "", "", "  ·  мастер: " & КтоМастер())
-    ws.Range("B2").Font.Size = 16
-    ws.Range("B2").Font.Bold = True
-    ws.Range("B2").Font.Color = RGB(31, 56, 100)
-    ws.Range("B3").Font.Italic = True
-    ws.Range("B3").Font.Color = RGB(89, 89, 89)
-
-    ' Каждая плитка со своей защитой: не собралась одна — Дашборд
-    ' всё равно показывает остальные. Наполовину собранный Дашборд
-    ' полезнее, чем сообщение об ошибке вместо него.
-    r = 5
+    начало = r
+    ' Каждая плитка со своей защитой: не собралась одна — остальные
+    ' всё равно показываются. Наполовину собранный пульт полезнее,
+    ' чем сообщение об ошибке вместо него.
     On Error Resume Next
     r = ПлиткаАттестацияЛНК(ws, r)
     r = ПлиткаСрокиПоЛисту(ws, r, Л_АТТЕСТАЦИИ, "Действительно до", "Удостоверения специалистов", _
@@ -48,6 +42,7 @@ Public Sub ПостроитьДашборд()
                            "Наименование", "Заводской №", 90)
     r = ПлиткаСрокиПоЛисту(ws, r, "НД", "Дата следующей проверки", "Проверка актуальности НД", _
                            "Наименование документа", "Обозначение", 60)
+    r = ПлиткаПлана(ws, r)
     r = ПлиткаЧерновиков(ws, r)
     r = ПлиткаВыданного(ws, r)
     r = ПлиткаРекламаций(ws, r)
@@ -57,30 +52,89 @@ Public Sub ПостроитьДашборд()
     If Err.Number <> 0 Then
         r = Плитка(ws, r, "Часть плиток не собралась", "сбой", _
                    "Ошибка " & Err.Number & ": " & Err.Description & _
-                   ". Остальное на Дашборде верно.", 1)
+                   ". Остальное на пульте верно.", 1)
         Err.Clear
     End If
-    On Error GoTo Сбой
+    On Error GoTo 0
 
-    If r = 5 Then
+    If r = начало Then
         ws.Cells(r, 2).Value = "Просроченного и ближайшего нет — всё в сроках."
         ws.Cells(r, 2).Font.Color = RGB(0, 97, 0)
         ws.Cells(r, 2).Font.Size = 12
+        r = r + 1
+    End If
+    ПлиткиНа = r
+End Function
+
+
+' Выполнение плана-графика работ в текущем месяце и работы сверх плана.
+Private Function ПлиткаПлана(ws As Worksheet, r As Long) As Long
+    Dim пл As Worksheet
+    Dim ж As Worksheet
+    Dim i As Long, last As Long
+    Dim cГод As Long, cМес As Long, cСтатус As Long
+    Dim всего As Long, выполнено As Long, вне As Long
+    Dim cДата As Long, cВид As Long
+    Dim д As Date
+
+    ПлиткаПлана = r
+    Set пл = ЛистТихо("План_график")
+    Set ж = ЛистТихо(Л_ЖУРНАЛ)
+    If пл Is Nothing Or ж Is Nothing Then Exit Function
+
+    cГод = ColByHeader(пл, "Год")
+    cМес = ColByHeader(пл, "Месяц")
+    cСтатус = ColByHeader(пл, "Статус")
+    If cГод = 0 Or cМес = 0 Or cСтатус = 0 Then Exit Function
+    last = ПоследняяСтрока(пл, 1)
+    For i = ПЕРВАЯ_СТРОКА To last
+        If CLng(Val(пл.Cells(i, cГод).Value)) = Year(Date) Then
+            If МесяцСовпал(CStr(пл.Cells(i, cМес).Value), Month(Date)) Then
+                всего = всего + 1
+                If StrComp(CStr(пл.Cells(i, cСтатус).Value), "Выполнено", vbTextCompare) = 0 Then
+                    выполнено = выполнено + 1
+                End If
+            End If
+        End If
+    Next i
+
+    cДата = ColByHeader(ж, "Дата контроля")
+    cВид = ColByHeader(ж, "Вид работ")
+    If cДата > 0 And cВид > 0 Then
+        last = ПоследняяСтрока(ж, cДата)
+        For i = ПЕРВАЯ_СТРОКА To last
+            If IsDate(ж.Cells(i, cДата).Value) Then
+                д = CDate(ж.Cells(i, cДата).Value)
+                If Year(д) = Year(Date) And Month(д) = Month(Date) Then
+                    If StrComp(Trim$(CStr(ж.Cells(i, cВид).Value)), "По плану", vbTextCompare) <> 0 Then
+                        вне = вне + 1
+                    End If
+                End If
+            End If
+        Next i
     End If
 
-    ws.Columns("A").ColumnWidth = 2
-    ws.Columns("B").ColumnWidth = 46
-    ws.Columns("C").ColumnWidth = 14
-    ws.Columns("D").ColumnWidth = 76
-    ws.Activate
-    ws.Range("A1").Select
-    Application.ScreenUpdating = True
-    Exit Sub
-Сбой:
-    Application.ScreenUpdating = True
-    MsgBox "Не удалось построить Дашборд." & vbCrLf & "Ошибка: " & Err.Description, _
-           vbCritical, "Дашборд"
-End Sub
+    If всего = 0 And вне = 0 Then Exit Function
+    ПлиткаПлана = Плитка(ws, r, "План работ на " & Format$(Date, "mmmm"), _
+        выполнено & " из " & всего, _
+        "По плану выполнено " & выполнено & " из " & всего & _
+        ", осталось " & (всего - выполнено) & ". Внеплановых работ за месяц: " & вне & ". " & _
+        "Плановой работа становится, когда её отметили в плане-графике.", _
+        IIf(всего > 0 And выполнено < всего, 1, 0))
+End Function
+
+
+Private Function МесяцСовпал(текст As String, месяц As Long) As Boolean
+    Dim s As String
+    s = Trim$(текст)
+    If s = "" Then Exit Function
+    If IsNumeric(s) Then
+        МесяцСовпал = (CLng(Val(s)) = месяц)
+        Exit Function
+    End If
+    МесяцСовпал = (StrComp(Left$(s, 3), Left$(Format$(DateSerial(2000, месяц, 1), "mmmm"), 3), _
+                           vbTextCompare) = 0)
+End Function
 
 
 ' -- Плитки ------------------------------------------------------------
@@ -365,22 +419,4 @@ Private Function Плитка(ws As Worksheet, r As Long, заголовок As String, _
     ws.Cells(r, 4).Font.Size = 9
     ws.Rows(r).RowHeight = 34
     Плитка = r + 1
-End Function
-
-
-Private Function ПересоздатьДашборд() As Worksheet
-    Dim ws As Worksheet
-    On Error Resume Next
-    Application.DisplayAlerts = False
-    ThisWorkbook.Worksheets(Л_ДАШБОРД).Delete
-    Application.DisplayAlerts = True
-    On Error GoTo 0
-    Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(1))
-    ws.Name = Л_ДАШБОРД
-    ws.Tab.Color = RGB(46, 84, 150)
-    ws.Cells.Interior.Color = RGB(255, 255, 255)
-    ws.Cells.Font.Name = "Calibri"
-    ws.Activate
-    ActiveWindow.DisplayGridlines = False
-    Set ПересоздатьДашборд = ws
 End Function

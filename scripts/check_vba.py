@@ -100,6 +100,7 @@ def main():
     declared = {}          # имя процедуры → модуль
     known_locals = set()
     per_module = collections.defaultdict(set)
+    private_of = collections.defaultdict(set)   # модуль → его Private-процедуры
     col_uses = []          # (файл, строка, лист-переменная, заголовок)
 
     for path in files:
@@ -123,6 +124,8 @@ def main():
                                   % (name, ln, m.group(2)))
                 declared[m.group(2)] = name
                 per_module[name].add(m.group(2))
+                if re.match(r"^\s*Private\b", code, re.I):
+                    private_of[name].add(m.group(2))
                 p = RE_PARAMS.search(code)
                 if p:
                     for arg in p.group(1).split(","):
@@ -191,14 +194,21 @@ def main():
     # Код листа «Меню» и «ЭтаКнига» лежит в .txt (его вставляют руками,
     # импортировать нельзя), но на модули он ссылается так же.
     bad = []
+    закрытые = []
     for path in files + sorted(glob.glob(os.path.join(MAC, "*.txt"))):
         name = os.path.basename(path)[:-4]
         for ln, raw in read_lines(path):
             for mm in re.finditer(r"\b(mod\w+)\.([А-Яа-яЁё\w]+)", strip_code(raw)):
                 if mm.group(2) not in per_module.get(mm.group(1), set()):
                     bad.append("%s:%d %s.%s" % (name, ln, mm.group(1), mm.group(2)))
+                elif mm.group(1) != name and mm.group(2) in private_of.get(mm.group(1), set()):
+                    закрытые.append("%s:%d %s.%s" % (name, ln, mm.group(1), mm.group(2)))
     check(not bad, "все вызовы вида modX.Имя ведут в существующую процедуру%s" %
           ("" if not bad else ": " + ", ".join(bad)))
+    # Private видна только внутри своего модуля: снаружи это ошибка
+    # компиляции, а не предупреждение.
+    check(not закрытые, "вызываемые снаружи процедуры объявлены Public%s" %
+          ("" if not закрытые else ": " + ", ".join(закрытые)))
 
     # ── кириллические вызовы: объявлены ли ───────────────────────────
     builtins = {"Данные", "Лист", "Настройка", "Путь"}
@@ -344,7 +354,7 @@ def main():
     menu = os.path.join(MAC, "modMenu.bas")
     if os.path.exists(menu):
         src = io.open(menu, encoding="utf-8").read()
-        items = set(re.findall(r'Пункт\(ws, r, "([^"]+)"', src))
+        items = set(re.findall(r'\bКнопка\(ws, r, "([^"]+)"', src))
         cases = set(re.findall(r'Case "([^"]+)":\s*mod', src))
         check(items == cases,
               "каждый пункт меню разбирается обработчиком (пунктов %d, ветвей %d)%s"

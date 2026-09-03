@@ -133,13 +133,29 @@ End Function
 ' импортом, только удалить старый и поставить новый.
 Private Function ИмпортироватьМодули(папка As String, ByRef импортировано As Long, _
                                      ByRef пропущено As Long) As String
+    Dim файлы As New Collection
     Dim файл As String
     Dim имя As String
     Dim ошибки As String
     Dim компонент As Object
+    Dim i As Long
 
+    ' Сначала полностью собрать список файлов и только потом его
+    ' обрабатывать. Dir хранит состояние перебора сам в себе: раньше
+    ' весь цикл был одним Do While с Dir на входе и на выходе, а внутри
+    ' — вызовы VBComponents.Import/Remove. Прямых доказательств, что эти
+    ' вызовы Dir не трогают, у меня нет — я не могу здесь запустить
+    ' Excel и проверить. Раз нельзя проверить — не полагаемся: список
+    ' собирается одним отдельным циклом Dir, а COM-вызовы идут по уже
+    ' готовому списку, без единого Dir поблизости.
     файл = Dir(папка & "*.bas")
     Do While файл <> ""
+        файлы.Add файл
+        файл = Dir
+    Loop
+
+    For i = 1 To файлы.Count
+        файл = CStr(файлы(i))
         имя = Left$(файл, Len(файл) - 4)
         If StrComp(имя, САМ_СЕБЯ, vbTextCompare) <> 0 Then
             On Error Resume Next
@@ -160,8 +176,7 @@ Private Function ИмпортироватьМодули(папка As String, ByRef импортировано As Lon
             End If
             On Error GoTo 0
         End If
-        файл = Dir
-    Loop
+    Next i
 
     If ошибки <> "" Then ИмпортироватьМодули = "Не импортировались:" & ошибки
 End Function

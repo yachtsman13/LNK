@@ -54,7 +54,13 @@ RE_IF = re.compile(r"^\s*If\b.*\bThen\s*$", re.I)
 RE_ENDIF = re.compile(r"^\s*End If\b", re.I)
 
 RE_DECL = re.compile(r"^\s*(?:Public |Private )?(?:Static )?(Sub|Function|Property\s+\w+)\s+([^\s(]+)", re.I)
-RE_LOCAL = re.compile(r"^\s*(?:Dim|Const|ReDim|Static)\s+([^\s,]+)", re.I)
+# Public/Private на уровне модуля объявляют переменную так же, как Dim
+# внутри процедуры; Sub, Function и прочее разбирает RE_DECL.
+RE_LOCAL = re.compile(
+    r"^\s*(?:Dim|Const|ReDim|Static|Public|Private)\s+"
+    r"(?:Const\s+|Static\s+)?"
+    r"(?!(?:Sub|Function|Property|Type|Enum|Declare|Const|Static|WithEvents)\b)"
+    r"([^\s,]+)", re.I)
 RE_LABEL = re.compile(r"^\s*([А-Яа-яЁёA-Za-z_]\w*):\s*$")
 # Set ws = Лист("Журнал") / ЛистТихо(Л_СИ) — по этому узнаём, какой лист
 # стоит за переменной, и сверяем заголовок именно с ним.

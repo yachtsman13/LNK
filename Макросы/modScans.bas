@@ -8,11 +8,23 @@ Option Explicit
 '  печатались отдельно и вкладывались руками, поэтому в сквозную
 '  нумерацию пакета они не попадали.
 '
-'  Устранимая её часть — картинки. Скан в JPG, PNG или TIFF Word
-'  вставляет сам, а значит, страницы со сканами становятся обычными
-'  страницами свода: и нумерация сквозная, и на бирке всё сходится.
-'  Неустранимая часть остаётся ровно одна — сканы в PDF: объединить их
-'  без Acrobat нельзя, и про них программа честно говорит отдельно.
+'  Часть решена полностью: скан в JPG, PNG или TIFF Word вставляет сам,
+'  и такие страницы становятся обычными страницами свода — нумерация
+'  сквозная, на бирке всё сходится.
+'
+'  Часть сканов приходит в PDF — так сложилось у разных исполнителей,
+'  переучивать никого не будем. Раз в лаборатории есть Acrobat (не
+'  Reader), эти файлы можно склеить программно: PDDoc.InsertPages —
+'  ровно то, для чего этот вызов существует, и самая обкатанная часть
+'  автоматизации Acrobat. Результат — один файл вместо десятка. Но
+'  вписать в этот уже готовый PDF номер по правилам «пакета» (лист, а
+'  не страница, без номера на первом листе) программно нельзя без риска
+'  сломать что-то на машине пользователя: это делается через JavaScript
+'  Acrobat, а такие вызовы через автоматизацию Acrobat не всегда
+'  разрешены его настройками безопасности и версией. Поэтому объединённый
+'  PDF печатается и подшивается отдельно, без сквозного номера, — как
+'  прежде подшивались сканы по одному, только теперь одним файлом,
+'  а не россыпью.
 '
 '  Картинки кладутся в таблицу с жёстко заданной высотой строк, а не
 '  абзацами подряд: тогда четвёртый скан не съезжает на следующую
@@ -27,6 +39,7 @@ Private Const wdCellAlignVerticalCenter As Long = 1
 Private Const wdLineStyleNone As Long = 0
 
 Private Const РАСШИРЕНИЯ As String = "*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.bmp;*.emf;*.wmf"
+Private Const МАСКА_PDF As String = "*.pdf"
 
 
 ' Папка сканов по разделу: Поверка, Удостоверения, ЛНК.
@@ -219,7 +232,7 @@ Public Function ПризнакиПриборов(строки As Collection) As 
     Dim результат As New Collection
     Dim i As Long, k As Long, last As Long
     Dim идЗаписи As String, идСИ As String, зав As String
-    Dim строкаСИ As Long
+    Dim rСИ As Long
 
     Set ПризнакиПриборов = результат
     Set ж = ЛистТихо(Л_ЖУРНАЛ)
@@ -235,9 +248,9 @@ Public Function ПризнакиПриборов(строки As Collection) As 
                 If StrComp(Trim$(CStr(пр.Cells(i, ColReq(пр, "ID записи журнала")).Value)), _
                            идЗаписи, vbTextCompare) = 0 Then
                     идСИ = Trim$(CStr(пр.Cells(i, ColReq(пр, "ID средства НК")).Value))
-                    строкаСИ = СтрокаСИ(si, идСИ)
-                    If строкаСИ > 0 Then
-                        зав = Trim$(CStr(si.Cells(строкаСИ, ColReq(si, "Заводской №")).Value))
+                    rСИ = СтрокаСИ(si, идСИ)
+                    If rСИ > 0 Then
+                        зав = Trim$(CStr(si.Cells(rСИ, ColReq(si, "Заводской №")).Value))
                         If зав <> "" Then ДобавитьРаз результат, зав
                     End If
                 End If
@@ -308,44 +321,68 @@ Private Function СтрокаСИ(si As Worksheet, идСИ As String) As Long
 End Function
 
 
-' Все сканы пакета в требуемом порядке: свидетельства лаборатории,
-' удостоверения исполнителей, свидетельства о поверке приборов.
+' Все сканы-картинки пакета в требуемом порядке: свидетельства
+' лаборатории, удостоверения исполнителей, свидетельства о поверке
+' приборов. PDF-сканы сюда не входят — Word не умеет вставлять их как
+' картинку; для них отдельная сборка через Acrobat, см. ниже.
+'
+' путьPDF, страницPDF (ByRef) — файл, в который объединились PDF-сканы по
+' тому же акту, тем же трём разделам и в том же порядке, и число страниц
+' в нём. путьPDF пуст, если PDF-сканов не нашлось ИЛИ Acrobat не смог их
+' объединить — эти два случая различает ошибкаPDF: пусто в первом,
+' текст причины во втором.
 Public Function СобратьСканыПакета(wdApp As Object, строки As Collection, _
-                                   ByRef страниц As Long) As String
+                                   ByRef страниц As Long, ByRef путьPDF As String, _
+                                   ByRef страницPDF As Long, ByRef ошибкаPDF As String) As String
     Dim док As Object
     Dim наСтранице As Long
     Dim признаки As Collection
     Dim файлы As Collection
+    Dim pdfВсе As New Collection
     Dim путь As String
 
     страниц = 0
+    путьPDF = ""
     наСтранице = CLng(Val(Настройка("Сканов на страницу")))
     If наСтранице <= 0 Then наСтранице = 4
 
     Set док = wdApp.Documents.Add
     страниц = страниц + ДобавитьРазделСканов(док, "Свидетельства лаборатории", _
                             НайтиСканы("ЛНК", ""), наСтранице)
+    ДобавитьВсе pdfВсе, НайтиPDF("ЛНК", "")
 
     Set признаки = ПризнакиИсполнителей(строки)
     Set файлы = СканыПоПризнакам("Удостоверения", признаки)
     страниц = страниц + ДобавитьРазделСканов(док, _
                             "Квалификационные удостоверения исполнителей", файлы, наСтранице)
+    ДобавитьВсе pdfВсе, PDFПоПризнакам("Удостоверения", признаки)
 
     Set признаки = ПризнакиПриборов(строки)
     Set файлы = СканыПоПризнакам("Поверка", признаки)
     страниц = страниц + ДобавитьРазделСканов(док, _
                             "Свидетельства о поверке применённых средств измерений", _
                             файлы, наСтранице)
+    ДобавитьВсе pdfВсе, PDFПоПризнакам("Поверка", признаки)
 
     If страниц = 0 Then
         док.Close SaveChanges:=False
-        Exit Function
+    Else
+        путь = ПапкаГотовых() & "Сканы_пакета_" & Format$(Now, "yyyymmdd_hhnnss") & ".docx"
+        док.SaveAs2 fileName:=путь
+        док.Close SaveChanges:=False
+        СобратьСканыПакета = путь
     End If
 
-    путь = ПапкаГотовых() & "Сканы_пакета_" & Format$(Now, "yyyymmdd_hhnnss") & ".docx"
-    док.SaveAs2 fileName:=путь
-    док.Close SaveChanges:=False
-    СобратьСканыПакета = путь
+    страницPDF = 0
+    путьPDF = ""
+    ошибкаPDF = ""
+    If pdfВсе.Count > 0 Then
+        If Not ОбъединитьPDF(pdfВсе, _
+                    ПапкаГотовых() & "Сканы_PDF_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf", _
+                    путьPDF, страницPDF, ошибкаPDF) Then
+            путьPDF = ""
+        End If
+    End If
 End Function
 
 
@@ -362,6 +399,140 @@ Private Function СканыПоПризнакам(раздел As String, при
             ДобавитьРаз результат, CStr(найденные(k))
         Next k
     Next i
+End Function
+
+
+' ── PDF-сканы: поиск и объединение через Acrobat ──────────────────────
+
+' То же самое, что НайтиСканы, только маска одна — *.pdf. Отдельная
+' функция, а не общий список масок: Word и Acrobat читают файлы
+' по-разному, и ниже по коду важно не перепутать, какой список идёт
+' куда — в картинки или в объединение PDF.
+Public Function НайтиPDF(раздел As String, признак As String) As Collection
+    Dim найдено As New Collection
+    Dim папка As String
+    Dim имя As String
+
+    Set НайтиPDF = найдено
+    папка = ПапкаСканов(раздел)
+    If папка = "" Then Exit Function
+    If Not ПапкаСуществует(папка) Then Exit Function
+
+    имя = ПервыйФайл(папка & МАСКА_PDF)
+    Do While имя <> ""
+        If признак = "" Then
+            найдено.Add папка & имя
+        ElseIf InStr(1, имя, признак, vbTextCompare) > 0 Then
+            найдено.Add папка & имя
+        End If
+        имя = СледующийФайл()
+    Loop
+End Function
+
+
+Private Function PDFПоПризнакам(раздел As String, признаки As Collection) As Collection
+    Dim результат As New Collection
+    Dim i As Long, k As Long
+    Dim найденные As Collection
+
+    Set PDFПоПризнакам = результат
+    If признаки Is Nothing Then Exit Function
+    For i = 1 To признаки.Count
+        Set найденные = НайтиPDF(раздел, CStr(признаки(i)))
+        For k = 1 To найденные.Count
+            ДобавитьРаз результат, CStr(найденные(k))
+        Next k
+    Next i
+End Function
+
+
+Private Sub ДобавитьВсе(куда As Collection, откуда As Collection)
+    Dim i As Long
+    For i = 1 To откуда.Count
+        ДобавитьРаз куда, CStr(откуда(i))
+    Next i
+End Sub
+
+
+' Склеивает несколько PDF в один через Acrobat (не Reader — тот
+' автоматизацию не даёт). PDDoc.InsertPages — старейшая и самая
+' обкатанная часть автоматизации Acrobat, десятилетиями используемая
+' именно для этой задачи, поэтому здесь ей и место.
+'
+' Файлы, которые Acrobat не смог открыть (повреждён скан, не PDF,
+' несмотря на расширение) — пропускаются, а не обрывают всю сборку:
+' один плохой файл не должен стоить всех остальных; пропуски видны в
+' ошибка (не пусто) даже при True, чтобы вызывающий мог показать это
+' человеку, не считая сборку полным провалом.
+'
+' Возвращает True при успехе (путь и страницы заполнены), False при
+' полном провале (Acrobat не найден или ни один файл не открылся) —
+' тогда заполнена только ошибка, а путь и страницы остаются пустыми.
+Public Function ОбъединитьPDF(файлы As Collection, выходной As String, _
+                              ByRef путь As String, ByRef страниц As Long, _
+                              ByRef ошибка As String) As Boolean
+    Const PDSaveFull As Long = 1
+    Dim базовый As Object
+    Dim вставка As Object
+    Dim i As Long
+    Dim открыт As Boolean
+    Dim пропущено As Long
+
+    путь = "": страниц = 0: ошибка = ""
+    If файлы Is Nothing Then Exit Function
+    If файлы.Count = 0 Then Exit Function
+
+    On Error GoTo НетAcrobat
+    Set базовый = CreateObject("AcroExch.PDDoc")
+    On Error GoTo Сбой
+
+    ' Первый файл, который реально открылся, становится основой —
+    ' не обязательно самый первый в списке, если он вдруг повреждён.
+    For i = 1 To файлы.Count
+        If базовый.Open(CStr(файлы(i))) Then
+            открыт = True
+            Exit For
+        Else
+            пропущено = пропущено + 1
+        End If
+    Next i
+    If Not открыт Then
+        ошибка = "ни один из " & файлы.Count & " файлов не открылся"
+        Exit Function
+    End If
+
+    For i = i + 1 To файлы.Count
+        Set вставка = CreateObject("AcroExch.PDDoc")
+        If вставка.Open(CStr(файлы(i))) Then
+            базовый.InsertPages базовый.GetNumPages() - 1, вставка, 0, _
+                                вставка.GetNumPages(), 0
+            вставка.Close
+        Else
+            пропущено = пропущено + 1
+        End If
+        Set вставка = Nothing
+    Next i
+
+    страниц = базовый.GetNumPages()
+    базовый.Save PDSaveFull, выходной
+    базовый.Close
+    Set базовый = Nothing
+
+    путь = выходной
+    If пропущено > 0 Then ошибка = "не открылось файлов: " & пропущено & " — пропущены"
+    ОбъединитьPDF = True
+    Exit Function
+
+НетAcrobat:
+    ошибка = "не нашёл Acrobat (AcroExch.PDDoc) — он должен быть установлен, " & _
+             "не только Reader"
+    Exit Function
+
+Сбой:
+    On Error Resume Next
+    If Not базовый Is Nothing Then базовый.Close
+    If Not вставка Is Nothing Then вставка.Close
+    ошибка = "Acrobat не справился: " & Err.Description
 End Function
 
 
@@ -382,10 +553,14 @@ Private Sub ПечатьРаздела(раздел As String, заголово�
     Dim строки As Collection
     Dim признаки As Collection
     Dim файлы As Collection
+    Dim pdfФайлы As Collection
     Dim wdApp As Object
     Dim док As Object
     Dim наСтранице As Long
     Dim страниц As Long
+    Dim путьPDF As String
+    Dim страницPDF As Long
+    Dim ошибкаPDF As String
 
     Set ж = Лист(Л_ЖУРНАЛ)
     If ж Is Nothing Then Exit Sub
@@ -411,18 +586,31 @@ Private Sub ПечатьРаздела(раздел As String, заголово�
         Set признаки = ПризнакиИсполнителей(строки)
     End If
     Set файлы = СканыПоПризнакам(раздел, признаки)
+    Set pdfФайлы = PDFПоПризнакам(раздел, признаки)
 
-    If файлы.Count = 0 Then
+    If файлы.Count = 0 And pdfФайлы.Count = 0 Then
         MsgBox "Ни одного скана не нашлось." & vbCrLf & vbCrLf & _
                "Искали в " & ПапкаСканов(раздел) & " по " & признаки.Count & _
-               " признакам. Проверьте, что в именах файлов есть заводской номер " & _
-               "прибора или фамилия специалиста, и что это картинки, а не PDF: " & _
-               "PDF Word вставить не может.", vbExclamation, заголовок
+               " признакам (JPG/PNG/TIFF и PDF). Проверьте, что в имени файла есть " & _
+               "заводской номер прибора или фамилия специалиста.", vbExclamation, заголовок
         Exit Sub
     End If
 
     наСтранице = CLng(Val(Настройка("Сканов на страницу")))
     If наСтранице <= 0 Then наСтранице = 4
+
+    If pdfФайлы.Count > 0 Then
+        путьPDF = ПапкаГотовых() & "Сканы_PDF_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+        If Not ОбъединитьPDF(pdfФайлы, путьPDF, путьPDF, страницPDF, ошибкаPDF) Then
+            путьPDF = ""
+        End If
+    End If
+
+    If файлы.Count = 0 Then
+        ' Только PDF — Word открывать незачем, объединённого файла хватит.
+        ПоказатьРезультатПечати заголовок, 0, 0, путьPDF, страницPDF, ошибкаPDF
+        Exit Sub
+    End If
 
     On Error GoTo Сбой
     Set wdApp = CreateObject("Word.Application")
@@ -431,10 +619,7 @@ Private Sub ПечатьРаздела(раздел As String, заголово�
     страниц = ДобавитьРазделСканов(док, заголовок, файлы, наСтранице)
     wdApp.Visible = True
     док.Activate
-    MsgBox "Собрано сканов: " & файлы.Count & " на " & страниц & " стр." & vbCrLf & vbCrLf & _
-           "Документ открыт в Word — проверьте и печатайте. В пакет по акту эти же " & _
-           "сканы попадают сами, отдельно печатать их не нужно.", _
-           vbInformation, заголовок
+    ПоказатьРезультатПечати заголовок, файлы.Count, страниц, путьPDF, страницPDF, ошибкаPDF
     Exit Sub
 
 Сбой:
@@ -442,4 +627,27 @@ Private Sub ПечатьРаздела(раздел As String, заголово�
     If Not wdApp Is Nothing Then wdApp.Visible = True
     MsgBox "Не удалось собрать сканы." & vbCrLf & "Ошибка: " & Err.Description, _
            vbCritical, заголовок
+End Sub
+
+
+Private Sub ПоказатьРезультатПечати(заголовок As String, картинок As Long, страницКартинок As Long, _
+                                    путьPDF As String, страницPDF As Long, ошибкаPDF As String)
+    Dim текст As String
+
+    If картинок > 0 Then
+        текст = "Картинок: " & картинок & ", на " & страницКартинок & " стр. " & _
+                "Документ открыт в Word — проверьте и печатайте."
+    End If
+    If путьPDF <> "" Then
+        текст = текст & IIf(текст = "", "", vbCrLf & vbCrLf) & _
+                "PDF объединены Acrobat, " & страницPDF & " стр.: " & путьPDF
+    ElseIf ошибкаPDF <> "" Then
+        текст = текст & IIf(текст = "", "", vbCrLf & vbCrLf) & _
+                "PDF-сканы найдены, но не объединились: " & ошибкаPDF & _
+                ". Печатайте их по одному."
+    End If
+    текст = текст & vbCrLf & vbCrLf & _
+            "В пакет по акту эти же сканы попадают сами, отдельно печатать их не нужно " & _
+            "— эта кнопка для случая, когда пакет ещё рано собирать целиком."
+    MsgBox текст, vbInformation, заголовок
 End Sub

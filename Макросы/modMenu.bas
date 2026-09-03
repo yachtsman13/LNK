@@ -11,16 +11,22 @@ Option Explicit
 '
 '  Кнопки — элементы управления формы, а не ActiveX: они переживают
 '  копирование книги между машинами и не требуют ни ссылок, ни
-'  регистрации библиотек. Что нажали, кнопка сообщает своим именем
-'  через Application.Caller, поэтому обработчик один на все.
+'  регистрации библиотек.
+'
+'  Что нажали, определяется по строке, над которой стоит кнопка: команда
+'  лежит в служебной (скрытой) колонке этой же строки. Кнопке нарочно не
+'  присваивается имя — Excel на это отвечает «Нельзя установить свойство
+'  Name класса Button», и на некоторых надписях построение пульта
+'  обрывалось. Строка под кнопкой известна всегда, а имя не нужно.
 ' ═══════════════════════════════════════════════════════════════════════
 
 Private Const Л_ПУЛЬТ As String = "Меню"
-Private Const ПРЕФИКС_КНОПКИ As String = "КН "
-Private Const ПРЕФИКС_ЛИСТА As String = "ЛИСТ "
+Private Const ПРЕФИКС_ЛИСТА As String = "ЛИСТ:"
 
-Private Const Ш_КНОПКИ As Long = 30      ' ширина колонки B, знаков
-Private Const В_СТРОКИ As Long = 21      ' высота строки под кнопку, пунктов
+Private Const К_КОМАНДЫ As Long = 8      ' служебная колонка с командой
+Private Const В_СТРОКИ As Long = 22      ' высота строки — надпись в одну строку
+Private Const В_СТРОКИ_2 As Long = 34    ' высота строки — надпись в две строки
+Private Const ПОРОГ_ПЕРЕНОСА As Long = 22 ' длиннее — переносим на два ряда
 
 
 Public Sub ПостроитьПульт()
@@ -49,10 +55,16 @@ Public Sub ПостроитьПульт()
     r = r + 1
     r = Кнопки(ws, r)
 
+    ' Колонка B — кнопки и заголовки плиток, C — число в плитке и
+    ' начало подсказки, D — пояснение плитки и продолжение подсказки.
+    ' Подсказка пишется в C и перетекает в пустую D, поэтому стоит
+    ' сразу за кнопкой, а не в стороне от неё.
     ws.Columns("A").ColumnWidth = 2
-    ws.Columns("B").ColumnWidth = Ш_КНОПКИ
-    ws.Columns("C").ColumnWidth = 12
-    ws.Columns("D").ColumnWidth = 70
+    ws.Columns("B").ColumnWidth = 40
+    ws.Columns("C").ColumnWidth = 13
+    ws.Columns("D").ColumnWidth = 78
+    ws.Columns(К_КОМАНДЫ).ColumnWidth = 2
+    ws.Columns(К_КОМАНДЫ).Hidden = True
     ws.Activate
     ws.Range("A1").Select
     Application.ScreenUpdating = True
@@ -202,11 +214,8 @@ End Function
 
 Private Function Кнопка(ws As Worksheet, r As Long, текст As String, _
                         подсказка As String) As Long
-    ПоложитьКнопку ws, r, текст, ПРЕФИКС_КНОПКИ & текст
-    ws.Cells(r, 3).Value = подсказка
-    ws.Cells(r, 3).Font.Color = RGB(89, 89, 89)
-    ws.Cells(r, 3).Font.Italic = True
-    ws.Rows(r).RowHeight = В_СТРОКИ
+    ПоложитьКнопку ws, r, текст, текст
+    Подсказка ws, r, подсказка
     Кнопка = r + 1
 End Function
 
@@ -217,27 +226,91 @@ End Function
 Private Function КнопкаЛиста(ws As Worksheet, r As Long, текст As String, _
                              лист As String, подсказка As String) As Long
     ПоложитьКнопку ws, r, текст, ПРЕФИКС_ЛИСТА & лист
-    ws.Cells(r, 3).Value = подсказка
-    ws.Cells(r, 3).Font.Color = RGB(89, 89, 89)
-    ws.Cells(r, 3).Font.Italic = True
-    ws.Rows(r).RowHeight = В_СТРОКИ
+    Подсказка ws, r, подсказка
     КнопкаЛиста = r + 1
 End Function
 
 
-Private Sub ПоложитьКнопку(ws As Worksheet, r As Long, надпись As String, имя As String)
+' Подсказка стоит в той же строке и по её середине: иначе текст
+' прижимается к низу ячейки и с кнопкой рядом не читается как пара.
+Private Sub Подсказка(ws As Worksheet, r As Long, текст As String)
+    With ws.Cells(r, 3)
+        .Value = текст
+        .Font.Color = RGB(89, 89, 89)
+        .Font.Italic = True
+        .Font.Size = 9
+        .VerticalAlignment = xlCenter
+        .HorizontalAlignment = xlLeft
+        .WrapText = False
+        .IndentLevel = 1
+    End With
+    ws.Rows(r).RowHeight = В_СТРОКИ
+End Sub
+
+
+' Кнопка ставится ПОСЛЕ того, как высота строки установлена под её
+' надпись — иначе кнопка вырезается по размеру ячейки на момент вставки
+' и не растёт вместе со строкой.
+'
+' Длинные надписи не отдаются на волю авто-переноса: где он в Forms-
+' кнопке разорвёт строку — по границе слова или прямо посередине —
+' заранее не угадать, а с длинными кириллическими словами вроде
+' «электроинструмента» такая рулетка кончается обрезанным текстом,
+' как и было. Перенос ставится явно, ближе к середине надписи, по
+' ближайшему пробелу — так на кнопке ровно две строки текста, обе
+' целиком читаемые.
+Private Sub ПоложитьКнопку(ws As Worksheet, r As Long, надпись As String, команда As String)
     Dim кн As Object
     Dim ячейка As Range
+    Dim текст As String
 
-    ws.Rows(r).RowHeight = В_СТРОКИ
+    текст = СПереносом(надпись)
+    ws.Rows(r).RowHeight = IIf(InStr(текст, vbLf) > 0, В_СТРОКИ_2, В_СТРОКИ)
+
     Set ячейка = ws.Cells(r, 2)
     Set кн = ws.Buttons.Add(ячейка.Left + 1, ячейка.Top + 1, _
                             ячейка.Width - 2, ячейка.Height - 2)
-    кн.Caption = надпись
-    кн.Name = имя
+    кн.Caption = текст
     кн.OnAction = "ЗапуститьКнопку"
     кн.Font.Size = 9
+    ' Команда — в служебной колонке этой строки, полным текстом надписи
+    ' (без переноса): по ней ищет обработчик, а перенос — только для
+    ' отображения. Переименовывать саму кнопку не пробуем: Excel это
+    ' запрещает («Нельзя установить свойство Name класса Button»).
+    ws.Cells(r, К_КОМАНДЫ).Value = команда
 End Sub
+
+
+Private Function СПереносом(текст As String) As String
+    Dim середина As Long
+    Dim лучший As Long
+    Dim i As Long
+    Dim расстояние As Long, лучшееРасстояние As Long
+
+    If Len(текст) <= ПОРОГ_ПЕРЕНОСА Then
+        СПереносом = текст
+        Exit Function
+    End If
+
+    середина = Len(текст) \ 2
+    лучший = 0
+    лучшееРасстояние = 999
+    For i = 1 To Len(текст)
+        If Mid$(текст, i, 1) = " " Then
+            расстояние = Abs(i - середина)
+            If расстояние < лучшееРасстояние Then
+                лучшееРасстояние = расстояние
+                лучший = i
+            End If
+        End If
+    Next i
+
+    If лучший = 0 Then
+        СПереносом = текст                 ' в надписи нет пробела — переносить негде
+    Else
+        СПереносом = Left$(текст, лучший - 1) & vbLf & Mid$(текст, лучший + 1)
+    End If
+End Function
 
 
 Private Function ПересоздатьПульт() As Worksheet
@@ -248,7 +321,12 @@ Private Function ПересоздатьПульт() As Worksheet
     Application.DisplayAlerts = True
     On Error GoTo 0
     Set ws = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
+    On Error Resume Next
     ws.Name = Л_ПУЛЬТ
+    On Error GoTo 0
+    ' Если прежний лист почему-то не удалился, на нём остались кнопки
+    ' от прошлой сборки — без команд и потому нерабочие.
+    ОчиститьКнопки ws
     ws.Tab.Color = RGB(31, 56, 100)
     ws.Cells.Interior.Color = RGB(255, 255, 255)
     ws.Cells.Font.Name = "Calibri"
@@ -258,23 +336,43 @@ Private Function ПересоздатьПульт() As Worksheet
 End Function
 
 
+Private Sub ОчиститьКнопки(ws As Worksheet)
+    Dim i As Long
+    On Error Resume Next
+    For i = ws.Shapes.Count To 1 Step -1
+        ws.Shapes(i).Delete
+    Next i
+    ws.Cells.ClearContents
+End Sub
+
+
 ' ── Что нажали ────────────────────────────────────────────────────────
 
-' Обработчик один на все кнопки: какая нажата, кнопка говорит своим
-' именем. Имя задаётся при отрисовке и содержит либо команду, либо
-' имя листа — разбирать надписи с их пробелами и переносами не надо.
+' Обработчик один на все кнопки. Какая нажата — видно по строке, над
+' которой она стоит: команда лежит в служебной колонке этой строки.
 Public Sub ЗапуститьКнопку()
-    Dim имя As String
+    Dim ws As Worksheet
+    Dim строка As Long
+    Dim команда As String
 
     On Error Resume Next
-    имя = CStr(Application.Caller)
+    Set ws = ThisWorkbook.Worksheets(Л_ПУЛЬТ)
+    строка = ws.Buttons(Application.Caller).TopLeftCell.Row
     On Error GoTo 0
-    If имя = "" Then Exit Sub
+    If строка < 1 Then Exit Sub
 
-    If Left$(имя, Len(ПРЕФИКС_ЛИСТА)) = ПРЕФИКС_ЛИСТА Then
-        ОткрытьЛист Mid$(имя, Len(ПРЕФИКС_ЛИСТА) + 1)
-    ElseIf Left$(имя, Len(ПРЕФИКС_КНОПКИ)) = ПРЕФИКС_КНОПКИ Then
-        ЗапуститьПунктМеню Mid$(имя, Len(ПРЕФИКС_КНОПКИ) + 1)
+    команда = Trim$(CStr(ws.Cells(строка, К_КОМАНДЫ).Value))
+    If команда = "" Then
+        MsgBox "У этой кнопки нет команды — похоже, пульт собран не до конца." & _
+               vbCrLf & vbCrLf & "Нажмите «Обновить пульт» или переоткройте книгу.", _
+               vbExclamation, "Пульт"
+        Exit Sub
+    End If
+
+    If Left$(команда, Len(ПРЕФИКС_ЛИСТА)) = ПРЕФИКС_ЛИСТА Then
+        ОткрытьЛист Mid$(команда, Len(ПРЕФИКС_ЛИСТА) + 1)
+    Else
+        ЗапуститьПунктМеню команда
     End If
 End Sub
 

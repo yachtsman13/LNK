@@ -14,7 +14,7 @@ from migrate import (METHODS, read_flat, to_wide, build_objects, parse_object, n
                      read_acts, attach_acts)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC_V2 = os.path.join(ROOT, "Реестры", "ЛНК_Реестры_v2.xlsx")
+SRC_V2 = os.path.join(ROOT, "Исходники", "ЛНК_Реестры_v2.xlsx")
 SRC_PPR = os.path.join(ROOT, "Исходники", "План-график_ППР_2026-2030.xlsx")
 SRC_ACTS = os.path.join(ROOT, "Исходники", "Журнал_заключений_2026_исходный.xlsx")
 OUT = os.path.join(ROOT, "Реестры", "ЛНК_Данные.xlsx")

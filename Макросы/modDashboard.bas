@@ -390,6 +390,16 @@ End Function
 
 ' ── Отрисовка ─────────────────────────────────────────────────────────
 
+' Пояснения бывают от пары слов до семисот символов (список из полусотни
+' записей). Раньше строка была фиксированной высоты 34 пункта, и длинный
+' текст обрезался визуально — WrapText сам по себе высоту не меняет.
+' Здесь высота считается автоматически (Rows.AutoFit), после того как
+' очень длинные пояснения обрезаны до разумного предела: без этого
+' предела одна плитка с полусотней записей растянулась бы на пол-листа.
+Private Const ПРЕДЕЛ_ПОЯСНЕНИЯ As Long = 280
+Private Const ВЫСОТА_МИН As Single = 20
+Private Const ВЫСОТА_МАКС As Single = 80
+
 Private Function Плитка(ws As Worksheet, r As Long, заголовок As String, _
                         число As String, пояснение As String, уровень As Long) As Long
     Dim фон As Long
@@ -403,7 +413,7 @@ Private Function Плитка(ws As Worksheet, r As Long, заголовок As 
 
     ws.Cells(r, 2).Value = заголовок
     ws.Cells(r, 3).Value = число
-    ws.Cells(r, 4).Value = пояснение
+    ws.Cells(r, 4).Value = Обрезано(пояснение, ПРЕДЕЛ_ПОЯСНЕНИЯ)
     With ws.Range(ws.Cells(r, 2), ws.Cells(r, 4))
         .Interior.Color = фон
         .Font.Color = цвет
@@ -417,6 +427,20 @@ Private Function Плитка(ws As Worksheet, r As Long, заголовок As 
     ws.Cells(r, 3).Font.Bold = True
     ws.Cells(r, 3).HorizontalAlignment = xlCenter
     ws.Cells(r, 4).Font.Size = 9
-    ws.Rows(r).RowHeight = 34
+
+    ws.Rows(r).RowHeight = ВЫСОТА_МИН        ' с этого AutoFit посчитает верно
+    ws.Rows(r).AutoFit
+    If ws.Rows(r).RowHeight < ВЫСОТА_МИН Then ws.Rows(r).RowHeight = ВЫСОТА_МИН
+    If ws.Rows(r).RowHeight > ВЫСОТА_МАКС Then ws.Rows(r).RowHeight = ВЫСОТА_МАКС
+
     Плитка = r + 1
+End Function
+
+
+Private Function Обрезано(текст As String, предел As Long) As String
+    If Len(текст) <= предел Then
+        Обрезано = текст
+    Else
+        Обрезано = Left$(текст, предел) & "… (список длиннее — подробности в соответствующем реестре)"
+    End If
 End Function

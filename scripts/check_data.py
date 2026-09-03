@@ -7,7 +7,7 @@ from migrate import METHODS, read_flat
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "Реестры", "ЛНК_Данные.xlsx")
-SRC = os.path.join(ROOT, "Реестры", "ЛНК_Реестры_v2.xlsx")
+SRC = os.path.join(ROOT, "Исходники", "ЛНК_Реестры_v2.xlsx")
 FIRST = 4
 
 errors, notes = [], []

@@ -348,6 +348,49 @@ def main():
                     if i < len(names) and a in var_sheet and var_sheet[a]:
                         param_sheet[(callee, names[i])] = var_sheet[a]
 
+    # ── локальная переменная, затеняющая процедуру ───────────────────
+    # VBA не различает регистр: Dim строкаСИ и Function СтрокаСИ — это
+    # одно имя. Внутри такой процедуры вызов СтрокаСИ(...) обращается к
+    # переменной, и книга не компилируется. Ошибка тихая: находится не
+    # при написании, а при первом запуске у человека.
+    затенения = []
+    DECL_FULL = re.compile(
+        r"^\s*(?:Public |Private )?(?:Static )?(Sub|Function)\s+([^\s(]+)\s*(?:\(([^)]*)\))?", re.I)
+    RE_END = re.compile(r"^\s*End (Sub|Function)\b", re.I)
+    процедуры = {имя.lower(): имя for имя in declared}
+    for path in files:
+        имяМодуля = os.path.basename(path)[:-4]
+        строки = read_lines(path)
+        k = 0
+        while k < len(строки):
+            d = DECL_FULL.match(strip_code(строки[k][1]))
+            if not d:
+                k += 1
+                continue
+            локальные, тело = {}, []
+            for a in (d.group(3) or "").split(","):
+                a = re.sub(r"^\s*(?:ByVal|ByRef|Optional)\s+", "", a.strip(), flags=re.I)
+                части = a.split()
+                if части:
+                    локальные[части[0].lower()] = части[0]
+            k += 1
+            while k < len(строки) and not RE_END.match(strip_code(строки[k][1])):
+                code = strip_code(строки[k][1])
+                m = RE_LOCAL.match(code)
+                if m:
+                    локальные[m.group(1).lower()] = m.group(1)
+                тело.append(code)
+                k += 1
+            текст = "\n".join(тело)
+            for низ, как in локальные.items():
+                if низ not in процедуры:
+                    continue
+                if re.search(r"(?<![.\w])" + re.escape(процедуры[низ]) + r"\s*\(", текст, re.I):
+                    затенения.append("%s:%s локальная «%s» затеняет %s" %
+                                     (имяМодуля, d.group(2), как, процедуры[низ]))
+    check(not затенения, "локальные имена не затеняют вызываемые процедуры%s" %
+          ("" if not затенения else ": " + "; ".join(затенения)))
+
     # ── пункты меню и их обработчик ──────────────────────────────────
     # Пункт запускается сравнением текста строки со списком Case.
     # Разошлись на один символ — пункт молча ничего не делает.

@@ -46,6 +46,7 @@ Public Function ПлиткиНа(ws As Worksheet, ByVal r As Long) As Long
     r = ПлиткаЧерновиков(ws, r)
     r = ПлиткаВыданного(ws, r)
     r = ПлиткаРекламаций(ws, r)
+    r = ПлиткаКД(ws, r)
     r = ПлиткаОбмена(ws, r)
     r = ПлиткаНосителя(ws, r)
     r = ПлиткаЭлектроинструмента(ws, r)
@@ -335,6 +336,46 @@ Private Function ПлиткаРекламаций(ws As Worksheet, r As Long) As Long
     ПлиткаРекламаций = Плитка(ws, r, "Рекламации", _
         IIf(просрочено > 0, просрочено & " просрочено", вРаботе & " в работе"), _
         IIf(список = "", "Мероприятия ещё не отмечены выполненными.", список), _
+        IIf(просрочено > 0, 2, 1))
+End Function
+
+
+Private Function ПлиткаКД(ws As Worksheet, r As Long) As Long
+    Dim src As Worksheet
+    Dim i As Long, last As Long
+    Dim cСрок As Long, cОценка As Long, cНесоотв As Long
+    Dim просрочено As Long, вРаботе As Long
+    Dim список As String
+
+    ПлиткаКД = r
+    Set src = ЛистТихо("Журнал_КД")
+    If src Is Nothing Then Exit Function
+    cСрок = ColByHeader(src, "Срок")
+    cОценка = ColByHeader(src, "Оценка результативности")
+    cНесоотв = ColByHeader(src, "Несоответствие")
+    If cСрок = 0 Then Exit Function
+    last = ПоследняяСтрока(src, 1)
+
+    For i = ПЕРВАЯ_СТРОКА To last
+        If Trim$(CStr(src.Cells(i, cОценка).Value)) = "" Then
+            If IsDate(src.Cells(i, cСрок).Value) Then
+                вРаботе = вРаботе + 1
+                If CDate(src.Cells(i, cСрок).Value) < Date Then
+                    просрочено = просрочено + 1
+                    If Len(список) < 300 Then
+                        список = список & IIf(список = "", "", "; ") & _
+                                 Left$(CStr(src.Cells(i, cНесоотв).Value), 40) & " — срок был " & _
+                                 Format$(src.Cells(i, cСрок).Value, "dd.mm.yyyy")
+                    End If
+                End If
+            End If
+        End If
+    Next i
+
+    If вРаботе = 0 Then Exit Function
+    ПлиткаКД = Плитка(ws, r, "Корректирующие действия", _
+        IIf(просрочено > 0, просрочено & " просрочено", вРаботе & " в работе"), _
+        IIf(список = "", "Результативность ещё не оценена.", список), _
         IIf(просрочено > 0, 2, 1))
 End Function
 

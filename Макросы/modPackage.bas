@@ -5,8 +5,14 @@ Option Explicit
 '  Сборка и печать пакета документов по одной работе.
 '
 '  Порядок в пакете задан вами и не меняется:
-'    акт → протоколы → свидетельства лаборатории → квалификационные
+'    сводный лист-опись (если объектов в акте больше одного) → акт →
+'    протоколы → свидетельства лаборатории → квалификационные
 '    удостоверения → свидетельства о поверке → пустой лист для сшива.
+'
+'  Сводный лист — это ДОБАВКА к отдельным документам, не замена: у
+'  каждого объекта и метода по-прежнему свой самостоятельный документ,
+'  а сводный лист впереди просто перечисляет их все одной таблицей —
+'  чтобы не листать пакет в поисках, что в него вошло.
 '
 '  Сквозная нумерация внутри экземпляра, на первой странице номера нет.
 '  Три экземпляра: каждый нумеруется заново, поэтому печатаются копии
@@ -51,6 +57,7 @@ Public Sub НапечататьПакет()
     Dim нумеровать As Boolean
     Dim всего As Long
     Dim экземпляров As Long
+    Dim путьСвода As String
 
     Set ws = Лист(Л_ЖУРНАЛ)
     If ws Is Nothing Then Exit Sub
@@ -76,6 +83,12 @@ Public Sub НапечататьПакет()
     On Error GoTo Сбой
     Set wdApp = CreateObject("Word.Application")
     wdApp.Visible = False
+
+    ' Сводный лист-опись — только когда в акте больше одного объекта:
+    ' на один объект и так есть акт/протокол, второй такой же список
+    ' был бы лишним листом ни о чём.
+    путьСвода = СобратьСводныйЛист(wdApp, ws, строки, акт)
+    If путьСвода <> "" Then файлы.Add путьСвода, Before:=1
 
     ' Сканы-картинки идут в свод как обычные страницы: свидетельства
     ' лаборатории, удостоверения, свидетельства о поверке — в этом
@@ -232,6 +245,239 @@ Private Function НайтиДокумент(ws As Worksheet, r As Long, мето
     маска = ОчиститьДляИмениФайла(РегНомер(ws, r, метод)) & "*.docx"
     файл = ПервыйФайл(папка & маска)
     If файл <> "" Then НайтиДокумент = папка & файл
+End Function
+
+
+' ── Сводный лист-опись протоколов акта ──────────────────────────────────
+'
+' Только когда в акте больше одного объекта: печатается впереди пакета,
+' одним текстом перечисляет все документы акта, сгруппированные по
+' методу — как в вашем образце («Акты ВИК №№ …», «Протоколы УЗТ №№ …»).
+' Это ДОБАВКА к отдельным документам по каждому объекту и методу, не
+' замена: они остаются в пакете как есть.
+'
+' Часть текста (номер и дата наряда-заказа) система по данным не
+' отслеживает — как и на бирке, оставлены пустые места под запись от
+' руки. Поменять формулировку целиком можно настройкой «Текст сводного
+' акта», не трогая код.
+Private Function СобратьСводныйЛист(wdApp As Object, ws As Worksheet, строки As Collection, _
+                                     акт As String) As String
+    Dim методы As Variant
+    Dim объекты As String, документы As String
+    Dim текст As String
+    Dim номерАкта As String
+    Dim док As Object
+    Dim исполнители As Collection
+    Dim подписьТабл As Object
+    Dim должность As String, кратко As String
+    Dim k As Long
+    Dim путь As String
+
+    If строки.Count <= 1 Then Exit Function
+
+    методы = Split(МЕТОДЫ, ",")
+    документы = СобратьДокументыАкта(ws, строки, методы)
+    If документы = "" Then Exit Function     ' ни одного зарегистрированного номера
+
+    объекты = СобратьОбъектыАкта(ws, строки)
+
+    номерАкта = акт
+    If InStr(1, номерАкта, "АКТ ", vbTextCompare) = 1 Then номерАкта = Mid$(номерАкта, 5)
+
+    текст = Настройка("Текст сводного акта")
+    If текст = "" Then
+        текст = "В соответствии с нарядом-заказом (заявкой) № ______ от " & _
+                "«____» ________________ 20____ г. выполнены работы по " & _
+                "неразрушающему контролю на объектах: #ОБЪЕКТЫ." & vbCr & vbCr & _
+                "Результаты работ отражены в следующих документах." & vbCr & vbCr & _
+                "#ДОКУМЕНТЫ"
+    End If
+    текст = Replace(текст, "#АКТ", номерАкта)
+    текст = Replace(текст, "#ОБЪЕКТЫ", объекты)
+    текст = Replace(текст, "#ДОКУМЕНТЫ", документы)
+
+    Set док = wdApp.Documents.Add
+    With док.Paragraphs(1).Range
+        .Text = "АКТ № " & номерАкта
+        .Font.Bold = True
+        .Font.Size = 14
+        .ParagraphFormat.Alignment = wdAlignParagraphCenter
+    End With
+    док.Content.InsertParagraphAfter
+    With док.Paragraphs(2).Range
+        .Text = "о проведении работ"
+        .ParagraphFormat.Alignment = wdAlignParagraphCenter
+    End With
+    док.Content.InsertParagraphAfter
+    док.Content.InsertParagraphAfter
+
+    With док.Paragraphs(док.Paragraphs.Count).Range
+        .InsertAfter текст
+    End With
+    док.Content.InsertParagraphAfter
+    док.Content.InsertParagraphAfter
+
+    ' Подписи — те, кто по журналу исполнял методы этого акта; должность
+    ' подтягивается из реестра специалистов, а не вписывается вручную.
+    Set исполнители = ИсполнителиАкта(ws, строки, методы)
+    If исполнители.Count > 0 Then
+        Set подписьТабл = док.Tables.Add(Range:=док.Paragraphs(док.Paragraphs.Count).Range, _
+                                         NumRows:=исполнители.Count, NumColumns:=2)
+        подписьТабл.Borders.Enable = False
+        For k = 1 To исполнители.Count
+            должность = ""
+            кратко = ДанныеСпециалиста(CStr(исполнители(k)), должность)
+            подписьТабл.Cell(k, 1).Range.Text = должность
+            подписьТабл.Cell(k, 2).Range.Text = кратко
+        Next k
+    End If
+
+    путь = ПапкаГотовых() & "Сводный_" & ОчиститьДляИмениФайла(номерАкта) & "_" & _
+           Format$(Now, "yyyymmdd_hhnnss") & ".docx"
+    док.SaveAs2 fileName:=путь
+    док.Close SaveChanges:=False
+    СобратьСводныйЛист = путь
+End Function
+
+
+Private Function ОбъектСРеквизитами(ws As Worksheet, r As Long) As String
+    Dim имя As String, зав As String, рег As String
+    имя = Trim$(CStr(ws.Cells(r, ColReq(ws, "Наименование объекта в документе")).Value))
+    зав = Trim$(CStr(ws.Cells(r, ColReq(ws, "Заводской № объекта")).Value))
+    рег = Trim$(CStr(ws.Cells(r, ColReq(ws, "Рег. / уч. № объекта")).Value))
+    If зав <> "" Then имя = имя & ", зав. № " & зав
+    If рег <> "" Then имя = имя & ", рег. № " & рег
+    ОбъектСРеквизитами = имя
+End Function
+
+
+' Объекты через «; », последний — через « и », как в образце заказчика.
+Private Function СобратьОбъектыАкта(ws As Worksheet, строки As Collection) As String
+    Dim i As Long
+    Dim s As String
+    For i = 1 To строки.Count
+        If i > 1 Then s = s & IIf(i = строки.Count, " и ", "; ")
+        s = s & ОбъектСРеквизитами(ws, CLng(строки(i)))
+    Next i
+    СобратьОбъектыАкта = s
+End Function
+
+
+' Название типа документа во множественном числе — как в шапке ваших
+' шаблонов, только во множественном числе и без номера. Для МК шаблона
+' документа в системе ещё нет (известный пробел) — название подставлено
+' по аналогии с остальными методами и не подтверждено.
+Private Function ТипДокументаМн(метод As String) As String
+    Select Case UCase$(метод)
+        Case "ВИК": ТипДокументаМн = "Акты визуального и (или) измерительного контроля"
+        Case "УЗД": ТипДокументаМн = "Заключения по результатам ультразвукового контроля"
+        Case "УЗТ": ТипДокументаМн = "Протоколы ультразвуковой толщинометрии"
+        Case "АЭ":  ТипДокументаМн = "Заключения по результатам акустико-эмиссионного контроля"
+        Case "ТВ":  ТипДокументаМн = "Протоколы измерения твёрдости металла"
+        Case "ТК":  ТипДокументаМн = "Протоколы теплового контроля"
+        Case "ВД":  ТипДокументаМн = "Протоколы вибродиагностического контроля"
+        Case "МК":  ТипДокументаМн = "Протоколы магнитопорошкового контроля"
+        Case Else:  ТипДокументаМн = "Документы по методу " & метод
+    End Select
+End Function
+
+
+Private Function СобратьДокументыАкта(ws As Worksheet, строки As Collection, методы As Variant) As String
+    Dim i As Long, m As Long
+    Dim метод As String, номер As String
+    Dim номера As Collection
+    Dim блоки As New Collection
+
+    For m = LBound(методы) To UBound(методы)
+        метод = CStr(методы(m))
+        Set номера = New Collection
+        For i = 1 To строки.Count
+            If МетодПрименён(ws, CLng(строки(i)), метод) Then
+                номер = РегНомер(ws, CLng(строки(i)), метод)
+                If номер <> "" Then номера.Add номер
+            End If
+        Next i
+        If номера.Count > 0 Then
+            блоки.Add ТипДокументаМн(метод) & " №№ " & СоединитьЗапятыми(номера) & "."
+        End If
+    Next m
+
+    СобратьДокументыАкта = СоединитьПереносами(блоки)
+End Function
+
+
+Private Function СоединитьЗапятыми(список As Collection) As String
+    Dim i As Long, s As String
+    For i = 1 To список.Count
+        If i > 1 Then s = s & ", "
+        s = s & CStr(список(i))
+    Next i
+    СоединитьЗапятыми = s
+End Function
+
+
+Private Function СоединитьПереносами(список As Collection) As String
+    Dim i As Long, s As String
+    For i = 1 To список.Count
+        If i > 1 Then s = s & vbCr & vbCr
+        s = s & CStr(список(i))
+    Next i
+    СоединитьПереносами = s
+End Function
+
+
+' Кто исполнял методы этого акта — без повторов, в порядке появления в
+' журнале. Должность подтягивается по ФИО из реестра специалистов.
+Private Function ИсполнителиАкта(ws As Worksheet, строки As Collection, методы As Variant) As Collection
+    Dim i As Long, m As Long, k As Long
+    Dim метод As String, фио As String
+    Dim найден As Boolean
+    Dim список As New Collection
+
+    For i = 1 To строки.Count
+        For m = LBound(методы) To UBound(методы)
+            метод = CStr(методы(m))
+            If МетодПрименён(ws, CLng(строки(i)), метод) Then
+                фио = Trim$(CStr(ws.Cells(CLng(строки(i)), ColReq(ws, метод & " исполнитель")).Value))
+                If фио <> "" Then
+                    найден = False
+                    For k = 1 To список.Count
+                        If StrComp(CStr(список(k)), фио, vbTextCompare) = 0 Then
+                            найден = True
+                            Exit For
+                        End If
+                    Next k
+                    If Not найден Then список.Add фио
+                End If
+            End If
+        Next m
+    Next i
+    Set ИсполнителиАкта = список
+End Function
+
+
+' ФИО в короткой форме («А.В. Иванов») и должность из реестра
+' специалистов — по полному или короткому ФИО, как записано в журнале.
+' Не нашли — возвращается то же ФИО, что и было, должность пустая.
+Private Function ДанныеСпециалиста(фио As String, ByRef должность As String) As String
+    Dim sp As Worksheet
+    Dim i As Long, last As Long
+    Dim полностью As String, кратко As String
+
+    ДанныеСпециалиста = фио
+    Set sp = Лист(Л_СПЕЦИАЛИСТЫ)
+    If sp Is Nothing Then Exit Function
+
+    last = ПоследняяСтрока(sp, ColReq(sp, "ID"))
+    For i = ПЕРВАЯ_СТРОКА To last
+        полностью = Trim$(CStr(sp.Cells(i, ColReq(sp, "ФИО полностью")).Value))
+        кратко = Trim$(CStr(sp.Cells(i, ColReq(sp, "ФИО в документах")).Value))
+        If StrComp(полностью, фио, vbTextCompare) = 0 Or StrComp(кратко, фио, vbTextCompare) = 0 Then
+            должность = Trim$(CStr(sp.Cells(i, ColReq(sp, "Должность")).Value))
+            If кратко <> "" Then ДанныеСпециалиста = кратко
+            Exit Function
+        End If
+    Next i
 End Function
 
 

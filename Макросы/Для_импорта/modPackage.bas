@@ -5,8 +5,14 @@ Option Explicit
 '  —борка и печать пакета документов по одной работе.
 '
 '  ѕор€док в пакете задан вами и не мен€етс€:
-'    акт -> протоколы -> свидетельства лаборатории -> квалификационные
+'    сводный лист-опись (если объектов в акте больше одного) -> акт ->
+'    протоколы -> свидетельства лаборатории -> квалификационные
 '    удостоверени€ -> свидетельства о поверке -> пустой лист дл€ сшива.
+'
+'  —водный лист Ч это ƒќЅј¬ ј к отдельным документам, не замена: у
+'  каждого объекта и метода по-прежнему свой самосто€тельный документ,
+'  а сводный лист впереди просто перечисл€ет их все одной таблицей Ч
+'  чтобы не листать пакет в поисках, что в него вошло.
 '
 '  —квозна€ нумераци€ внутри экземпл€ра, на первой странице номера нет.
 '  “ри экземпл€ра: каждый нумеруетс€ заново, поэтому печатаютс€ копии
@@ -51,6 +57,7 @@ Public Sub Ќапечататьѕакет()
     Dim нумеровать As Boolean
     Dim всего As Long
     Dim экземпл€ров As Long
+    Dim путь—вода As String
 
     Set ws = Ћист(Ћ_∆”–ЌјЋ)
     If ws Is Nothing Then Exit Sub
@@ -76,6 +83,12 @@ Public Sub Ќапечататьѕакет()
     On Error GoTo —бой
     Set wdApp = CreateObject("Word.Application")
     wdApp.Visible = False
+
+    ' —водный лист-опись Ч только когда в акте больше одного объекта:
+    ' на один объект и так есть акт/протокол, второй такой же список
+    ' был бы лишним листом ни о чЄм.
+    путь—вода = —обрать—водныйЋист(wdApp, ws, строки, акт)
+    If путь—вода <> "" Then файлы.Add путь—вода, Before:=1
 
     ' —каны-картинки идут в свод как обычные страницы: свидетельства
     ' лаборатории, удостоверени€, свидетельства о поверке Ч в этом
@@ -232,6 +245,239 @@ Private Function Ќайтиƒокумент(ws As Worksheet, r As Long, метод As String) As S
     маска = ќчиститьƒл€»мени‘айла(–егЌомер(ws, r, метод)) & "*.docx"
     файл = ѕервый‘айл(папка & маска)
     If файл <> "" Then Ќайтиƒокумент = папка & файл
+End Function
+
+
+' -- —водный лист-опись протоколов акта ----------------------------------
+'
+' “олько когда в акте больше одного объекта: печатаетс€ впереди пакета,
+' одним текстом перечисл€ет все документы акта, сгруппированные по
+' методу Ч как в вашем образце (Ђјкты ¬»  єє Еї, Ђѕротоколы ”«“ єє Еї).
+' Ёто ƒќЅј¬ ј к отдельным документам по каждому объекту и методу, не
+' замена: они остаютс€ в пакете как есть.
+'
+' „асть текста (номер и дата нар€да-заказа) система по данным не
+' отслеживает Ч как и на бирке, оставлены пустые места под запись от
+' руки. ѕомен€ть формулировку целиком можно настройкой Ђ“екст сводного
+' актаї, не трога€ код.
+Private Function —обрать—водныйЋист(wdApp As Object, ws As Worksheet, строки As Collection, _
+                                     акт As String) As String
+    Dim методы As Variant
+    Dim объекты As String, документы As String
+    Dim текст As String
+    Dim номерјкта As String
+    Dim док As Object
+    Dim исполнители As Collection
+    Dim подпись“абл As Object
+    Dim должность As String, кратко As String
+    Dim k As Long
+    Dim путь As String
+
+    If строки.Count <= 1 Then Exit Function
+
+    методы = Split(ћ≈“ќƒџ, ",")
+    документы = —обратьƒокументыјкта(ws, строки, методы)
+    If документы = "" Then Exit Function     ' ни одного зарегистрированного номера
+
+    объекты = —обратьќбъектыјкта(ws, строки)
+
+    номерјкта = акт
+    If InStr(1, номерјкта, "ј “ ", vbTextCompare) = 1 Then номерјкта = Mid$(номерјкта, 5)
+
+    текст = Ќастройка("“екст сводного акта")
+    If текст = "" Then
+        текст = "¬ соответствии с нар€дом-заказом (за€вкой) є ______ от " & _
+                "Ђ____ї ________________ 20____ г. выполнены работы по " & _
+                "неразрушающему контролю на объектах: #ќЅЏ≈ “џ." & vbCr & vbCr & _
+                "–езультаты работ отражены в следующих документах." & vbCr & vbCr & _
+                "#ƒќ ”ћ≈Ќ“џ"
+    End If
+    текст = Replace(текст, "#ј “", номерјкта)
+    текст = Replace(текст, "#ќЅЏ≈ “џ", объекты)
+    текст = Replace(текст, "#ƒќ ”ћ≈Ќ“џ", документы)
+
+    Set док = wdApp.Documents.Add
+    With док.Paragraphs(1).Range
+        .Text = "ј “ є " & номерјкта
+        .Font.Bold = True
+        .Font.Size = 14
+        .ParagraphFormat.Alignment = wdAlignParagraphCenter
+    End With
+    док.Content.InsertParagraphAfter
+    With док.Paragraphs(2).Range
+        .Text = "о проведении работ"
+        .ParagraphFormat.Alignment = wdAlignParagraphCenter
+    End With
+    док.Content.InsertParagraphAfter
+    док.Content.InsertParagraphAfter
+
+    With док.Paragraphs(док.Paragraphs.Count).Range
+        .InsertAfter текст
+    End With
+    док.Content.InsertParagraphAfter
+    док.Content.InsertParagraphAfter
+
+    ' ѕодписи Ч те, кто по журналу исполн€л методы этого акта; должность
+    ' подт€гиваетс€ из реестра специалистов, а не вписываетс€ вручную.
+    Set исполнители = »сполнителијкта(ws, строки, методы)
+    If исполнители.Count > 0 Then
+        Set подпись“абл = док.Tables.Add(Range:=док.Paragraphs(док.Paragraphs.Count).Range, _
+                                         NumRows:=исполнители.Count, NumColumns:=2)
+        подпись“абл.Borders.Enable = False
+        For k = 1 To исполнители.Count
+            должность = ""
+            кратко = ƒанные—пециалиста(CStr(исполнители(k)), должность)
+            подпись“абл.Cell(k, 1).Range.Text = должность
+            подпись“абл.Cell(k, 2).Range.Text = кратко
+        Next k
+    End If
+
+    путь = ѕапка√отовых() & "—водный_" & ќчиститьƒл€»мени‘айла(номерјкта) & "_" & _
+           Format$(Now, "yyyymmdd_hhnnss") & ".docx"
+    док.SaveAs2 fileName:=путь
+    док.Close SaveChanges:=False
+    —обрать—водныйЋист = путь
+End Function
+
+
+Private Function ќбъект—–еквизитами(ws As Worksheet, r As Long) As String
+    Dim им€ As String, зав As String, рег As String
+    им€ = Trim$(CStr(ws.Cells(r, ColReq(ws, "Ќаименование объекта в документе")).Value))
+    зав = Trim$(CStr(ws.Cells(r, ColReq(ws, "«аводской є объекта")).Value))
+    рег = Trim$(CStr(ws.Cells(r, ColReq(ws, "–ег. / уч. є объекта")).Value))
+    If зав <> "" Then им€ = им€ & ", зав. є " & зав
+    If рег <> "" Then им€ = им€ & ", рег. є " & рег
+    ќбъект—–еквизитами = им€
+End Function
+
+
+' ќбъекты через Ђ; ї, последний Ч через Ђ и ї, как в образце заказчика.
+Private Function —обратьќбъектыјкта(ws As Worksheet, строки As Collection) As String
+    Dim i As Long
+    Dim s As String
+    For i = 1 To строки.Count
+        If i > 1 Then s = s & IIf(i = строки.Count, " и ", "; ")
+        s = s & ќбъект—–еквизитами(ws, CLng(строки(i)))
+    Next i
+    —обратьќбъектыјкта = s
+End Function
+
+
+' Ќазвание типа документа во множественном числе Ч как в шапке ваших
+' шаблонов, только во множественном числе и без номера. ƒл€ ћ  шаблона
+' документа в системе ещЄ нет (известный пробел) Ч название подставлено
+' по аналогии с остальными методами и не подтверждено.
+Private Function “ипƒокументаћн(метод As String) As String
+    Select Case UCase$(метод)
+        Case "¬» ": “ипƒокументаћн = "јкты визуального и (или) измерительного контрол€"
+        Case "”«ƒ": “ипƒокументаћн = "«аключени€ по результатам ультразвукового контрол€"
+        Case "”«“": “ипƒокументаћн = "ѕротоколы ультразвуковой толщинометрии"
+        Case "јЁ":  “ипƒокументаћн = "«аключени€ по результатам акустико-эмиссионного контрол€"
+        Case "“¬":  “ипƒокументаћн = "ѕротоколы измерени€ твЄрдости металла"
+        Case "“ ":  “ипƒокументаћн = "ѕротоколы теплового контрол€"
+        Case "¬ƒ":  “ипƒокументаћн = "ѕротоколы вибродиагностического контрол€"
+        Case "ћ ":  “ипƒокументаћн = "ѕротоколы магнитопорошкового контрол€"
+        Case Else:  “ипƒокументаћн = "ƒокументы по методу " & метод
+    End Select
+End Function
+
+
+Private Function —обратьƒокументыјкта(ws As Worksheet, строки As Collection, методы As Variant) As String
+    Dim i As Long, m As Long
+    Dim метод As String, номер As String
+    Dim номера As Collection
+    Dim блоки As New Collection
+
+    For m = LBound(методы) To UBound(методы)
+        метод = CStr(методы(m))
+        Set номера = New Collection
+        For i = 1 To строки.Count
+            If ћетодѕрименЄн(ws, CLng(строки(i)), метод) Then
+                номер = –егЌомер(ws, CLng(строки(i)), метод)
+                If номер <> "" Then номера.Add номер
+            End If
+        Next i
+        If номера.Count > 0 Then
+            блоки.Add “ипƒокументаћн(метод) & " єє " & —оединить«ап€тыми(номера) & "."
+        End If
+    Next m
+
+    —обратьƒокументыјкта = —оединитьѕереносами(блоки)
+End Function
+
+
+Private Function —оединить«ап€тыми(список As Collection) As String
+    Dim i As Long, s As String
+    For i = 1 To список.Count
+        If i > 1 Then s = s & ", "
+        s = s & CStr(список(i))
+    Next i
+    —оединить«ап€тыми = s
+End Function
+
+
+Private Function —оединитьѕереносами(список As Collection) As String
+    Dim i As Long, s As String
+    For i = 1 To список.Count
+        If i > 1 Then s = s & vbCr & vbCr
+        s = s & CStr(список(i))
+    Next i
+    —оединитьѕереносами = s
+End Function
+
+
+'  то исполн€л методы этого акта Ч без повторов, в пор€дке по€влени€ в
+' журнале. ƒолжность подт€гиваетс€ по ‘»ќ из реестра специалистов.
+Private Function »сполнителијкта(ws As Worksheet, строки As Collection, методы As Variant) As Collection
+    Dim i As Long, m As Long, k As Long
+    Dim метод As String, фио As String
+    Dim найден As Boolean
+    Dim список As New Collection
+
+    For i = 1 To строки.Count
+        For m = LBound(методы) To UBound(методы)
+            метод = CStr(методы(m))
+            If ћетодѕрименЄн(ws, CLng(строки(i)), метод) Then
+                фио = Trim$(CStr(ws.Cells(CLng(строки(i)), ColReq(ws, метод & " исполнитель")).Value))
+                If фио <> "" Then
+                    найден = False
+                    For k = 1 To список.Count
+                        If StrComp(CStr(список(k)), фио, vbTextCompare) = 0 Then
+                            найден = True
+                            Exit For
+                        End If
+                    Next k
+                    If Not найден Then список.Add фио
+                End If
+            End If
+        Next m
+    Next i
+    Set »сполнителијкта = список
+End Function
+
+
+' ‘»ќ в короткой форме (Ђј.¬. »вановї) и должность из реестра
+' специалистов Ч по полному или короткому ‘»ќ, как записано в журнале.
+' Ќе нашли Ч возвращаетс€ то же ‘»ќ, что и было, должность пуста€.
+Private Function ƒанные—пециалиста(фио As String, ByRef должность As String) As String
+    Dim sp As Worksheet
+    Dim i As Long, last As Long
+    Dim полностью As String, кратко As String
+
+    ƒанные—пециалиста = фио
+    Set sp = Ћист(Ћ_—ѕ≈÷»јЋ»—“џ)
+    If sp Is Nothing Then Exit Function
+
+    last = ѕоследн€€—трока(sp, ColReq(sp, "ID"))
+    For i = ѕ≈–¬јя_—“–ќ ј To last
+        полностью = Trim$(CStr(sp.Cells(i, ColReq(sp, "‘»ќ полностью")).Value))
+        кратко = Trim$(CStr(sp.Cells(i, ColReq(sp, "‘»ќ в документах")).Value))
+        If StrComp(полностью, фио, vbTextCompare) = 0 Or StrComp(кратко, фио, vbTextCompare) = 0 Then
+            должность = Trim$(CStr(sp.Cells(i, ColReq(sp, "ƒолжность")).Value))
+            If кратко <> "" Then ƒанные—пециалиста = кратко
+            Exit Function
+        End If
+    Next i
 End Function
 
 

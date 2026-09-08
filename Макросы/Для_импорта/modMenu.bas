@@ -300,7 +300,10 @@ Private Sub ѕоложить нопку(ws As Worksheet, r As Long, надпись As String, команд
     Set кн = ws.Buttons.Add(€чейка.Left + 1, €чейка.Top + 1, _
                             €чейка.Width - 2, €чейка.Height - 2)
     кн.Caption = текст
-    кн.OnAction = "«апустить нопку"
+    ' »м€ макроса Ч с указанием книги: кнопка лежит теперь в книге
+    ' данных, а сам макрос в книге программы. Ѕез имени книги Excel
+    ' ищет макрос там же, где кнопка, и не находит.
+    кн.OnAction = "'" & ThisWorkbook.Name & "'!«апустить нопку"
     кн.Font.Size = 9
     '  оманда Ч в служебной колонке этой строки, полным текстом надписи
     ' (без переноса): по ней ищет обработчик, а перенос Ч только дл€
@@ -342,14 +345,24 @@ Private Function —ѕереносом(текст As String) As String
 End Function
 
 
+' ѕульт живЄт в  Ќ»√≈ ƒјЌЌџ’, а не в книге программы. –аньше было
+' наоборот, и получалось два окна: работают в данных, а кнопки в
+' программе Ч на каждое действие переключение туда и обратно. Ћист
+' пересобираетс€ при каждом открытии, поэтому перенос ничего не стоит:
+' в книге данных он просто по€вл€етс€ заново.
 Private Function ѕересоздатьѕульт() As Worksheet
+    Dim wb As Workbook
     Dim ws As Worksheet
+
+    Set wb = ƒанные()
+    If wb Is Nothing Then Exit Function
+
     On Error Resume Next
     Application.DisplayAlerts = False
-    ThisWorkbook.Worksheets(Ћ_ѕ”Ћ№“).Delete
+    wb.Worksheets(Ћ_ѕ”Ћ№“).Delete
     Application.DisplayAlerts = True
     On Error GoTo 0
-    Set ws = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
+    Set ws = wb.Worksheets.Add(Before:=wb.Worksheets(1))
     On Error Resume Next
     ws.Name = Ћ_ѕ”Ћ№“
     On Error GoTo 0
@@ -385,7 +398,7 @@ Public Sub «апустить нопку()
     Dim команда As String
 
     On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(Ћ_ѕ”Ћ№“)
+    Set ws = Ћист(Ћ_ѕ”Ћ№“)
     строка = ws.Buttons(Application.Caller).TopLeftCell.Row
     On Error GoTo 0
     If строка < 1 Then Exit Sub

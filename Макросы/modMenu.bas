@@ -300,7 +300,10 @@ Private Sub ПоложитьКнопку(ws As Worksheet, r As Long, надпи�
     Set кн = ws.Buttons.Add(ячейка.Left + 1, ячейка.Top + 1, _
                             ячейка.Width - 2, ячейка.Height - 2)
     кн.Caption = текст
-    кн.OnAction = "ЗапуститьКнопку"
+    ' Имя макроса — с указанием книги: кнопка лежит теперь в книге
+    ' данных, а сам макрос в книге программы. Без имени книги Excel
+    ' ищет макрос там же, где кнопка, и не находит.
+    кн.OnAction = "'" & ThisWorkbook.Name & "'!ЗапуститьКнопку"
     кн.Font.Size = 9
     ' Команда — в служебной колонке этой строки, полным текстом надписи
     ' (без переноса): по ней ищет обработчик, а перенос — только для
@@ -342,14 +345,24 @@ Private Function СПереносом(текст As String) As String
 End Function
 
 
+' Пульт живёт в КНИГЕ ДАННЫХ, а не в книге программы. Раньше было
+' наоборот, и получалось два окна: работают в данных, а кнопки в
+' программе — на каждое действие переключение туда и обратно. Лист
+' пересобирается при каждом открытии, поэтому перенос ничего не стоит:
+' в книге данных он просто появляется заново.
 Private Function ПересоздатьПульт() As Worksheet
+    Dim wb As Workbook
     Dim ws As Worksheet
+
+    Set wb = Данные()
+    If wb Is Nothing Then Exit Function
+
     On Error Resume Next
     Application.DisplayAlerts = False
-    ThisWorkbook.Worksheets(Л_ПУЛЬТ).Delete
+    wb.Worksheets(Л_ПУЛЬТ).Delete
     Application.DisplayAlerts = True
     On Error GoTo 0
-    Set ws = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
+    Set ws = wb.Worksheets.Add(Before:=wb.Worksheets(1))
     On Error Resume Next
     ws.Name = Л_ПУЛЬТ
     On Error GoTo 0
@@ -385,7 +398,7 @@ Public Sub ЗапуститьКнопку()
     Dim команда As String
 
     On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(Л_ПУЛЬТ)
+    Set ws = Лист(Л_ПУЛЬТ)
     строка = ws.Buttons(Application.Caller).TopLeftCell.Row
     On Error GoTo 0
     If строка < 1 Then Exit Sub

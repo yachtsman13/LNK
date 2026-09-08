@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Вкладка «ЛНК» на ленте Excel. Кладётся внутрь ЛНК_Программа.xlsm
+  скриптом scripts/inject_ribbon.py — VBA такого не умеет.
+
+  Правила, которые здесь важны:
+    * tag каждой кнопки — ТОЧНЫЙ текст команды из ЗапуститьПунктМеню
+      (modMenu). Расхождение хотя бы в букве — кнопка молча ничего не
+      делает; это сверяет check_ribbon.py;
+    * onAction у всех один — modUI.ЛентаНажата, он и разбирает tag;
+    * imageMso — встроенные значки Office, своих картинок не держим:
+      картинка внутри книги была бы двоичной, а такие файлы я собрать
+      не могу. Неизвестное имя значка даёт пустое место, но не ошибку;
+    * состояние кнопок не меняется по листам: для этого пришлось бы
+      хранить ссылку на ленту, а она теряется при любом сбросе VBA.
+      Кнопка нажимается всегда и сама говорит, если встали не туда.
+-->
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui">
+  <ribbon>
+    <tabs>
+      <tab id="tabLNK" label="ЛНК" insertBeforeMso="TabHome">
+
+        <group id="grpZapis" label="Запись">
+          <button id="btnNovaya" label="Новая запись" size="large"
+                  imageMso="FileNew" onAction="ЛентаНажата"
+                  tag="Новая запись в журнале"/>
+          <button id="btnAkt" label="Новый акт" size="large"
+                  imageMso="CreateFormBlankForm" onAction="ЛентаНажата"
+                  tag="Открыть новый акт"/>
+          <button id="btnKartochka" label="Карточка объекта" size="large"
+                  imageMso="PropertySheet" onAction="ЛентаНажата"
+                  tag="Карточка объекта"/>
+          <button id="btnSohranitKartochku" label="Сохранить карточку"
+                  imageMso="FileSave" onAction="ЛентаНажата"
+                  tag="Сохранить карточку"/>
+          <button id="btnPlan" label="Отметить по плану"
+                  imageMso="TaskUpdate" onAction="ЛентаНажата"
+                  tag="Отметить выполнение по плану"/>
+        </group>
+
+        <group id="grpZamery" label="Замеры и приборы">
+          <button id="btnTochki" label="Добавить точки замеров"
+                  imageMso="TableInsertExcel" onAction="ЛентаНажата"
+                  tag="Добавить точки замеров"/>
+          <button id="btnPokazat" label="Показать замеры записи"
+                  imageMso="ZoomCurrent75" onAction="ЛентаНажата"
+                  tag="Показать замеры записи"/>
+          <button id="btnAE" label="Скопировать настройки АЭ"
+                  imageMso="Copy" onAction="ЛентаНажата"
+                  tag="Скопировать настройки АЭ"/>
+          <button id="btnSredstva" label="Добавить применённые средства"
+                  imageMso="ListMacros" onAction="ЛентаНажата"
+                  tag="Добавить применённые средства"/>
+          <button id="btnKomplekt" label="Проверить комплект"
+                  imageMso="ReviewProtectDocument" onAction="ЛентаНажата"
+                  tag="Проверить комплект приборов"/>
+        </group>
+
+        <group id="grpDoc" label="Документы">
+          <button id="btnSformirovat" label="Сформировать документы" size="large"
+                  imageMso="CreateDocument" onAction="ЛентаНажата"
+                  tag="Сформировать документы"/>
+          <button id="btnRegistr" label="Зарегистрировать" size="large"
+                  imageMso="AcceptInvitation" onAction="ЛентаНажата"
+                  tag="Зарегистрировать запись"/>
+          <button id="btnPaket" label="Напечатать пакет" size="large"
+                  imageMso="PrintPreviewAndPrint" onAction="ЛентаНажата"
+                  tag="Напечатать пакет"/>
+          <button id="btnChernoviki" label="Зарегистрировать все черновики"
+                  imageMso="AcceptTask" onAction="ЛентаНажата"
+                  tag="Зарегистрировать все черновики"/>
+          <button id="btnAnnul" label="Аннулировать заключение"
+                  imageMso="Cancel" onAction="ЛентаНажата"
+                  tag="Аннулировать заключение"/>
+          <button id="btnKD" label="Создать корректирующее действие"
+                  imageMso="TaskBlank" onAction="ЛентаНажата"
+                  tag="Создать корректирующее действие"/>
+        </group>
+
+        <group id="grpPechat" label="Печать">
+          <button id="btnPoverka" label="Свидетельства о поверке"
+                  imageMso="PrintDialogExcel" onAction="ЛентаНажата"
+                  tag="Печать свидетельств о поверке"/>
+          <button id="btnUdost" label="Удостоверения"
+                  imageMso="PrintDialogExcel" onAction="ЛентаНажата"
+                  tag="Печать удостоверений"/>
+          <button id="btnZhurnaly" label="Печатные журналы"
+                  imageMso="PrintPreviewClose" onAction="ЛентаНажата"
+                  tag="Построить печатные журналы"/>
+          <button id="btnElektro" label="Журнал электроинструмента"
+                  imageMso="PrintPreviewClose" onAction="ЛентаНажата"
+                  tag="Печать журнала электроинструмента"/>
+        </group>
+
+        <group id="grpOborud" label="Оборудование">
+          <button id="btnVydat" label="Выдать"
+                  imageMso="ShapesArrowsRight" onAction="ЛентаНажата"
+                  tag="Выдать оборудование"/>
+          <button id="btnVozvrat" label="Принять возврат"
+                  imageMso="ShapesArrowsLeft" onAction="ЛентаНажата"
+                  tag="Принять возврат"/>
+          <button id="btnVydachaPo" label="Выдача по применённым"
+                  imageMso="TableRowsInsertAbove" onAction="ЛентаНажата"
+                  tag="Отметить выдачу по применённым"/>
+          <button id="btnTO" label="План-график ТО на месяц"
+                  imageMso="ScheduleReport" onAction="ЛентаНажата"
+                  tag="План-график ТО на месяц"/>
+          <button id="btnZayavka" label="Заявка на поверку на год"
+                  imageMso="ScheduleReport" onAction="ЛентаНажата"
+                  tag="Заявка на поверку на год"/>
+        </group>
+
+        <group id="grpOtchet" label="Отчёты и год">
+          <button id="btnOtchetPlan" label="План и внеплановые"
+                  imageMso="ChartTypeColumnInsertGallery" onAction="ЛентаНажата"
+                  tag="Отчёт: план и внеплановые"/>
+          <button id="btnPasport" label="Собрать Паспорт ЛНК"
+                  imageMso="BindingProperties" onAction="ЛентаНажата"
+                  tag="Собрать Паспорт ЛНК"/>
+          <button id="btnZakrytGod" label="Закрыть год"
+                  imageMso="DateAndTimeInsert" onAction="ЛентаНажата"
+                  tag="Закрыть год"/>
+          <button id="btnArhiv" label="Передать в архив"
+                  imageMso="FileDocumentInspect" onAction="ЛентаНажата"
+                  tag="Отметить передачу в архив"/>
+          <button id="btnOpis" label="Опись хранения"
+                  imageMso="ListsMenu" onAction="ЛентаНажата"
+                  tag="Опись хранения"/>
+          <button id="btnPyatiletka" label="Пересчитать пятилетний план"
+                  imageMso="RefreshAll" onAction="ЛентаНажата"
+                  tag="Пересчитать пятилетний план"/>
+        </group>
+
+        <group id="grpSM" label="Документы СМ">
+          <button id="btnNomerSM" label="Выдать номер документа СМ"
+                  imageMso="NumberInsert" onAction="ЛентаНажата"
+                  tag="Выдать номер документа СМ"/>
+          <button id="btnOznak" label="Лист ознакомления"
+                  imageMso="SignatureLineInsert" onAction="ЛентаНажата"
+                  tag="Лист ознакомления"/>
+        </group>
+
+        <group id="grpObmen" label="Обмен и копии">
+          <button id="btnOtpravit" label="Отправить мои изменения"
+                  imageMso="ExportExcel" onAction="ЛентаНажата"
+                  tag="Отправить мои изменения"/>
+          <button id="btnSvod" label="Собрать свод"
+                  imageMso="ImportExcel" onAction="ЛентаНажата"
+                  tag="Собрать свод"/>
+          <button id="btnPoluchit" label="Получить свод"
+                  imageMso="ImportSavedImports" onAction="ЛентаНажата"
+                  tag="Получить свод"/>
+          <button id="btnFleshka" label="Подготовить флешку"
+                  imageMso="DriveMapNetwork" onAction="ЛентаНажата"
+                  tag="Подготовить флешку для обмена"/>
+          <button id="btnNositel" label="Зарегистрировать носитель"
+                  imageMso="DatabaseLinkedTableManager" onAction="ЛентаНажата"
+                  tag="Зарегистрировать носитель"/>
+          <button id="btnKopiya" label="Сделать резервную копию"
+                  imageMso="FileSaveAsExcelXlsx" onAction="ЛентаНажата"
+                  tag="Сделать резервную копию"/>
+        </group>
+
+        <group id="grpPult" label="Пульт">
+          <button id="btnPult" label="Обновить пульт" size="large"
+                  imageMso="RefreshStatus" onAction="ЛентаНажата"
+                  tag="Обновить пульт"/>
+          <button id="btnObnovlenie" label="Проверить обновление"
+                  imageMso="ServerProperties" onAction="ЛентаНажата"
+                  tag="Проверить обновление"/>
+        </group>
+
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

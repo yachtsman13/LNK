@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Проверка собранной книги ЛНК_Данные.xlsx: сверка с исходным журналом и связность ссылок."""
-import sys, os, re, collections
+import sys, os, re, collections, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import openpyxl
 from migrate import METHODS, read_flat
@@ -144,6 +144,61 @@ def main():
         if v is not None and not isinstance(v, (datetime.date, datetime.datetime)):
             bad_dates.append(r)
     check(not bad_dates, "даты контроля — настоящие даты (проверено 316 строк)")
+
+    # ── 9. формулы применяются к колонкам подходящего рода ───────────
+    # «Год» однажды считался как YEAR() от колонки «№ акта» вместо
+    # «Даты контроля»: буква колонки в формуле была вписана руками и
+    # уехала на соседнюю, когда в середину вставили колонку. В книге
+    # это видно как #ЗНАЧ, а здесь не ловилось ничем — ссылка-то на
+    # существующую колонку своего листа.
+    #
+    # Проверяется не по названию колонки, а по тому, что в ней лежит:
+    # YEAR/MONTH/DAY/EDATE должны смотреть в колонку с датами, COUNT —
+    # в колонку с числами или датами. Считается только то, где род
+    # колонки известен наверняка (есть непустые значения не-формулы).
+    ДАТНЫЕ = ("YEAR", "MONTH", "DAY", "EDATE")
+    ССЫЛКА = re.compile(r"(?:(%s)\s*\(\s*)?\$?([A-Z]{1,2})\$?\d+" % "|".join(ДАТНЫЕ + ("COUNT",)))
+    неверные = []
+    for w in wb.worksheets:
+        # род каждой колонки — по фактическим значениям листа
+        род = {}
+        for c in range(1, w.max_column + 1):
+            даты = числа = текст = 0
+            for r in range(FIRST, min(w.max_row, FIRST + 400) + 1):
+                v = w.cell(r, c).value
+                if v is None or (isinstance(v, str) and v.startswith("=")):
+                    continue
+                if isinstance(v, (datetime.date, datetime.datetime)):
+                    даты += 1
+                elif isinstance(v, (int, float)):
+                    числа += 1
+                elif str(v).strip():
+                    текст += 1
+            if даты + числа + текст >= 5:      # мало значений — не судим
+                род[openpyxl.utils.get_column_letter(c)] = (
+                    "дата" if даты > числа + текст else
+                    "число" if числа > даты + текст else "текст")
+
+        for r in range(FIRST, min(w.max_row, FIRST + 60) + 1):
+            for c in range(1, w.max_column + 1):
+                f = w.cell(r, c).value
+                if not (isinstance(f, str) and f.startswith("=")):
+                    continue
+                # ссылки на другие листы не трогаем: там свои колонки
+                for кусок in re.split(r"[A-Za-zА-Яа-я_]+!", f)[:1]:
+                    for func, буква in ССЫЛКА.findall(кусок):
+                        if not func or буква not in род:
+                            continue
+                        нужно = "дата" if func in ДАТНЫЕ else ("число", "дата")
+                        если_плохо = (род[буква] != нужно if func in ДАТНЫЕ
+                                      else род[буква] not in нужно)
+                        if если_плохо:
+                            неверные.append("%s!%s %s($%s) — в колонке %s"
+                                            % (w.title, w.cell(r, c).coordinate,
+                                               func, буква, род[буква]))
+    неверные = sorted(set(неверные))
+    check(not неверные, "функции дат и счёта применены к подходящим колонкам%s"
+          % ("" if not неверные else ": " + "; ".join(неверные[:5])))
 
     print("\n" + "\n".join(notes))
     if errors:

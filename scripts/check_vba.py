@@ -250,7 +250,12 @@ def main():
             code = strip_code(raw)
             if RE_DECL.match(code) or RE_LOCAL.match(code):
                 continue
-            for ident in re.findall(r"\b([А-ЯЁ][А-Яа-яЁё_]{1,})\b", code):
+            # После точки стоит не имя проекта, а свойство или метод
+            # объекта: у формы поиска это ф.Список, ф.Запрос. Проверять
+            # их здесь нельзя — они объявлены не в модулях, а на самой
+            # форме. Квалифицированные вызовы modX.Имя разбирает
+            # отдельная проверка выше, так что ничего не теряется.
+            for ident in re.findall(r"(?<![.\w])([А-ЯЁ][А-Яа-яЁё_]{1,})\b", code):
                 if ident in declared or ident in known_locals or ident in builtins:
                     continue
                 if ident in ("МЕТОДЫ", "ПЕРВАЯ_СТРОКА", "СТРОКА_ЗАГОЛОВКОВ", "ИМЯ_ФАЙЛА_ДАННЫХ"):

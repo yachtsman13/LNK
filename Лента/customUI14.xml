@@ -39,9 +39,12 @@
         </group>
 
         <group id="grpZamery" label="Замеры и приборы">
-          <button id="btnTochki" label="Добавить точки замеров"
+          <button id="btnVvod" label="Ввести замеры" size="large"
                   imageMso="TableInsertExcel" onAction="ЛентаНажата"
-                  tag="Добавить точки замеров"/>
+                  tag="Ввести замеры"/>
+          <button id="btnAEvvod" label="Настройки АЭ" size="large"
+                  imageMso="EquipmentSettings" onAction="ЛентаНажата"
+                  tag="Настройки АЭ"/>
           <button id="btnPokazat" label="Показать замеры записи"
                   imageMso="ZoomCurrent75" onAction="ЛентаНажата"
                   tag="Показать замеры записи"/>

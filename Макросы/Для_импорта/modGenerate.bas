@@ -388,7 +388,7 @@ End Function
 
 ' ќдно поле объекта по строке журнала Ч дл€ случаев, когда им€
 ' плейсхолдера не совпадает с заголовком колонки.
-Private Function ѕолеќбъекта(ws As Worksheet, r As Long, заголовок As String) As String
+Public Function ѕолеќбъекта(ws As Worksheet, r As Long, заголовок As String) As String
     Dim об As Worksheet
     Dim строка As Long
     Dim c As Long
@@ -596,7 +596,7 @@ End Sub
 ' ‘айл схемы дл€ пары Ђметод + вариантї. —начала строка реестра
 ' Ђ—хемы контрол€ї Ч она же несЄт размер рамки и подпись; если строки
 ' нет, ищетс€ файл Ђћетод__¬ариантї и затем Ђћетодї в папке схем.
-Private Function Ќайти—хему(метод As String, вариант As String, _
+Public Function Ќайти—хему(метод As String, вариант As String, _
                             ByRef подпись As String, _
                             ByRef ширина As Single, ByRef высота As Single) As String
     Dim сх As Worksheet

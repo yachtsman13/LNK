@@ -4,6 +4,10 @@ Option Explicit
 ' =======================================================================
 '  Ввод результатов замеров.
 '
+'  Одна строка листа «Замеры» — одна точка. Заполняются они листом
+'  ввода (modEntry): здесь остались показ уже введённого, подстановка
+'  в документ и перенос настроек АЭ из прошлой работы.
+'
 '  Одна строка листа «Замеры» — одна точка. Для УЗТ заполняются пять
 '  замеров, минимум считается формулой; для ТВ — твёрдость в МПа, НВ
 '  пересчитывается по таблице, снятой с вашего файла.
@@ -20,67 +24,6 @@ Public Const Л_ДАННЫЕ_АЭ As String = "Данные_АЭ"
 Private Const МЕСТ_В_ШАБЛОНЕ As Long = 4
 
 
-' Добавить точки замеров к текущей строке журнала.
-Public Sub ДобавитьТочкиЗамеров()
-    Dim ж As Worksheet
-    Dim ws As Worksheet
-    Dim r As Long
-    Dim идЗаписи As String
-    Dim метод As String
-    Dim сколько As Long
-    Dim i As Long
-    Dim строка As Long
-    Dim было As Long
-
-    Set ж = Лист(Л_ЖУРНАЛ)
-    If ж Is Nothing Then Exit Sub
-    r = ТекущаяСтрока(ж)
-    If r = 0 Then Exit Sub
-
-    идЗаписи = Trim$(CStr(ж.Cells(r, ColReq(ж, "ID записи")).Value))
-    If идЗаписи = "" Then
-        MsgBox "У этой строки нет ID записи — замеры не к чему привязать.", _
-               vbExclamation, "Замеры"
-        Exit Sub
-    End If
-
-    метод = СпроситьМетод(ж, r)
-    If метод = "" Then Exit Sub
-
-    сколько = CLng(Val(InputBox( _
-        "Сколько точек замера добавить по методу " & метод & "?" & vbCrLf & vbCrLf & _
-        "В шаблон протокола попадут первые " & МЕСТ_В_ШАБЛОНЕ & " — столько в нём мест. " & _
-        "Точек можно завести больше: они останутся в системе и будут видны в журнале замеров.", _
-        "Замеры", "4")))
-    If сколько <= 0 Then Exit Sub
-    If сколько > 100 Then
-        MsgBox "Больше ста точек за раз — похоже на опечатку.", vbExclamation, "Замеры"
-        Exit Sub
-    End If
-
-    Set ws = Лист(Л_ЗАМЕРЫ)
-    If ws Is Nothing Then Exit Sub
-    было = СколькоТочек(ws, идЗаписи, метод)
-    строка = ПоследняяСтрока(ws, 1) + 1
-
-    For i = 1 To сколько
-        ws.Cells(строка, 1).Value = НовыйID(ws, "ЗМ-")
-        ws.Cells(строка, ColReq(ws, "ID записи журнала")).Value = идЗаписи
-        ws.Cells(строка, ColReq(ws, "Метод")).Value = метод
-        ws.Cells(строка, ColReq(ws, "№ точки")).Value = было + i
-        ws.Cells(строка, ColReq(ws, "Кем внесено")).Value = ТекущийСотрудник()
-        ws.Cells(строка, ColReq(ws, "Изменено")).Value = Now
-        строка = строка + 1
-    Next i
-
-    ws.Activate
-    ws.Cells(строка - сколько, ColReq(ws, "Замер 1")).Select
-    MsgBox "Добавлено точек: " & сколько & " (номера " & (было + 1) & "…" & (было + сколько) & ")." & _
-           vbCrLf & vbCrLf & _
-           IIf(метод = "УЗТ", "Заполняйте «Замер 1…5», минимум посчитается сам.", _
-               "Заполняйте «Твёрдость, МПа» — НВ пересчитается по таблице."), _
-           vbInformation, "Замеры"
-End Sub
 
 
 ' Открыть замеры текущей строки журнала: показать, что уже введено.
@@ -215,7 +158,7 @@ End Function
 Private Function ЗавестиСтрокуАЭ(ws As Worksheet, идЗаписи As String) As Long
     Dim r As Long
     r = ПоследняяСтрока(ws, 1) + 1
-    ws.Cells(r, 1).Value = НовыйID(ws, "АЭ-")
+    ws.Cells(r, 1).Value = НовыйID(ws, modExchange.ПрефиксID(Л_ДАННЫЕ_АЭ))
     ws.Cells(r, ColReq(ws, "ID записи журнала")).Value = идЗаписи
     ws.Cells(r, ColReq(ws, "Кем внесено")).Value = ТекущийСотрудник()
     ws.Cells(r, ColReq(ws, "Изменено")).Value = Now
@@ -317,7 +260,7 @@ Private Function СколькоТочек(ws As Worksheet, идЗаписи As String, метод As Stri
 End Function
 
 
-Private Function СпроситьМетод(ж As Worksheet, r As Long) As String
+Public Function СпроситьМетод(ж As Worksheet, r As Long) As String
     Dim доступные As String
     Dim ответ As String
 

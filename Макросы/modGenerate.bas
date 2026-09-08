@@ -388,7 +388,7 @@ End Function
 
 ' Одно поле объекта по строке журнала — для случаев, когда имя
 ' плейсхолдера не совпадает с заголовком колонки.
-Private Function ПолеОбъекта(ws As Worksheet, r As Long, заголовок As String) As String
+Public Function ПолеОбъекта(ws As Worksheet, r As Long, заголовок As String) As String
     Dim об As Worksheet
     Dim строка As Long
     Dim c As Long
@@ -596,7 +596,7 @@ End Sub
 ' Файл схемы для пары «метод + вариант». Сначала строка реестра
 ' «Схемы контроля» — она же несёт размер рамки и подпись; если строки
 ' нет, ищется файл «Метод__Вариант» и затем «Метод» в папке схем.
-Private Function НайтиСхему(метод As String, вариант As String, _
+Public Function НайтиСхему(метод As String, вариант As String, _
                             ByRef подпись As String, _
                             ByRef ширина As Single, ByRef высота As Single) As String
     Dim сх As Worksheet

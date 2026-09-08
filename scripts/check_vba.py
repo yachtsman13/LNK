@@ -190,6 +190,37 @@ def main():
         check(not stack, "%s: все блоки закрыты%s" % (
             name, "" if not stack else " (не закрыт %s со строки %d)" % (stack[-1][0], stack[-1][1])))
 
+    # ── объявления уровня модуля — только до первой процедуры ────────
+    # Excel 2016 читает Private/Dim/Const уровня модуля лишь в секции
+    # объявлений, до первой Sub/Function. Объявление ниже по файлу он
+    # молча не видит, а обращение к нему падает «Variable not defined» —
+    # с подсветкой самой константы, которая в файле есть и написана
+    # верно. Проверка родилась на живой установке: три константы
+    # modDashboard стояли посреди файла, и пульт не собирался.
+    поздние = []
+    for path in files:
+        name = os.path.basename(path)[:-4]
+        начались_процедуры = False
+        внутри = False
+        for ln, raw in read_lines(path):
+            code = strip_code(raw)
+            if not code.strip():
+                continue
+            if re.match(r"^\s*End\s+(Sub|Function|Property)\b", code, re.I):
+                внутри = False
+                continue
+            if RE_DECL.match(code):
+                начались_процедуры = True
+                внутри = True
+                continue
+            if внутри:
+                continue
+            if начались_процедуры and re.match(
+                    r"^\s*(?:Public|Private|Dim|Const|Type|Enum|Declare)\b", code, re.I):
+                поздние.append("%s:%d %s" % (name, ln, code.strip()[:50]))
+    check(not поздние, "объявления уровня модуля стоят до первой процедуры%s" %
+          ("" if not поздние else ": " + "; ".join(поздние[:5])))
+
     # ── квалифицированные вызовы modX.Имя ────────────────────────────
     # Код листа «Меню» и «ЭтаКнига» лежит в .txt (его вставляют руками,
     # импортировать нельзя), но на модули он ссылается так же.

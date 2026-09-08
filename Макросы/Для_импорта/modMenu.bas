@@ -237,7 +237,7 @@ End Function
 Private Function Кнопка(ws As Worksheet, r As Long, текст As String, _
                         подсказка As String) As Long
     ПоложитьКнопку ws, r, текст, текст
-    Подсказка ws, r, подсказка
+    ПоложитьПодсказку ws, r, подсказка
     Кнопка = r + 1
 End Function
 
@@ -248,14 +248,21 @@ End Function
 Private Function КнопкаЛиста(ws As Worksheet, r As Long, текст As String, _
                              лист As String, подсказка As String) As Long
     ПоложитьКнопку ws, r, текст, ПРЕФИКС_ЛИСТА & лист
-    Подсказка ws, r, подсказка
+    ПоложитьПодсказку ws, r, подсказка
     КнопкаЛиста = r + 1
 End Function
 
 
 ' Подсказка стоит в той же строке и по её середине: иначе текст
 ' прижимается к низу ячейки и с кнопкой рядом не читается как пара.
-Private Sub Подсказка(ws As Worksheet, r As Long, текст As String)
+'
+' Имя — «ПоложитьПодсказку», в пару к «ПоложитьКнопку», а не просто
+' «Подсказка»: у вызывающих процедур параметр называется «подсказка»,
+' и одноимённая процедура затеняется им намертво — VBA читает в строке
+' вызова строковую переменную и говорит «Expected Sub, Function, or
+' Property». Имя различается не регистром (регистр VBA не различает),
+' а самим словом.
+Private Sub ПоложитьПодсказку(ws As Worksheet, r As Long, текст As String)
     With ws.Cells(r, 3)
         .Value = текст
         .Font.Color = RGB(89, 89, 89)

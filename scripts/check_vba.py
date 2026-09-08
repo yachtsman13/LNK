@@ -416,11 +416,163 @@ def main():
             for низ, как in локальные.items():
                 if низ not in процедуры:
                     continue
-                if re.search(r"(?<![.\w])" + re.escape(процедуры[низ]) + r"\s*\(", текст, re.I):
+                имя = re.escape(процедуры[низ])
+                # Вызвать процедуру можно двумя записями, и затеняет их
+                # обе одинаково: со скобками — Имя(арг) — и без скобок,
+                # оператором: Имя арг1, арг2. Вторую форму проверка
+                # раньше не видела, и «Подсказка ws, r, подсказка»
+                # доехало до заказчика: VBA читает там строковую
+                # переменную вместо вызова и говорит «Expected Sub,
+                # Function, or Property».
+                со_скобками = r"(?<![.\w])" + имя + r"\s*\("
+                оператором = r"(?im)^[ \t]*(?:Call[ \t]+)?" + имя + r"[ \t]+(?![=<>])"
+                if re.search(со_скобками, текст, re.I) or re.search(оператором, текст):
                     затенения.append("%s:%s локальная «%s» затеняет %s" %
                                      (имяМодуля, d.group(2), как, процедуры[низ]))
     check(not затенения, "локальные имена не затеняют вызываемые процедуры%s" %
           ("" if not затенения else ": " + "; ".join(затенения)))
+
+    # ── число аргументов в вызовах ───────────────────────────────────
+    # «Wrong number of arguments» — тоже ошибка компиляции, то есть до
+    # первого запуска её не видно, а после — не работает ничего. Считать
+    # аргументы приходится с оглядкой: strip_code стирает строки вместе
+    # с запятыми внутри них, поэтому здесь строковый литерал заменяется
+    # на «"S"» и остаётся одним аргументом.
+    #
+    # Область видимости важна: ПересоздатьЛист без параметров в modCard
+    # и ПересоздатьЛист(имя) в modSM — разные Private-процедуры, и
+    # сравнивать вызов надо со своей, а не с чужой.
+    def строка_с_литералами(line):
+        out, i, instr = [], 0, False
+        while i < len(line):
+            ch = line[i]
+            if ch == '"':
+                out.append('"S' if not instr else '"')
+                instr = not instr
+                i += 1
+                continue
+            if instr:
+                i += 1
+                continue
+            if ch == "'":
+                break
+            out.append(ch)
+            i += 1
+        return "".join(out)
+
+    def тело_скобок(s, откр):
+        depth, i, buf = 0, откр, ""
+        while i < len(s):
+            ch = s[i]
+            if ch == "(":
+                depth += 1
+                if depth == 1:
+                    i += 1
+                    continue
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    return buf
+            if depth >= 1:
+                buf += ch
+            i += 1
+        return buf
+
+    def сколько(body):
+        if not body.strip():
+            return 0
+        depth, n = 0, 1
+        for ch in body:
+            if ch in "([":
+                depth += 1
+            elif ch in ")]":
+                depth -= 1
+            elif ch == "," and depth == 0:
+                n += 1
+        return n
+
+    ГОЛОВА = re.compile(
+        r"^\s*(?:(Public|Private|Friend)\s+)?(?:Static\s+)?(Sub|Function)\s+"
+        r"([А-Яа-яЁёA-Za-z_]\w*)\s*\(", re.I)
+    свои, общие = {}, {}
+    for path in files:
+        мод = os.path.basename(path)[:-4]
+        for ln, raw in read_lines(path):
+            code = строка_с_литералами(raw)
+            m = ГОЛОВА.match(code)
+            if not m:
+                continue
+            тело = тело_скобок(code, code.index("(", m.end(3)))
+            части, depth, cur = [], 0, ""
+            for ch in тело:
+                if ch in "([":
+                    depth += 1
+                elif ch in ")]":
+                    depth -= 1
+                if ch == "," and depth == 0:
+                    части.append(cur)
+                    cur = ""
+                else:
+                    cur += ch
+            if cur.strip():
+                части.append(cur)
+            опц = sum(1 for a in части if re.match(r"^\s*Optional\b", a.strip(), re.I))
+            свободных = any(re.search(r"\bParamArray\b", a, re.I) for a in части)
+            запись = (m.group(2).lower(), len(части) - опц,
+                      999 if свободных else len(части), m.group(3))
+            свои[(мод, m.group(3).lower())] = запись
+            if (m.group(1) or "Public").lower() != "private":
+                общие[m.group(3).lower()] = запись
+
+    def чья(мод, имя):
+        return свои.get((мод, имя)) or общие.get(имя)
+
+    арность, скобки_у_sub = [], []
+    for path in files:
+        мод = os.path.basename(path)[:-4]
+        внутри = False
+        for ln, raw in read_lines(path):
+            code = строка_с_литералами(raw)
+            if ГОЛОВА.match(code):
+                внутри = True
+                continue
+            if re.match(r"^\s*End\s+(Sub|Function)\b", code, re.I):
+                внутри = False
+                continue
+            if not внутри:
+                continue
+
+            # вызов оператором: Имя арг1, арг2
+            m = re.match(r"^[ \t]*(?:Call[ \t]+)?([А-Яа-яЁёA-Za-z_]\w*)[ \t]+(?![=<>])(.*)$", code)
+            if m:
+                p = чья(мод, m.group(1).lower())
+                хвост = m.group(2).strip()
+                if p and not re.match(r"^(As|Then|=|To\b)", хвост, re.I):
+                    n = сколько(хвост)
+                    if not (p[1] <= n <= p[2]):
+                        арность.append("%s:%d %s — передано %d, объявлено %d..%d"
+                                       % (мод, ln, p[3], n, p[1], p[2]))
+
+            # вызов со скобками: Имя(арг1, арг2)
+            for mm in re.finditer(r"(?<![.\w])([А-Яа-яЁёA-Za-z_]\w*)\s*\(", code):
+                p = чья(мод, mm.group(1).lower())
+                if not p:
+                    continue
+                n = сколько(тело_скобок(code, code.index("(", mm.end(1))))
+                перед = code[:mm.start()].rstrip().lower()
+                # Sub со скобками и несколькими аргументами — синтаксическая
+                # ошибка VBA: либо без скобок, либо через Call.
+                if p[0] == "sub" and n > 1 and not перед.endswith("call"):
+                    скобки_у_sub.append("%s:%d %s (%d аргументов)" % (мод, ln, p[3], n))
+                if not (p[1] <= n <= p[2]):
+                    арность.append("%s:%d %s — передано %d, объявлено %d..%d"
+                                   % (мод, ln, p[3], n, p[1], p[2]))
+
+    арность = sorted(set(арность))
+    check(not арность, "число аргументов в вызовах совпадает с объявлением%s" %
+          ("" if not арность else ": " + "; ".join(арность[:5])))
+    check(not скобки_у_sub, "Sub не вызывается со скобками и несколькими аргументами%s" %
+          ("" if not скобки_у_sub else ": " + "; ".join(скобки_у_sub[:5])))
 
     # ── пункты меню и их обработчик ──────────────────────────────────
     # Пункт запускается сравнением текста строки со списком Case.

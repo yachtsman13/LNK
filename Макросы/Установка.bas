@@ -95,14 +95,28 @@ Private Function ЕстьДоступКVBA() As Boolean
 End Function
 
 
+' Угадать папку с модулями — не всегда рядом с книгой: книгу могли
+' сохранить и на уровень выше (в корне «ЛНК», а не в «ЛНК\Макросы»,
+' где реально лежит «Для_импорта»). Пробуем оба места, и только если
+' ни одно не подошло — предлагаем то, что попроще объяснить в InputBox.
 Private Function СпроситьПапку() As String
     Dim поУмолчанию As String
+    Dim рядом As String
+    Dim вПодпапке As String
     Dim папка As String
 
-    поУмолчанию = ThisWorkbook.Path
-    If Right$(поУмолчанию, 1) <> Application.PathSeparator Then _
-        поУмолчанию = поУмолчанию & Application.PathSeparator
-    поУмолчанию = поУмолчанию & "Для_импорта"
+    рядом = ThisWorkbook.Path
+    If Right$(рядом, 1) <> Application.PathSeparator Then рядом = рядом & Application.PathSeparator
+    вПодпапке = рядом & "Макросы" & Application.PathSeparator & "Для_импорта"
+    рядом = рядом & "Для_импорта"
+
+    If Dir(рядом & Application.PathSeparator & "*.bas") <> "" Then
+        поУмолчанию = рядом
+    ElseIf Dir(вПодпапке & Application.PathSeparator & "*.bas") <> "" Then
+        поУмолчанию = вПодпапке
+    Else
+        поУмолчанию = рядом          ' ни одно не подошло — спросим явно
+    End If
 
     Do
         папка = InputBox("Папка с модулями (Для_импорта):", "Установка", поУмолчанию)

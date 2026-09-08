@@ -95,14 +95,28 @@ Private Function ≈стьƒоступ VBA() As Boolean
 End Function
 
 
+' ”гадать папку с модул€ми Ч не всегда р€дом с книгой: книгу могли
+' сохранить и на уровень выше (в корне ЂЋЌ ї, а не в ЂЋЌ \ћакросыї,
+' где реально лежит Ђƒл€_импортаї). ѕробуем оба места, и только если
+' ни одно не подошло Ч предлагаем то, что попроще объ€снить в InputBox.
 Private Function —проситьѕапку() As String
     Dim по”молчанию As String
+    Dim р€дом As String
+    Dim вѕодпапке As String
     Dim папка As String
 
-    по”молчанию = ThisWorkbook.Path
-    If Right$(по”молчанию, 1) <> Application.PathSeparator Then _
-        по”молчанию = по”молчанию & Application.PathSeparator
-    по”молчанию = по”молчанию & "ƒл€_импорта"
+    р€дом = ThisWorkbook.Path
+    If Right$(р€дом, 1) <> Application.PathSeparator Then р€дом = р€дом & Application.PathSeparator
+    вѕодпапке = р€дом & "ћакросы" & Application.PathSeparator & "ƒл€_импорта"
+    р€дом = р€дом & "ƒл€_импорта"
+
+    If Dir(р€дом & Application.PathSeparator & "*.bas") <> "" Then
+        по”молчанию = р€дом
+    ElseIf Dir(вѕодпапке & Application.PathSeparator & "*.bas") <> "" Then
+        по”молчанию = вѕодпапке
+    Else
+        по”молчанию = р€дом          ' ни одно не подошло Ч спросим €вно
+    End If
 
     Do
         папка = InputBox("ѕапка с модул€ми (ƒл€_импорта):", "”становка", по”молчанию)

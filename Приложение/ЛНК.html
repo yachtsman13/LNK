@@ -303,8 +303,7 @@
 "use strict";
 const DB = JSON.parse(document.getElementById("lnk-data").textContent);
 const METHODS = DB.методы || ["ВИК","УЗД","УЗТ","АЭ","ТВ","ТК","ВД","МК"];
-const objById = {}; (DB.объекты||[]).forEach(o=>objById[o.id]=o);
-const objByName = {}; (DB.объекты||[]).forEach(o=>{ if(o.наименование) objByName[o.наименование]=o; });
+const objById = {}, objByName = {};   // строятся из рабочего справочника O
 let curView="journal", query="";
 
 // «Живые» записи — без удалённых. Удаление не выкидывает запись, а ставит
@@ -354,10 +353,41 @@ function saveWS(o){
   try{ localStorage.setItem("lnk_ws", JSON.stringify(o)); }catch(e){}
   const el=document.getElementById("wsName"); if(el) el.textContent=o.код;
 }
-function newId(){
-  return getWS().код + "-" + Date.now().toString(36).toUpperCase()
+function newId(pfx){
+  return (pfx||"З") + "-" + getWS().код + "-" + Date.now().toString(36).toUpperCase()
     + "-" + Math.random().toString(36).slice(2,5).toUpperCase();
 }
+
+// ── Справочники как рабочие копии (для правки и обмена) ────
+// Объекты, приборы, специалисты — тоже редактируемые и переносятся
+// обменом, поэтому живут в памяти браузера, как журнал. Те же правила:
+// «живые» без удалённых, слияние по свежести, мягкое удаление.
+const REG_OBJ="lnk_obj", REG_SI="lnk_si", REG_PPL="lnk_ppl";
+let O, S, P;
+function loadReg(key, seed){
+  try{ const raw=localStorage.getItem(key); if(raw){ const p=JSON.parse(raw);
+       const rows=Array.isArray(p)?p:p.rows; if(Array.isArray(rows)) return rows; } }catch(e){}
+  return JSON.parse(JSON.stringify(seed||[]));
+}
+function saveReg(key, arr){
+  try{ localStorage.setItem(key, JSON.stringify({версия:DB.версия, сохранено:new Date().toISOString(), rows:arr})); }catch(e){}
+}
+function live(arr){ return arr.filter(z=>!z.удалено); }
+function rebuildObjIndex(){
+  for(const k in objById) delete objById[k];
+  for(const k in objByName) delete objByName[k];
+  live(O).forEach(o=>{ objById[o.id]=o; if(o.наименование) objByName[o.наименование]=o; });
+}
+// Общее слияние по id со свежестью (журнал и справочники одинаково).
+function mergeInto(arr, key, incoming){
+  let added=0, updated=0, skipped=0; const idx={}; arr.forEach((z,i)=>idx[z.id]=i);
+  (incoming||[]).forEach(r=>{ if(!r||!r.id) return;
+    if(idx[r.id]==null){ arr.push(r); idx[r.id]=arr.length-1; if(!r.удалено) added++; }
+    else { if(lastTs(r) > lastTs(arr[idx[r.id]])){ arr[idx[r.id]]=r; updated++; } else skipped++; } });
+  if(key && (added||updated)) saveReg(key, arr);
+  return {added,updated,skipped};
+}
+
 // Отдать файл на скачивание (обмен, копии).
 function dl(name, text){
   const blob=new Blob([text],{type:"application/json;charset=utf-8"}), url=URL.createObjectURL(blob);
@@ -378,9 +408,9 @@ function methodsOf(z){ return Object.keys(z.методы||{}); }
 
 function setChrome(){
   document.getElementById("cJournal").textContent=liveJ().length;
-  document.getElementById("cObjects").textContent=DB.объекты.length;
-  document.getElementById("cSi").textContent=DB.си.length;
-  document.getElementById("cPeople").textContent=DB.специалисты.length;
+  document.getElementById("cObjects").textContent=live(O).length;
+  document.getElementById("cSi").textContent=live(S).length;
+  document.getElementById("cPeople").textContent=live(P).length;
   document.getElementById("fRows").textContent=liveJ().length;
   document.getElementById("fBuilt").textContent=ru(DB.собрано)||DB.собрано||"—";
   document.getElementById("verTag").textContent="v"+(DB.версия||"?")+" • реальные данные";
@@ -498,6 +528,60 @@ function renderDoc(id){
     </div>`;
 }
 
+// ── Правка справочников (объекты / приборы / специалисты) ──
+const REGS={
+  obj:{ arr:()=>O, key:REG_OBJ, view:"objects", pfx:"ОБ", title:"объект", name:"наименование", reindex:true,
+    fields:[{k:"наименование",l:"Наименование",wide:1},{k:"зав",l:"Заводской №"},{k:"рег",l:"Регистрационный / учётный №"},
+      {k:"учет",l:"Учётный №"},{k:"инв",l:"Инвентарный №"},{k:"тип",l:"Тип / группа"},{k:"место",l:"Расположение"},
+      {k:"изготовитель",l:"Изготовитель"},{k:"паспорт",l:"Номер паспорта"},{k:"материал",l:"Марка материала"},
+      {k:"объем",l:"Объём"},{k:"толщины",l:"Толщины"},{k:"мин_толщина",l:"Мин. толщина, мм"},{k:"твердость",l:"Доп. твёрдость, НВ"},
+      {k:"давление",l:"Рабочее давление"},{k:"среда",l:"Рабочая среда"},{k:"примечание",l:"Примечание",wide:1,type:"area"}] },
+  si:{ arr:()=>S, key:REG_SI, view:"si", pfx:"СИ", title:"прибор", name:"наименование",
+    fields:[{k:"наименование",l:"Наименование",wide:1},{k:"тип",l:"Тип / обозначение"},{k:"зав",l:"Заводской №"},
+      {k:"инв",l:"Инвентарный №"},{k:"метод",l:"Метод контроля"},{k:"назначение",l:"Назначение",wide:1},
+      {k:"поверка_до",l:"Действительно до",type:"date"},{k:"свидетельство",l:"№ свидетельства"},
+      {k:"периодичность",l:"Периодичность, мес."},{k:"хранение",l:"Место хранения"},{k:"состояние",l:"Состояние"}] },
+  ppl:{ arr:()=>P, key:REG_PPL, view:"people", pfx:"СП", title:"специалист", name:"фио",
+    fields:[{k:"фио",l:"ФИО полностью",wide:1},{k:"вдок",l:"ФИО в документах",wide:1},{k:"должность",l:"Должность"},
+      {k:"функции",l:"Функции в ЛНК",wide:1},{k:"стаж",l:"Стаж по НК с"}] }
+};
+function editReg(kind,id){
+  const C=REGS[kind], arr=C.arr(), z=id?arr.find(x=>String(x.id)===String(id)):null;
+  curView="regedit"; document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
+  const val=v=>esc(v==null?"":v);
+  const inp=f=>{ const v=z?z[f.k]:"";
+    const body=f.type==="area" ? `<textarea id="rf_${f.k}">${val(v)}</textarea>`
+      : `<input id="rf_${f.k}" ${f.type==="date"?"type=date":""} value="${val(v)}">`;
+    return `<label class="${f.wide?"wide":""}">${f.l}${body}</label>`; };
+  document.getElementById("main").innerHTML=`
+    <div class="head"><h2>${z?("Правка: "+C.title):("Новый "+C.title)}</h2></div>
+    <div class="card" style="padding:20px"><div class="form">
+      <div class="grid">${C.fields.map(inp).join("")}</div>
+      <div class="formbtns">
+        <button class="btn primary" onclick="saveRegRec('${kind}','${z?esc(z.id):""}')">✓ Сохранить</button>
+        <button class="btn" onclick="switchView('${C.view}')">Отмена</button>
+        ${z?`<button class="btn danger" style="margin-left:auto" onclick="delReg('${kind}','${esc(z.id)}')">✕ Удалить</button>`:""}
+      </div></div></div>`;
+  const f0=document.getElementById("rf_"+C.name); if(f0&&!z) setTimeout(()=>f0.focus(),50);
+}
+function saveRegRec(kind,id){
+  const C=REGS[kind], arr=C.arr(), rec={};
+  C.fields.forEach(f=>{ const el=document.getElementById("rf_"+f.k); rec[f.k]=el?el.value.trim():""; });
+  if(!rec[C.name]){ toast("Заполните: "+C.fields.find(f=>f.k===C.name).l); return; }
+  rec.изменено=new Date().toISOString(); rec.место=getWS().код;
+  if(id){ const i=arr.findIndex(x=>String(x.id)===String(id)); if(i>=0) arr[i]=Object.assign({},arr[i],rec); }
+  else { rec.id=newId(C.pfx); arr.push(rec); }
+  saveReg(C.key,arr); if(C.reindex) rebuildObjIndex();
+  switchView(C.view); toast(id?"Сохранено":"Добавлено");
+}
+function delReg(kind,id){
+  const C=REGS[kind], arr=C.arr(), z=arr.find(x=>String(x.id)===String(id)); if(!z) return;
+  if(!confirm("Удалить «"+(z[C.name]||"")+"»?\n\nУдаление перенесётся на другие места при обмене.")) return;
+  z.удалено=new Date().toISOString(); z.место=getWS().код;
+  saveReg(C.key,arr); if(C.reindex) rebuildObjIndex();
+  closeDrawer(); switchView(C.view); toast("Удалено");
+}
+
 // ── Пульт (сводка) ────────────────────────────────────────
 function renderDash(){
   const L=liveJ();
@@ -507,7 +591,7 @@ function renderDash(){
 
   // поверка приборов
   const groups={bad:[],work:[],ok:[],none:[]};
-  (DB.си||[]).forEach(s=>{ const[c]=siStatus(s);
+  live(S).forEach(s=>{ const[c]=siStatus(s);
     if(c==="bad")groups.bad.push(s); else if(c==="work")groups.work.push(s);
     else if(c==="ok")groups.ok.push(s); else groups.none.push(s); });
   const attn=groups.bad.concat(groups.work)
@@ -524,7 +608,7 @@ function renderDash(){
     <div class="n">${n}</div><div class="l">${l}</div></div>`;
 
   let поверкаHTML;
-  if((DB.си||[]).length===0){ поверкаHTML=`<div class="note">Приборы не заведены.</div>`; }
+  if(live(S).length===0){ поверкаHTML=`<div class="note">Приборы не заведены.</div>`; }
   else {
     поверкаHTML=`
       <div class="tiles" style="margin-bottom:12px">
@@ -552,9 +636,9 @@ function renderDash(){
     <div class="tiles">
       ${tile(L.length,"записей журнала","accent","journal")}
       ${tile(заГод,"за "+year+" год","")}
-      ${tile(DB.объекты.length,"объектов","","objects")}
-      ${tile(DB.си.length,"приборов (СИ)","","si")}
-      ${tile(DB.специалисты.length,"специалистов","","people")}
+      ${tile(live(O).length,"объектов","","objects")}
+      ${tile(live(S).length,"приборов (СИ)","","si")}
+      ${tile(live(P).length,"специалистов","","people")}
     </div>
 
     <div class="cols">
@@ -596,8 +680,8 @@ function editJournal(id){
   const z = id ? J.find(x=>String(x.id)===String(id)) : null;
   const val=(v)=>esc(v==null?"":v);
   const opts=(arr,cur)=>arr.map(x=>`<option${x===cur?" selected":""}>${esc(x)}</option>`).join("");
-  const objlist = (DB.объекты||[]).map(o=>`<option value="${esc(o.наименование)}">`).join("");
-  const splist = (DB.специалисты||[]).map(p=>`<option value="${esc(p.вдок||p.фио)}">`).join("");
+  const objlist = live(O).map(o=>`<option value="${esc(o.наименование)}">`).join("");
+  const splist = live(P).map(p=>`<option value="${esc(p.вдок||p.фио)}">`).join("");
   const mrows = METHODS.map(m=>{
     const mm=(z&&z.методы&&z.методы[m])||{};
     return `<div class="mrow"><div class="mname">${m}</div>
@@ -717,9 +801,9 @@ function backupOpen(){
 // ── Объекты ───────────────────────────────────────────────
 function renderObjects(){
   const q=query.toLowerCase();
-  const rows=DB.объекты.filter(o=>!q||(o.наименование+o.зав+o.рег+o.тип+o.место).toLowerCase().includes(q));
+  const rows=live(O).filter(o=>!q||(o.наименование+o.зав+o.рег+o.тип+o.место).toLowerCase().includes(q));
   const body=rows.length?rows.map(o=>`
-    <tr onclick="showObject(${o.id})">
+    <tr onclick="showObject('${esc(o.id)}')">
       <td class="obj">${esc(o.наименование)}</td>
       <td class="num">${esc(o.зав)||"—"}</td>
       <td class="num">${esc(o.рег)||"—"}</td>
@@ -728,10 +812,11 @@ function renderObjects(){
     </tr>`).join(""):`<tr><td colspan="5" class="empty">Ничего не найдено.</td></tr>`;
   document.getElementById("main").innerHTML=`
     <div class="print-only">Справочник объектов контроля</div>
-    <div class="head"><h2>Объекты</h2><span class="sub">${rows.length} из ${DB.объекты.length}</span>
+    <div class="head"><h2>Объекты</h2><span class="sub">${rows.length} из ${live(O).length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: наименование, зав. №, тип…" value="${esc(query)}"></div>
       <div class="spring"></div>
-      <button class="btn" onclick="exportCSV()">▤ Экспорт в Excel</button>
+      <button class="btn primary" onclick="editReg('obj',null)">＋ Добавить</button>
+      <button class="btn" onclick="exportCSV()">▤ Excel</button>
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Рег. / уч. №</th><th>Тип / группа</th><th>Расположение</th></tr></thead>
@@ -739,10 +824,14 @@ function renderObjects(){
   wireSearch(renderObjects);
 }
 function showObject(id){
-  const o=objById[id]; if(!o) return;
+  const o=objById[id]||O.find(x=>String(x.id)===String(id)); if(!o) return;
   const F=(k,v)=>v?`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`:"";
   const cnt=liveJ().filter(z=>z.объект===o.наименование).length;
   openDrawer(o.наименование,`
+    <div class="dbtns">
+      <button class="btn primary" onclick="closeDrawer();editReg('obj','${esc(o.id)}')">✎ Изменить</button>
+      <button class="btn danger" onclick="delReg('obj','${esc(o.id)}')">✕ Удалить</button>
+    </div>
     ${F("Заводской №",o.зав)}${F("Регистрационный №",o.рег)}${F("Учётный №",o.учет)}${F("Инвентарный №",o.инв)}
     ${F("Тип / группа",o.тип)}${F("Расположение",o.место)}${F("Изготовитель",o.изготовитель)}${F("Паспорт",o.паспорт)}
     <div class="sect">Параметры для контроля</div>
@@ -766,9 +855,9 @@ function siStatus(s){
 }
 function renderSi(){
   const q=query.toLowerCase();
-  const rows=DB.си.filter(s=>!q||(s.наименование+s.тип+s.зав+s.метод).toLowerCase().includes(q));
+  const rows=live(S).filter(s=>!q||(s.наименование+s.тип+s.зав+s.метод).toLowerCase().includes(q));
   const body=rows.length?rows.map(s=>{const[c,l]=siStatus(s);return`
-    <tr onclick="showSi(${s.id})">
+    <tr onclick="showSi('${esc(s.id)}')">
       <td class="obj">${esc(s.наименование)}<div class="muted" style="font-size:11.5px">${esc(s.тип)}</div></td>
       <td class="num">${esc(s.зав)||"—"}</td>
       <td>${esc(s.метод)||"—"}</td>
@@ -777,10 +866,11 @@ function renderSi(){
     </tr>`;}).join(""):`<tr><td colspan="5" class="empty">Ничего не найдено.</td></tr>`;
   document.getElementById("main").innerHTML=`
     <div class="print-only">Реестр средств измерений</div>
-    <div class="head"><h2>Приборы (СИ)</h2><span class="sub">${rows.length} из ${DB.си.length}</span>
+    <div class="head"><h2>Приборы (СИ)</h2><span class="sub">${rows.length} из ${live(S).length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: наименование, тип, метод…" value="${esc(query)}"></div>
       <div class="spring"></div>
-      <button class="btn" onclick="exportCSV()">▤ Экспорт в Excel</button>
+      <button class="btn primary" onclick="editReg('si',null)">＋ Добавить</button>
+      <button class="btn" onclick="exportCSV()">▤ Excel</button>
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Метод</th><th>Поверка до</th><th>Статус</th></tr></thead>
@@ -788,9 +878,13 @@ function renderSi(){
   wireSearch(renderSi);
 }
 function showSi(id){
-  const s=DB.си.find(x=>x.id===id); if(!s) return;
+  const s=S.find(x=>String(x.id)===String(id)); if(!s) return;
   const F=(k,v)=>v?`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`:"";
   openDrawer(s.наименование,`
+    <div class="dbtns">
+      <button class="btn primary" onclick="closeDrawer();editReg('si','${esc(s.id)}')">✎ Изменить</button>
+      <button class="btn danger" onclick="delReg('si','${esc(s.id)}')">✕ Удалить</button>
+    </div>
     ${F("Тип / обозначение",s.тип)}${F("Заводской №",s.зав)}${F("Инвентарный №",s.инв)}
     ${F("Метод контроля",s.метод)}${F("Назначение",s.назначение)}
     <div class="sect">Поверка</div>
@@ -801,8 +895,8 @@ function showSi(id){
 
 // ── Специалисты ───────────────────────────────────────────
 function renderPeople(){
-  const body=DB.специалисты.map(p=>`
-    <tr onclick="showPerson(${p.id})">
+  const body=live(P).map(p=>`
+    <tr onclick="showPerson('${esc(p.id)}')">
       <td class="obj">${esc(p.вдок||p.фио)}</td>
       <td>${esc(p.должность)||"—"}</td>
       <td>${esc(p.функции)||"<span class='muted'>—</span>"}</td>
@@ -810,18 +904,22 @@ function renderPeople(){
     </tr>`).join("")||`<tr><td colspan="4" class="empty">Список пуст.</td></tr>`;
   document.getElementById("main").innerHTML=`
     <div class="print-only">Специалисты ЛНК</div>
-    <div class="head"><h2>Специалисты</h2><span class="sub">${DB.специалисты.length}</span>
+    <div class="head"><h2>Специалисты</h2><span class="sub">${live(P).length}</span>
       <div class="spring"></div>
-      <button class="btn" onclick="exportCSV()">▤ Экспорт в Excel</button>
+      <button class="btn primary" onclick="editReg('ppl',null)">＋ Добавить</button>
+      <button class="btn" onclick="exportCSV()">▤ Excel</button>
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>ФИО</th><th>Должность</th><th>Функции в ЛНК</th><th>Стаж с</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
 }
 function showPerson(id){
-  const p=DB.специалисты.find(x=>x.id===id); if(!p) return;
+  const p=P.find(x=>String(x.id)===String(id)); if(!p) return;
   const F=(k,v)=>v?`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`:"";
-  openDrawer(p.фио,`${F("В документах",p.вдок)}${F("Должность",p.должность)}${F("Функции в ЛНК",p.функции)}${F("Стаж по НК с",p.стаж)}`);
+  openDrawer(p.фио,`<div class="dbtns">
+      <button class="btn primary" onclick="closeDrawer();editReg('ppl','${esc(p.id)}')">✎ Изменить</button>
+      <button class="btn danger" onclick="delReg('ppl','${esc(p.id)}')">✕ Удалить</button>
+    </div>${F("В документах",p.вдок)}${F("Должность",p.должность)}${F("Функции в ЛНК",p.функции)}${F("Стаж по НК с",p.стаж)}`);
 }
 
 // ── Заглушки и обмен ──────────────────────────────────────
@@ -846,12 +944,13 @@ function mergeJournal(incoming){
 }
 function exchangeExport(){
   const ws=getWS();
-  const payload={ тип:"обмен ЛНК", формат:1, место:ws.код, мастер:ws.мастер,
-    версия:DB.версия, выгружено:new Date().toISOString(), записи:J };
+  const payload={ тип:"обмен ЛНК", формат:2, место:ws.код, мастер:ws.мастер,
+    версия:DB.версия, выгружено:new Date().toISOString(),
+    записи:J, объекты:O, приборы:S, специалисты:P };
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
   try{ localStorage.setItem("lnk_last_export", new Date().toISOString()); }catch(e){}
-  toast("Выгружено: "+liveJ().length+" записей → "+name);
+  toast("Выгружено: журнал "+liveJ().length+", объекты "+live(O).length+", СИ "+live(S).length+", спец. "+live(P).length);
   if(curView==="exchange") renderExchange();
 }
 let _exIn;
@@ -860,23 +959,32 @@ function exchangeImport(){
     _exIn=document.createElement("input"); _exIn.type="file"; _exIn.accept=".json"; _exIn.multiple=true; _exIn.style.display="none"; document.body.appendChild(_exIn);
     _exIn.addEventListener("change",e=>{
       const files=[...e.target.files]; if(!files.length) return;
-      let done=0, tot={added:0,updated:0,skipped:0}, отчёт=[];
+      let done=0, tot={j:0,o:0,s:0,p:0}, отчёт=[];
       files.forEach(f=>{
         const rd=new FileReader();
         rd.onload=()=>{
           try{
-            const d=JSON.parse(rd.result); const arr=Array.isArray(d)?d:d.записи;
-            if(!Array.isArray(arr)) throw new Error("не файл обмена");
-            const r=mergeJournal(arr);
-            tot.added+=r.added; tot.updated+=r.updated; tot.skipped+=r.skipped;
-            отчёт.push((d.место?("["+d.место+"] "):"")+f.name+": +"+r.added+" новых, "+r.updated+" обновлено");
+            const d=JSON.parse(rd.result);
+            const jarr=Array.isArray(d)?d:d.записи;
+            if(!Array.isArray(jarr) && !d.объекты && !d.приборы && !d.специалисты)
+              throw new Error("не файл обмена");
+            const rj=Array.isArray(jarr)?mergeJournal(jarr):{added:0,updated:0,skipped:0};
+            const ro=mergeInto(O,REG_OBJ,d.объекты);
+            const rs=mergeInto(S,REG_SI,d.приборы);
+            const rp=mergeInto(P,REG_PPL,d.специалисты);
+            if(ro.added||ro.updated) rebuildObjIndex();
+            tot.j+=rj.added+rj.updated; tot.o+=ro.added+ro.updated; tot.s+=rs.added+rs.updated; tot.p+=rp.added+rp.updated;
+            отчёт.push((d.место?("["+d.место+"] "):"")+f.name+
+              ": журнал +"+rj.added+"/"+rj.updated+", объекты +"+ro.added+"/"+ro.updated+
+              ", СИ +"+rs.added+"/"+rs.updated+", спец. +"+rp.added+"/"+rp.updated);
           }catch(err){ отчёт.push(f.name+": ошибка — "+err.message); }
           if(++done===files.length){
             try{ localStorage.setItem("lnk_last_import", new Date().toISOString()); }catch(e){}
             renderExchange();
             alert("Принято файлов: "+files.length+"\n\n"+отчёт.join("\n")+
-              "\n\nИтого: добавлено "+tot.added+", обновлено "+tot.updated+", без изменений "+tot.skipped+".");
-            toast("Обмен принят: +"+tot.added+" / обновлено "+tot.updated);
+              "\n\nВсего изменений: журнал "+tot.j+", объекты "+tot.o+", приборы "+tot.s+", специалисты "+tot.p+
+              ".\n(в записи «+новых/обновлено»)");
+            toast("Обмен принят");
           }
         };
         rd.readAsText(f);
@@ -920,27 +1028,29 @@ function renderExchange(){
         </div>
       </div>
       <div class="panel">
-        <h3>▤ Состояние</h3>
-        <div class="bar"><span class="g" style="flex:1">Всего записей</span><b>${liveJ().length}</b></div>
-        <div class="bar"><span class="g" style="flex:1">Удалённых (переносятся при обмене)</span><b>${J.filter(z=>z.удалено).length}</b></div>
-        <div class="bar"><span class="g" style="flex:1">Заведено на этом месте</span><b>${мои}</b></div>
-        <div class="bar"><span class="g" style="flex:1">С отметкой об изменении</span><b>${пометки}</b></div>
-        <div class="note">${last("lnk_last_export","Последняя выгрузка")}<br>${last("lnk_last_import","Последний приём")}</div>
+        <h3>▤ Что уйдёт в обмен</h3>
+        <div class="bar"><span class="g" style="flex:1">Записей журнала</span><b>${liveJ().length}</b></div>
+        <div class="bar"><span class="g" style="flex:1">Объектов</span><b>${live(O).length}</b></div>
+        <div class="bar"><span class="g" style="flex:1">Приборов (СИ)</span><b>${live(S).length}</b></div>
+        <div class="bar"><span class="g" style="flex:1">Специалистов</span><b>${live(P).length}</b></div>
+        <div class="note">Заведено на этом месте (журнал): ${мои}. Удалённых к переносу: ${J.filter(z=>z.удалено).length}.<br>
+          ${last("lnk_last_export","Последняя выгрузка")}<br>${last("lnk_last_import","Последний приём")}</div>
       </div>
     </div>
 
     <div class="cols">
       <div class="panel">
         <h3>▼ Выгрузить изменения</h3>
-        <div class="note">Кладёт ваш журнал обычным файлом «Обмен ЛНК … (${esc(ws.код)}).json»
-          в папку загрузок. Скопируйте его на флешку или в общую папку «Обмен».
+        <div class="note">Кладёт журнал <b>и справочники</b> одним обычным файлом
+          «Обмен ЛНК … (${esc(ws.код)}).json» в папку загрузок. Скопируйте его на флешку
+          или в общую папку «Обмен».
           ${ws.мастер?"Как мастер — сначала примите файлы всех мест, потом выгрузите: это будет свод.":""}</div>
-        <div class="formbtns"><button class="btn primary" onclick="exchangeExport()">▼ Выгрузить (${liveJ().length})</button></div>
+        <div class="formbtns"><button class="btn primary" onclick="exchangeExport()">▼ Выгрузить всё</button></div>
       </div>
       <div class="panel">
         <h3>▲ Принять файлы обмена</h3>
-        <div class="note">Выберите один или несколько файлов «Обмен ЛНК …». Новые записи добавятся,
-          изменённые обновятся по свежести. Ваши записи не пострадают.</div>
+        <div class="note">Выберите один или несколько файлов «Обмен ЛНК …». Журнал и справочники
+          сольются: новое добавится, изменённое обновится по свежести. Ваши данные не пострадают.</div>
         <div class="formbtns"><button class="btn primary" onclick="exchangeImport()">▲ Выбрать файлы…</button></div>
       </div>
     </div>
@@ -955,7 +1065,8 @@ function renderExchange(){
       <div class="note">Файлы обмена — обычные документы с понятным именем: не спутать и случайно не испортить.
         <b>Удаление переносится</b>: удалили запись на одном месте — при обмене она скроется и у других.
         Защита от потерь: если ту же запись где-то <b>изменили позже</b> удаления, побеждает правка —
-        свежая работа не пропадёт. Обмен пока по журналу; справочники добавим тем же способом.</div>
+        свежая работа не пропадёт. Обмениваются и журнал, и справочники (объекты, приборы, специалисты) —
+        одним файлом, теми же правилами.</div>
     </div>`;
 }
 
@@ -975,11 +1086,11 @@ function exportCSV(){
   if(curView==="journal"){head=["№ акта","Дата","Объект","Заводской №","Рег. №","Методы","Статус"];
     rowsF=liveJ().map(z=>[z.акт,ru(z.дата),z.объект,z.зав,z.рег,methodsOf(z).join(" "),z.статус]);name="Журнал ЛНК";}
   else if(curView==="objects"){head=["Наименование","Заводской №","Рег. №","Тип","Расположение","Материал"];
-    rowsF=DB.объекты.map(o=>[o.наименование,o.зав,o.рег,o.тип,o.место,o.материал]);name="Объекты ЛНК";}
+    rowsF=live(O).map(o=>[o.наименование,o.зав,o.рег,o.тип,o.место,o.материал]);name="Объекты ЛНК";}
   else if(curView==="si"){head=["Наименование","Тип","Заводской №","Метод","Поверка до","№ свидетельства"];
-    rowsF=DB.си.map(s=>[s.наименование,s.тип,s.зав,s.метод,ru(s.поверка_до),s.свидетельство]);name="СИ ЛНК";}
+    rowsF=live(S).map(s=>[s.наименование,s.тип,s.зав,s.метод,ru(s.поверка_до),s.свидетельство]);name="СИ ЛНК";}
   else if(curView==="people"){head=["ФИО","Должность","Функции","Стаж с"];
-    rowsF=DB.специалисты.map(p=>[p.фио,p.должность,p.функции,p.стаж]);name="Специалисты ЛНК";}
+    rowsF=live(P).map(p=>[p.фио,p.должность,p.функции,p.стаж]);name="Специалисты ЛНК";}
   else{toast("Здесь нечего выгружать");return;}
   const q=s=>'"'+String(s==null?"":s).replace(/"/g,'""')+'"';
   const csv="﻿"+[head.map(q).join(";")].concat(rowsF.map(r=>r.map(q).join(";"))).join("\r\n");
@@ -1014,6 +1125,10 @@ function applyTheme(t){
 })();
 
 J = loadJournal();
+O = loadReg(REG_OBJ, DB.объекты);
+S = loadReg(REG_SI, DB.си);
+P = loadReg(REG_PPL, DB.специалисты);
+rebuildObjIndex();
 document.getElementById("wsName").textContent = getWS().код;
 setChrome(); switchView("dash");
 </script>

@@ -169,6 +169,32 @@
   .placeholder{display:grid;place-items:center;height:65%;color:var(--muted);text-align:center}
   .placeholder .big{font-size:44px;margin-bottom:10px;opacity:.5}
 
+  /* Пульт */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:14px;margin-bottom:18px}
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--card-radius);
+    box-shadow:var(--shadow);padding:14px 16px}
+  .tile.click{cursor:pointer} .tile.click:hover{border-color:var(--brand)}
+  .tile .n{font-size:27px;font-weight:700;line-height:1.05}
+  .tile .l{color:var(--muted);font-size:12.5px;margin-top:4px}
+  .tile.bad .n{color:var(--danger)} .tile.warn .n{color:var(--warn)}
+  .tile.ok .n{color:var(--ok)} .tile.accent .n{color:var(--brand)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+  @media(max-width:920px){.cols{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--card-radius);
+    box-shadow:var(--shadow);padding:16px 18px}
+  .panel h3{margin:0 0 12px;font-size:14px;display:flex;align-items:center;gap:8px}
+  .panel h3 .pc{margin-left:auto;font-size:12px;color:var(--muted);font-weight:500}
+  .bar{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:13px}
+  .bar .bn{width:42px;color:var(--muted);font-weight:600}
+  .bar .bt{flex:1;background:var(--row);border-radius:6px;height:20px;overflow:hidden}
+  .bar .bf{display:block;height:100%;background:var(--brand);border-radius:6px;min-width:2px}
+  .bar .bc{width:34px;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .plist{font-size:13px}
+  .plist .pr{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);cursor:pointer}
+  .plist .pr:last-child{border-bottom:0} .plist .pr:hover{background:var(--brand-soft)}
+  .plist .pr .g{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .note{color:var(--muted);font-size:12.5px;padding:6px 0}
+
   /* Редактор записи */
   .form{max-width:780px}
   .form .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -241,8 +267,10 @@
   </div>
 
   <nav class="side" id="side">
+    <div class="grp">Обзор</div>
+    <button class="nav on" data-view="dash"><span class="ic">◈</span>Пульт</button>
     <div class="grp">Работа</div>
-    <button class="nav on" data-view="journal"><span class="ic">▤</span>Журнал<span class="cnt" id="cJournal">0</span></button>
+    <button class="nav" data-view="journal"><span class="ic">▤</span>Журнал<span class="cnt" id="cJournal">0</span></button>
     <button class="nav" data-view="objects"><span class="ic">▢</span>Объекты<span class="cnt" id="cObjects">0</span></button>
     <button class="nav" data-view="si"><span class="ic">⌗</span>Приборы (СИ)<span class="cnt" id="cSi">0</span></button>
     <button class="nav" data-view="people"><span class="ic">☺</span>Специалисты<span class="cnt" id="cPeople">0</span></button>
@@ -436,6 +464,95 @@ function renderDoc(id){
       <div class="signs">
         <div class="doch" style="border:0">Специалисты, проводившие контроль:</div>
         ${signRows}
+      </div>
+    </div>`;
+}
+
+// ── Пульт (сводка) ────────────────────────────────────────
+function renderDash(){
+  const year=new Date().getFullYear();
+  const заГод=J.filter(z=>(z.дата||"").slice(0,4)===String(year)).length;
+  const st=(k)=>J.filter(z=>statusClass(z.статус)===k).length;
+
+  // поверка приборов
+  const groups={bad:[],work:[],ok:[],none:[]};
+  (DB.си||[]).forEach(s=>{ const[c]=siStatus(s);
+    if(c==="bad")groups.bad.push(s); else if(c==="work")groups.work.push(s);
+    else if(c==="ok")groups.ok.push(s); else groups.none.push(s); });
+  const attn=groups.bad.concat(groups.work)
+    .sort((a,b)=>(a.поверка_до||"").localeCompare(b.поверка_до||""));
+
+  // записи по методам
+  const mc=METHODS.map(m=>({m,n:J.filter(z=>z.методы&&z.методы[m]).length}));
+  const mmax=Math.max(1,...mc.map(x=>x.n));
+
+  // последние записи по дате
+  const last=J.slice().filter(z=>z.дата).sort((a,b)=>b.дата.localeCompare(a.дата)).slice(0,6);
+
+  const tile=(n,l,cls,view)=>`<div class="tile ${cls||""} ${view?"click":""}"${view?` onclick="switchView('${view}')"`:""}>
+    <div class="n">${n}</div><div class="l">${l}</div></div>`;
+
+  let поверкаHTML;
+  if((DB.си||[]).length===0){ поверкаHTML=`<div class="note">Приборы не заведены.</div>`; }
+  else {
+    поверкаHTML=`
+      <div class="tiles" style="margin-bottom:12px">
+        ${tile(groups.bad.length,"просрочено","bad")}
+        ${tile(groups.work.length,"истекает (30 дн.)","warn")}
+        ${tile(groups.ok.length,"в норме","ok")}
+        ${tile(groups.none.length,"дата не указана","")}
+      </div>`;
+    if(attn.length){
+      поверкаHTML+=`<div class="plist">`+attn.map(s=>{const[c,l]=siStatus(s);
+        return `<div class="pr" onclick="switchView('si')">
+          <span class="st ${c}">${l}</span>
+          <span class="g">${esc(s.наименование)}${s.зав?` · зав. ${esc(s.зав)}`:""}</span>
+          <span class="num">${ru(s.поверка_до)||"—"}</span></div>`;}).join("")+`</div>`;
+    } else if(groups.none.length){
+      поверкаHTML+=`<div class="note">Просроченных нет. Даты поверки не заполнены — статус не отслеживается, пока даты не внесены (приборов: ${groups.none.length}).</div>`;
+    } else {
+      поверкаHTML+=`<div class="note">Все поверки в норме.</div>`;
+    }
+  }
+
+  document.getElementById("main").innerHTML=`
+    <div class="head"><h2>Пульт</h2><span class="sub">на ${ru(new Date().toISOString().slice(0,10))}</span></div>
+
+    <div class="tiles">
+      ${tile(J.length,"записей журнала","accent","journal")}
+      ${tile(заГод,"за "+year+" год","")}
+      ${tile(DB.объекты.length,"объектов","","objects")}
+      ${tile(DB.си.length,"приборов (СИ)","","si")}
+      ${tile(DB.специалисты.length,"специалистов","","people")}
+    </div>
+
+    <div class="cols">
+      <div class="panel">
+        <h3>⌗ Поверка приборов</h3>
+        ${поверкаHTML}
+      </div>
+      <div class="panel">
+        <h3>▤ Записи по методам <span class="pc">всего ${J.length}</span></h3>
+        ${mc.map(x=>`<div class="bar"><span class="bn">${x.m}</span>
+          <span class="bt"><span class="bf" style="width:${Math.round(x.n/mmax*100)}%"></span></span>
+          <span class="bc">${x.n}</span></div>`).join("")}
+      </div>
+    </div>
+
+    <div class="cols">
+      <div class="panel">
+        <h3>◷ По статусу</h3>
+        ${[["Зарегистрировано","ok"],["В работе / черновик","work"],["Новые","new"],["Аннулировано","bad"]]
+          .map(([l,c])=>`<div class="bar"><span class="bt" style="max-width:none"><span class="bf ${c}" style="background:var(--${c==='ok'?'ok':c==='work'?'warn':c==='bad'?'danger':'brand'});width:${Math.round(st(c)/Math.max(1,J.length)*100)}%"></span></span><span class="bc">${st(c)}</span></div>`).join("")}
+        <div class="note">Зарегистрировано ${st("ok")}, в работе/черновик ${st("work")}, новых ${st("new")}, аннулировано ${st("bad")}.</div>
+      </div>
+      <div class="panel">
+        <h3>◈ Последние записи</h3>
+        <div class="plist">${last.map(z=>`<div class="pr" onclick="showJournal('${esc(z.id)}')">
+          <span class="num">${ru(z.дата)}</span>
+          <span class="g">${esc(z.объект)}</span>
+          <span>${methodsOf(z).map(m=>`<span class="pill">${m}</span>`).join("")}</span></div>`).join("")
+          ||`<div class="note">Записей нет.</div>`}</div>
       </div>
     </div>`;
 }
@@ -717,7 +834,7 @@ let toastT;function toast(m){const t=document.getElementById("toast");t.textCont
 
 function switchView(v){curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,exchange:renderExchange}[v]
+  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,exchange:renderExchange}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b)switchView(b.dataset.view);});
@@ -738,7 +855,7 @@ function applyTheme(t){
 })();
 
 J = loadJournal();
-setChrome(); switchView("journal");
+setChrome(); switchView("dash");
 </script>
 </body>
 </html>

@@ -176,6 +176,8 @@
     border:1px solid var(--line);border-radius:var(--radius);padding:5px 8px;cursor:pointer}
   .filters .btn{padding:5px 10px;box-shadow:none}
   .filters .fnote{font-size:12px;color:var(--faint);margin-left:auto}
+  .filters.seg .btn.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .filters.seg .btn b{font-weight:700;opacity:.85}
   th.sortable{cursor:pointer;user-select:none}
   th.sortable:hover{color:var(--brand-d);background:var(--brand-soft)}
 
@@ -306,7 +308,7 @@
     <button class="nav" data-view="si"><span class="ic">⌗</span>Приборы (СИ)<span class="cnt" id="cSi">0</span></button>
     <button class="nav" data-view="people"><span class="ic">☺</span>Специалисты<span class="cnt" id="cPeople">0</span></button>
     <div class="grp">Документы</div>
-    <button class="nav" data-view="docs"><span class="ic">▦</span>Акты и протоколы</button>
+    <button class="nav" data-view="docs"><span class="ic">▦</span>Акты и протоколы<span class="cnt" id="cDocs">0</span></button>
     <button class="nav" data-view="plan"><span class="ic">◷</span>План работ</button>
     <div class="grp">Обмен</div>
     <button class="nav" data-view="exchange"><span class="ic">⇄</span>Обмен файлами</button>
@@ -459,6 +461,8 @@ function setChrome(){
   document.getElementById("cObjects").textContent=live(O).length;
   document.getElementById("cSi").textContent=live(S).length;
   document.getElementById("cPeople").textContent=live(P).length;
+  const cd=document.getElementById("cDocs");
+  if(cd) cd.textContent=liveJ().filter(z=>!String(z.заключение||"").trim()).length;
   document.getElementById("fRows").textContent=liveJ().length;
   document.getElementById("fBuilt").textContent=ru(DB.собрано)||DB.собрано||"—";
   document.getElementById("verTag").textContent="v"+(DB.версия||"?")+" • реальные данные";
@@ -640,6 +644,58 @@ function renderDoc(id){
         ${signRows}
       </div>
     </div>`;
+}
+
+// ── Акты и протоколы ──────────────────────────────────────
+// Раздел отвечает на один рабочий вопрос: по каким записям документ уже
+// оформлен, а по каким ещё нет. «Оформлен» = в документе вписано
+// заключение (оно и хранится в записи).
+let df="нужно";                         // готовые | нужно | все
+function setDF(v){ df=v; renderDocs(); }
+function оформлен(z){ return !!String(z.заключение||"").trim(); }
+function docsRows(){
+  const q=(query||"").toLowerCase();
+  return liveJ().filter(z=>{
+    if(df==="готовые" && !оформлен(z)) return false;
+    if(df==="нужно" && оформлен(z)) return false;
+    if(q && !((z.объект||"")+(z.акт||"")+(z.заключение||"")).toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a,b)=>String(b.дата||"").localeCompare(String(a.дата||"")));
+}
+function renderDocs(){
+  const rows=docsRows();
+  const всего=liveJ().length;
+  const гот=liveJ().filter(оформлен).length;
+  const seg=(v,l,n)=>`<button class="btn ${df===v?"on":""}" onclick="setDF('${v}')">${l} <b>${n}</b></button>`;
+  const body=rows.length?rows.map(z=>`
+    <tr onclick="renderDoc('${esc(z.id)}')">
+      <td class="num">${esc(z.акт)||"—"}</td>
+      <td class="num">${ru(z.дата)}</td>
+      <td class="obj">${esc(z.объект)}</td>
+      <td>${methodsOf(z).map(m=>`<span class="pill">${m}</span>`).join("")||"<span class='muted'>—</span>"}</td>
+      <td>${оформлен(z)
+        ? `<span class="st ok">оформлен</span>`
+        : `<span class="st work">нет заключения</span>`}</td>
+      <td class="obj muted" style="font-size:12px">${esc(String(z.заключение||"").slice(0,90))}${String(z.заключение||"").length>90?"…":""}</td>
+    </tr>`).join(""):`<tr><td colspan="6" class="empty">Ничего не найдено.</td></tr>`;
+  document.getElementById("main").innerHTML=`
+    ${printHead("Акты и протоколы", (df==="готовые"?"оформленные":df==="нужно"?"требуют оформления":"все")+" · записей "+rows.length)}
+    <div class="head">
+      <h2>Акты и протоколы</h2><span class="sub">${rows.length} из ${всего}</span>
+      <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: объект, № акта, текст заключения…" value="${esc(query)}"></div>
+      <div class="spring"></div>
+      <button class="btn" onclick="window.print()">⎙ PDF</button>
+    </div>
+    <div class="filters noprint seg">
+      ${seg("нужно","Требуют оформления",всего-гот)}
+      ${seg("готовые","Оформлены",гот)}
+      ${seg("все","Все",всего)}
+      <span class="fnote">клик по строке — открыть документ</span>
+    </div>
+    <div class="card"><div class="tblwrap"><table>
+      <thead><tr><th>№ акта</th><th>Дата</th><th>Объект контроля</th><th>Методы</th><th>Документ</th><th>Заключение</th></tr></thead>
+      <tbody>${body}</tbody></table></div></div>`;
+  wireSearch(renderDocs);
 }
 
 // ── Правка справочников (объекты / приборы / специалисты) ──
@@ -845,11 +901,27 @@ function editJournal(id){
   const f=document.getElementById("e_объект"); if(f&&!z) setTimeout(()=>f.focus(),50);
 }
 function objHint(){
-  const name=(document.getElementById("e_объект")||{}).value||"";
-  const o=objByName[name.trim()];
+  const name=((document.getElementById("e_объект")||{}).value||"").trim();
+  const o=objByName[name];
   const h=document.getElementById("objHint"); if(!h) return;
-  h.textContent = o ? ("Из справочника: зав. № "+(o.зав||"—")+", рег. "+(o.рег||"—")) :
-    (name.trim()? "Нет в справочнике — зав./рег. № подставлены не будут" : "");
+  if(o){ h.innerHTML="Из справочника: зав. № "+esc(o.зав||"—")+", рег. "+esc(o.рег||"—"); }
+  else if(name){
+    // Объекта нет в справочнике — предлагаем завести его отсюда же, не
+    // уходя из записи: иначе приходится бросать заполнение, идти в
+    // «Объекты», заводить, возвращаться и набирать заново.
+    h.innerHTML="Нет в справочнике — зав./рег. № не подставятся. "+
+      '<button type="button" class="btn" style="padding:2px 9px;margin-left:6px" '+
+      'onclick="quickAddObject()">＋ Завести объект</button>';
+  } else h.innerHTML="";
+}
+function quickAddObject(){
+  const name=((document.getElementById("e_объект")||{}).value||"").trim();
+  if(!name) return;
+  if(objByName[name]){ toast("Такой объект уже есть"); objHint(); return; }
+  O.push({ id:newId("ОБ"), наименование:name,
+           изменено:new Date().toISOString(), место:getWS().код });
+  saveReg(REG_OBJ,O); rebuildObjIndex(); setChrome(); objHint();
+  toast("Объект заведён. Заводской и рег. номера допишите в разделе «Объекты».");
 }
 function saveJournalRec(id){
   const v=(k)=>{const el=document.getElementById(k);return el?el.value.trim():"";};
@@ -1251,7 +1323,7 @@ let toastT;function toast(m){const t=document.getElementById("toast");t.textCont
 
 function switchView(v){curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,exchange:renderExchange}[v]
+  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b)switchView(b.dataset.view);});

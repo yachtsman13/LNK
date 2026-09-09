@@ -256,19 +256,29 @@ let curView="journal", query="";
 
 // ── Рабочий журнал (правки живут в localStorage поверх вшитых данных) ──
 // Данные вшиты в файл, поэтому редактируемая копия журнала хранится в
-// памяти браузера. Ключ привязан к версии данных: пришлёт новый файл с
-// новой версией — сядем на его записи, а не на старую копию.
-const STORE_KEY = "lnk_journal_" + (DB.версия || "0");
+// памяти браузера. КЛЮЧ НЕ ЗАВИСИТ ОТ ВЕРСИИ ПРОГРАММЫ — иначе новая
+// версия смотрела бы в другой «ящик» и открывалась пустой. Браузер держит
+// память для file:// независимо от конкретного файла, поэтому обновление
+// программы (замена файла) ваши записи сохраняет.
+const STORE_KEY = "lnk_journal";
 let J;
 function loadJournal(){
   try{
-    const raw = localStorage.getItem(STORE_KEY);
-    if(raw){ const p=JSON.parse(raw); if(Array.isArray(p)) return p; }
+    let raw = localStorage.getItem(STORE_KEY);
+    if(!raw){                                   // перенос со старого ключа с версией (до 3.1)
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k && k.indexOf("lnk_journal_")===0){ raw=localStorage.getItem(k); break; }
+      }
+    }
+    if(raw){ const p=JSON.parse(raw); const rows=Array.isArray(p)?p:p.rows;
+             if(Array.isArray(rows)) return rows; }
   }catch(e){}
-  return JSON.parse(JSON.stringify(DB.журнал));   // первая загрузка — копия вшитых
+  return JSON.parse(JSON.stringify(DB.журнал));   // первый запуск — копия вшитых
 }
 function saveJournal(){
-  try{ localStorage.setItem(STORE_KEY, JSON.stringify(J)); }catch(e){ toast("Не удалось сохранить в память браузера"); }
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify({baseVersion:DB.версия, сохранено:new Date().toISOString(), rows:J})); }
+  catch(e){ toast("Не удалось сохранить в память браузера"); }
   setChrome();
 }
 function newId(){ return "З-" + Date.now().toString(36).toUpperCase(); }

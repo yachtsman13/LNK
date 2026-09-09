@@ -307,6 +307,14 @@ const objById = {}; (DB.объекты||[]).forEach(o=>objById[o.id]=o);
 const objByName = {}; (DB.объекты||[]).forEach(o=>{ if(o.наименование) objByName[o.наименование]=o; });
 let curView="journal", query="";
 
+// «Живые» записи — без удалённых. Удаление не выкидывает запись, а ставит
+// метку z.удалено (надгробие): так удаление можно перенести файлом обмена
+// тем же слиянием по свежести. Показываем и считаем только живые.
+function liveJ(){ return J.filter(z=>!z.удалено); }
+// Метка последнего события записи — правка или удаление, что позже. По ней
+// слияние решает, чья версия свежее (в т.ч. «удалено» против «изменено»).
+function lastTs(z){ const a=z.изменено||"", b=z.удалено||""; return a>b?a:b; }
+
 // ── Рабочий журнал (правки живут в localStorage поверх вшитых данных) ──
 // Данные вшиты в файл, поэтому редактируемая копия журнала хранится в
 // памяти браузера. КЛЮЧ НЕ ЗАВИСИТ ОТ ВЕРСИИ ПРОГРАММЫ — иначе новая
@@ -369,11 +377,11 @@ function statusClass(s){ s=(s||"").toLowerCase();
 function methodsOf(z){ return Object.keys(z.методы||{}); }
 
 function setChrome(){
-  document.getElementById("cJournal").textContent=J.length;
+  document.getElementById("cJournal").textContent=liveJ().length;
   document.getElementById("cObjects").textContent=DB.объекты.length;
   document.getElementById("cSi").textContent=DB.си.length;
   document.getElementById("cPeople").textContent=DB.специалисты.length;
-  document.getElementById("fRows").textContent=J.length;
+  document.getElementById("fRows").textContent=liveJ().length;
   document.getElementById("fBuilt").textContent=ru(DB.собрано)||DB.собрано||"—";
   document.getElementById("verTag").textContent="v"+(DB.версия||"?")+" • реальные данные";
 }
@@ -381,7 +389,7 @@ function setChrome(){
 // ── Журнал ────────────────────────────────────────────────
 function renderJournal(){
   const q=query.toLowerCase();
-  const rows=J.filter(z=>!q ||
+  const rows=liveJ().filter(z=>!q ||
     (z.объект+z.акт+z.наименование+z.зав+z.рег+methodsOf(z).join(" ")+z.дата).toLowerCase().includes(q));
   const body=rows.length?rows.map(z=>`
     <tr onclick="showJournal('${esc(z.id)}')">
@@ -394,7 +402,7 @@ function renderJournal(){
   document.getElementById("main").innerHTML=`
     <div class="print-only">Журнал учёта заключений ЛНК</div>
     <div class="head">
-      <h2>Журнал</h2><span class="sub" id="cnt">${rows.length} из ${J.length}</span>
+      <h2>Журнал</h2><span class="sub" id="cnt">${rows.length} из ${liveJ().length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: объект, № акта, зав. №, метод…" value="${esc(query)}"></div>
       <div class="spring"></div>
       <button class="btn primary" onclick="editJournal(null)">＋ Добавить запись</button>
@@ -492,9 +500,10 @@ function renderDoc(id){
 
 // ── Пульт (сводка) ────────────────────────────────────────
 function renderDash(){
+  const L=liveJ();
   const year=new Date().getFullYear();
-  const заГод=J.filter(z=>(z.дата||"").slice(0,4)===String(year)).length;
-  const st=(k)=>J.filter(z=>statusClass(z.статус)===k).length;
+  const заГод=L.filter(z=>(z.дата||"").slice(0,4)===String(year)).length;
+  const st=(k)=>L.filter(z=>statusClass(z.статус)===k).length;
 
   // поверка приборов
   const groups={bad:[],work:[],ok:[],none:[]};
@@ -505,11 +514,11 @@ function renderDash(){
     .sort((a,b)=>(a.поверка_до||"").localeCompare(b.поверка_до||""));
 
   // записи по методам
-  const mc=METHODS.map(m=>({m,n:J.filter(z=>z.методы&&z.методы[m]).length}));
+  const mc=METHODS.map(m=>({m,n:L.filter(z=>z.методы&&z.методы[m]).length}));
   const mmax=Math.max(1,...mc.map(x=>x.n));
 
   // последние записи по дате
-  const last=J.slice().filter(z=>z.дата).sort((a,b)=>b.дата.localeCompare(a.дата)).slice(0,6);
+  const last=L.slice().filter(z=>z.дата).sort((a,b)=>b.дата.localeCompare(a.дата)).slice(0,6);
 
   const tile=(n,l,cls,view)=>`<div class="tile ${cls||""} ${view?"click":""}"${view?` onclick="switchView('${view}')"`:""}>
     <div class="n">${n}</div><div class="l">${l}</div></div>`;
@@ -541,7 +550,7 @@ function renderDash(){
     <div class="head"><h2>Пульт</h2><span class="sub">на ${ru(new Date().toISOString().slice(0,10))}</span></div>
 
     <div class="tiles">
-      ${tile(J.length,"записей журнала","accent","journal")}
+      ${tile(L.length,"записей журнала","accent","journal")}
       ${tile(заГод,"за "+year+" год","")}
       ${tile(DB.объекты.length,"объектов","","objects")}
       ${tile(DB.си.length,"приборов (СИ)","","si")}
@@ -554,7 +563,7 @@ function renderDash(){
         ${поверкаHTML}
       </div>
       <div class="panel">
-        <h3>▤ Записи по методам <span class="pc">всего ${J.length}</span></h3>
+        <h3>▤ Записи по методам <span class="pc">всего ${L.length}</span></h3>
         ${mc.map(x=>`<div class="bar"><span class="bn">${x.m}</span>
           <span class="bt"><span class="bf" style="width:${Math.round(x.n/mmax*100)}%"></span></span>
           <span class="bc">${x.n}</span></div>`).join("")}
@@ -565,7 +574,7 @@ function renderDash(){
       <div class="panel">
         <h3>◷ По статусу</h3>
         ${[["Зарегистрировано","ok"],["В работе / черновик","work"],["Новые","new"],["Аннулировано","bad"]]
-          .map(([l,c])=>`<div class="bar"><span class="bt" style="max-width:none"><span class="bf ${c}" style="background:var(--${c==='ok'?'ok':c==='work'?'warn':c==='bad'?'danger':'brand'});width:${Math.round(st(c)/Math.max(1,J.length)*100)}%"></span></span><span class="bc">${st(c)}</span></div>`).join("")}
+          .map(([l,c])=>`<div class="bar"><span class="bt" style="max-width:none"><span class="bf ${c}" style="background:var(--${c==='ok'?'ok':c==='work'?'warn':c==='bad'?'danger':'brand'});width:${Math.round(st(c)/Math.max(1,L.length)*100)}%"></span></span><span class="bc">${st(c)}</span></div>`).join("")}
         <div class="note">Зарегистрировано ${st("ok")}, в работе/черновик ${st("work")}, новых ${st("new")}, аннулировано ${st("bad")}.</div>
       </div>
       <div class="panel">
@@ -671,8 +680,11 @@ function saveJournalRec(id){
 }
 function delJournal(id){
   const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
-  if(!confirm("Удалить запись?\n\nАкт № "+(z.акт||"—")+" · "+(z.объект||""))) return;
-  J=J.filter(x=>String(x.id)!==String(id));
+  if(!confirm("Удалить запись?\n\nАкт № "+(z.акт||"—")+" · "+(z.объект||"")+
+     "\n\nУдаление перенесётся на другие места при обмене.")) return;
+  // Мягкое удаление: запись остаётся надгробием (скрыта), чтобы удаление
+  // можно было перенести файлом обмена. Метка времени решает споры.
+  z.удалено=new Date().toISOString(); z.место=getWS().код;
   saveJournal(); closeDrawer(); switchView("journal"); toast("Запись удалена");
 }
 
@@ -683,7 +695,7 @@ function backupSave(){
     {type:"application/json"}),url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},400);
-  toast("Копия сохранена: "+J.length+" записей");
+  toast("Копия сохранена: "+liveJ().length+" записей");
 }
 let _fileIn;
 function backupOpen(){
@@ -729,7 +741,7 @@ function renderObjects(){
 function showObject(id){
   const o=objById[id]; if(!o) return;
   const F=(k,v)=>v?`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`:"";
-  const cnt=J.filter(z=>z.объект===o.наименование).length;
+  const cnt=liveJ().filter(z=>z.объект===o.наименование).length;
   openDrawer(o.наименование,`
     ${F("Заводской №",o.зав)}${F("Регистрационный №",o.рег)}${F("Учётный №",o.учет)}${F("Инвентарный №",o.инв)}
     ${F("Тип / группа",o.тип)}${F("Расположение",o.место)}${F("Изготовитель",o.изготовитель)}${F("Паспорт",o.паспорт)}
@@ -824,9 +836,9 @@ function mergeJournal(incoming){
   const idx={}; J.forEach((z,i)=>{ idx[z.id]=i; });
   incoming.forEach(r=>{
     if(!r||!r.id) return;
-    if(idx[r.id]==null){ J.push(r); idx[r.id]=J.length-1; added++; }
+    if(idx[r.id]==null){ J.push(r); idx[r.id]=J.length-1; if(!r.удалено) added++; }
     else { const cur=J[idx[r.id]];
-      if((r.изменено||"") > (cur.изменено||"")){ J[idx[r.id]]=r; updated++; }
+      if(lastTs(r) > lastTs(cur)){ J[idx[r.id]]=r; updated++; }
       else skipped++; }
   });
   if(added||updated) saveJournal();
@@ -839,7 +851,7 @@ function exchangeExport(){
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
   try{ localStorage.setItem("lnk_last_export", new Date().toISOString()); }catch(e){}
-  toast("Выгружено: "+J.length+" записей → "+name);
+  toast("Выгружено: "+liveJ().length+" записей → "+name);
   if(curView==="exchange") renderExchange();
 }
 let _exIn;
@@ -909,7 +921,8 @@ function renderExchange(){
       </div>
       <div class="panel">
         <h3>▤ Состояние</h3>
-        <div class="bar"><span class="g" style="flex:1">Всего записей</span><b>${J.length}</b></div>
+        <div class="bar"><span class="g" style="flex:1">Всего записей</span><b>${liveJ().length}</b></div>
+        <div class="bar"><span class="g" style="flex:1">Удалённых (переносятся при обмене)</span><b>${J.filter(z=>z.удалено).length}</b></div>
         <div class="bar"><span class="g" style="flex:1">Заведено на этом месте</span><b>${мои}</b></div>
         <div class="bar"><span class="g" style="flex:1">С отметкой об изменении</span><b>${пометки}</b></div>
         <div class="note">${last("lnk_last_export","Последняя выгрузка")}<br>${last("lnk_last_import","Последний приём")}</div>
@@ -922,7 +935,7 @@ function renderExchange(){
         <div class="note">Кладёт ваш журнал обычным файлом «Обмен ЛНК … (${esc(ws.код)}).json»
           в папку загрузок. Скопируйте его на флешку или в общую папку «Обмен».
           ${ws.мастер?"Как мастер — сначала примите файлы всех мест, потом выгрузите: это будет свод.":""}</div>
-        <div class="formbtns"><button class="btn primary" onclick="exchangeExport()">▼ Выгрузить (${J.length})</button></div>
+        <div class="formbtns"><button class="btn primary" onclick="exchangeExport()">▼ Выгрузить (${liveJ().length})</button></div>
       </div>
       <div class="panel">
         <h3>▲ Принять файлы обмена</h3>
@@ -940,8 +953,9 @@ function renderExchange(){
         <div class="pr" style="cursor:default"><b>3.</b><span class="g" style="white-space:normal">Мастер «Выгрузить» → раздаёт файл-свод обратно. Каждое место его «Принимает» и видит общую картину.</span></div>
       </div>
       <div class="note">Файлы обмена — обычные документы с понятным именем: не спутать и случайно не испортить.
-        Пока не переносится <b>удаление</b> записей — если запись удалили на одном месте, у других она
-        останется (сделаем отдельно, аккуратно, чтобы не терять чужое).</div>
+        <b>Удаление переносится</b>: удалили запись на одном месте — при обмене она скроется и у других.
+        Защита от потерь: если ту же запись где-то <b>изменили позже</b> удаления, побеждает правка —
+        свежая работа не пропадёт. Обмен пока по журналу; справочники добавим тем же способом.</div>
     </div>`;
 }
 
@@ -959,7 +973,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
 function exportCSV(){
   let head,rowsF,name;
   if(curView==="journal"){head=["№ акта","Дата","Объект","Заводской №","Рег. №","Методы","Статус"];
-    rowsF=J.map(z=>[z.акт,ru(z.дата),z.объект,z.зав,z.рег,methodsOf(z).join(" "),z.статус]);name="Журнал ЛНК";}
+    rowsF=liveJ().map(z=>[z.акт,ru(z.дата),z.объект,z.зав,z.рег,methodsOf(z).join(" "),z.статус]);name="Журнал ЛНК";}
   else if(curView==="objects"){head=["Наименование","Заводской №","Рег. №","Тип","Расположение","Материал"];
     rowsF=DB.объекты.map(o=>[o.наименование,o.зав,o.рег,o.тип,o.место,o.материал]);name="Объекты ЛНК";}
   else if(curView==="si"){head=["Наименование","Тип","Заводской №","Метод","Поверка до","№ свидетельства"];

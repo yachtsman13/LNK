@@ -633,6 +633,19 @@ def main():
         check(not dyn_missing, "колонки методов «<метод> №» и «<метод> исполнитель» есть по всем 8 методам%s"
               % ("" if not dyn_missing else ": " + ", ".join(dyn_missing)))
 
+    # Версия кода и версия в книге данных приходят одной присылкой и
+    # обязаны совпадать. Разойдясь, они дают самую неприятную породу
+    # ошибок: код зовёт колонку, которой в старой книге ещё нет, и
+    # ругается на колонку — про забытое обновление ни слова.
+    m = re.search(r'ВЕРСИЯ_КОДА\s+As\s+String\s*=\s*"([^"]+)"',
+                  io.open(os.path.join(MAC, "modConfig.bas"), encoding="utf-8").read())
+    сборка = io.open(os.path.join(ROOT, "scripts", "build_data.py"), encoding="utf-8").read()
+    m2 = re.search(r'\("Версия программы",\s*"([^"]+)"', сборка)
+    в_коде = m.group(1) if m else None
+    в_книге = m2.group(1) if m2 else None
+    check(в_коде is not None and в_коде == в_книге,
+          "версия в modConfig и в книге данных одна (%s / %s)" % (в_коде, в_книге))
+
     print("\n".join(oks))
     if errors:
         print("\n" + "\n".join(errors))

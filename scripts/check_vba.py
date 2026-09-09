@@ -633,6 +633,28 @@ def main():
         check(not dyn_missing, "колонки методов «<метод> №» и «<метод> исполнитель» есть по всем 8 методам%s"
               % ("" if not dyn_missing else ": " + ", ".join(dyn_missing)))
 
+    # Типы из внешних библиотек (Office, Word, Scripting, MSForms).
+    # Тип проверяется при СБОРКЕ проекта: нет ссылки на библиотеку — не
+    # собирается весь проект, с ошибкой «User-defined type not defined»
+    # на этой строке, и не работает уже ничего. Ссылки на Word и Office
+    # в Excel есть по умолчанию, но «по умолчанию» — не «всегда».
+    # Позднее связывание (As Object + CreateObject) этой проверки не
+    # требует: имена ищутся во время выполнения. Так сделано во всей
+    # системе, и одно исключение однажды встало поперёк всего.
+    чужие_типы = []
+    ОПАСНЫЕ = (r"IRibbon\w*", r"Word\.\w+", r"Scripting\.\w+", r"MSForms\.\w+",
+               r"Office\.\w+", r"FileDialog", r"CommandBar\b", r"Outlook\.\w+")
+    for файл in sorted(glob.glob(os.path.join(MAC, "*.bas"))):
+        for n, строка in enumerate(io.open(файл, encoding="utf-8"), 1):
+            голая = строка.split("'")[0]
+            for тип in ОПАСНЫЕ:
+                if re.search(r"\bAs\s+(New\s+)?%s" % тип, голая):
+                    чужие_типы.append("%s:%d" % (os.path.basename(файл), n))
+                    break
+    check(not чужие_типы,
+          "нет типов из внешних библиотек (только As Object)%s"
+          % ("" if not чужие_типы else ": " + ", ".join(чужие_типы)))
+
     # Отладочные операторы в присланном коде. Stop и Debug.Assert ставят
     # Excel заказчика на паузу в редакторе VBA — ровно то состояние,
     # в котором перестаёт работать вообще всё, а сообщение при этом

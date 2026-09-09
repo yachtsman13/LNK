@@ -334,7 +334,29 @@ function saveJournal(){
   catch(e){ toast("Не удалось сохранить в память браузера"); }
   setChrome();
 }
-function newId(){ return "З-" + Date.now().toString(36).toUpperCase(); }
+// ── Рабочее место (код для обмена) ────────────────────────
+// Код места входит в id новых записей — тогда при слиянии журналов
+// с разных мест записи не сталкиваются (у каждого места свои id).
+function getWS(){
+  try{ const r=localStorage.getItem("lnk_ws"); if(r){ const o=JSON.parse(r);
+        return {код:(o.код||"М1"), мастер:!!o.мастер}; } }catch(e){}
+  return {код:"М1", мастер:false};
+}
+function saveWS(o){
+  try{ localStorage.setItem("lnk_ws", JSON.stringify(o)); }catch(e){}
+  const el=document.getElementById("wsName"); if(el) el.textContent=o.код;
+}
+function newId(){
+  return getWS().код + "-" + Date.now().toString(36).toUpperCase()
+    + "-" + Math.random().toString(36).slice(2,5).toUpperCase();
+}
+// Отдать файл на скачивание (обмен, копии).
+function dl(name, text){
+  const blob=new Blob([text],{type:"application/json;charset=utf-8"}), url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url); a.remove();}, 400);
+}
 
 // ── helpers ───────────────────────────────────────────────
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -639,7 +661,8 @@ function saveJournalRec(id){
     объект_ид:spr.id||"", наименование:v("e_наим")||объект,
     зав:spr.зав||"", рег:spr.рег||"", методы:методы,
     архив:v("e_архив"), исходящий:v("e_исходящий"), отправитель:v("e_отправитель"),
-    примечание:v("e_примечание")
+    примечание:v("e_примечание"),
+    изменено:new Date().toISOString(), место:getWS().код
   };
   if(id){ const i=J.findIndex(x=>String(x.id)===String(id)); if(i>=0) J[i]=Object.assign({},J[i],rec); }
   else { rec.id=newId(); rec.нп=J.length+1; J.unshift(rec); }
@@ -664,7 +687,7 @@ function backupSave(){
 }
 let _fileIn;
 function backupOpen(){
-  if(!_fileIn){ _fileIn=document.createElement("input"); _fileIn.type="file"; _fileIn.accept=".json";
+  if(!_fileIn){ _fileIn=document.createElement("input"); _fileIn.type="file"; _fileIn.accept=".json"; _fileIn.style.display="none"; document.body.appendChild(_fileIn);
     _fileIn.addEventListener("change",e=>{
       const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
       rd.onload=()=>{ try{
@@ -792,13 +815,135 @@ function showPerson(id){
 // ── Заглушки и обмен ──────────────────────────────────────
 function renderPlaceholder(t,x){document.getElementById("main").innerHTML=
   `<div class="head"><h2>${t}</h2></div><div class="placeholder"><div><div class="big">▦</div>${x}</div></div>`;}
-function renderExchange(){document.getElementById("main").innerHTML=`
-  <div class="head"><h2>Обмен файлами</h2></div>
-  <div class="card" style="padding:20px;max-width:660px;line-height:1.7">
-    Обмен между рабочими местами (флешка или общая папка) прорабатываем отдельно —
-    как вы и сказали. Здесь он появится, когда договоримся о порядке.<br><br>
-    <span class="muted">Экспорт в Excel и печать в PDF уже работают на каждой вкладке.</span>
-  </div>`;}
+// ── Обмен между рабочими местами ──────────────────────────
+// Файлами, без сети. Слияние по id записи: новых нет — добавляем;
+// есть — берём ту, у кого «изменено» свежее. Код места входит в id
+// новых записей, поэтому места не затирают друг друга.
+function mergeJournal(incoming){
+  let added=0, updated=0, skipped=0;
+  const idx={}; J.forEach((z,i)=>{ idx[z.id]=i; });
+  incoming.forEach(r=>{
+    if(!r||!r.id) return;
+    if(idx[r.id]==null){ J.push(r); idx[r.id]=J.length-1; added++; }
+    else { const cur=J[idx[r.id]];
+      if((r.изменено||"") > (cur.изменено||"")){ J[idx[r.id]]=r; updated++; }
+      else skipped++; }
+  });
+  if(added||updated) saveJournal();
+  return {added,updated,skipped};
+}
+function exchangeExport(){
+  const ws=getWS();
+  const payload={ тип:"обмен ЛНК", формат:1, место:ws.код, мастер:ws.мастер,
+    версия:DB.версия, выгружено:new Date().toISOString(), записи:J };
+  const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
+  dl(name, JSON.stringify(payload));
+  try{ localStorage.setItem("lnk_last_export", new Date().toISOString()); }catch(e){}
+  toast("Выгружено: "+J.length+" записей → "+name);
+  if(curView==="exchange") renderExchange();
+}
+let _exIn;
+function exchangeImport(){
+  if(!_exIn){
+    _exIn=document.createElement("input"); _exIn.type="file"; _exIn.accept=".json"; _exIn.multiple=true; _exIn.style.display="none"; document.body.appendChild(_exIn);
+    _exIn.addEventListener("change",e=>{
+      const files=[...e.target.files]; if(!files.length) return;
+      let done=0, tot={added:0,updated:0,skipped:0}, отчёт=[];
+      files.forEach(f=>{
+        const rd=new FileReader();
+        rd.onload=()=>{
+          try{
+            const d=JSON.parse(rd.result); const arr=Array.isArray(d)?d:d.записи;
+            if(!Array.isArray(arr)) throw new Error("не файл обмена");
+            const r=mergeJournal(arr);
+            tot.added+=r.added; tot.updated+=r.updated; tot.skipped+=r.skipped;
+            отчёт.push((d.место?("["+d.место+"] "):"")+f.name+": +"+r.added+" новых, "+r.updated+" обновлено");
+          }catch(err){ отчёт.push(f.name+": ошибка — "+err.message); }
+          if(++done===files.length){
+            try{ localStorage.setItem("lnk_last_import", new Date().toISOString()); }catch(e){}
+            renderExchange();
+            alert("Принято файлов: "+files.length+"\n\n"+отчёт.join("\n")+
+              "\n\nИтого: добавлено "+tot.added+", обновлено "+tot.updated+", без изменений "+tot.skipped+".");
+            toast("Обмен принят: +"+tot.added+" / обновлено "+tot.updated);
+          }
+        };
+        rd.readAsText(f);
+      });
+      e.target.value="";
+    });
+  }
+  _exIn.click();
+}
+function saveWSfromForm(){
+  const код=(document.getElementById("wsCode").value||"").trim()||"М1";
+  const мастер=document.getElementById("wsMaster").checked;
+  saveWS({код:код, мастер:мастер});
+  toast("Рабочее место: "+код+(мастер?" (мастер)":"")); renderExchange();
+}
+function renderExchange(){
+  const ws=getWS();
+  const мои=J.filter(z=>z.место===ws.код).length;
+  const пометки=J.filter(z=>z.изменено).length;
+  const last=(k,l)=>{ let t=""; try{t=localStorage.getItem(k)||"";}catch(e){}
+    return t?`${l}: ${ru(t.slice(0,10))} ${t.slice(11,16)}`:`${l}: —`; };
+  document.getElementById("main").innerHTML=`
+    <div class="head"><h2>Обмен между рабочими местами</h2>
+      <span class="sub">без сети — через файлы (флешка или общая папка)</span></div>
+
+    <div class="cols">
+      <div class="panel">
+        <h3>◈ Это рабочее место</h3>
+        <div class="form">
+          <div class="grid">
+            <label>Код места
+              <input id="wsCode" value="${esc(ws.код)}" maxlength="6" placeholder="М1"></label>
+            <label style="justify-content:flex-end">
+              <span style="display:flex;gap:8px;align-items:center;color:var(--ink)">
+                <input type="checkbox" id="wsMaster" ${ws.мастер?"checked":""} style="width:auto">
+                Мастер (собирает свод)</span></label>
+          </div>
+          <div class="formbtns"><button class="btn primary" onclick="saveWSfromForm()">Сохранить</button></div>
+          <div class="note">Код должен быть у каждого места свой (М1, М2, …). Он входит в номер
+            новых записей, поэтому при слиянии места не затирают друг друга.</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>▤ Состояние</h3>
+        <div class="bar"><span class="g" style="flex:1">Всего записей</span><b>${J.length}</b></div>
+        <div class="bar"><span class="g" style="flex:1">Заведено на этом месте</span><b>${мои}</b></div>
+        <div class="bar"><span class="g" style="flex:1">С отметкой об изменении</span><b>${пометки}</b></div>
+        <div class="note">${last("lnk_last_export","Последняя выгрузка")}<br>${last("lnk_last_import","Последний приём")}</div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <div class="panel">
+        <h3>▼ Выгрузить изменения</h3>
+        <div class="note">Кладёт ваш журнал обычным файлом «Обмен ЛНК … (${esc(ws.код)}).json»
+          в папку загрузок. Скопируйте его на флешку или в общую папку «Обмен».
+          ${ws.мастер?"Как мастер — сначала примите файлы всех мест, потом выгрузите: это будет свод.":""}</div>
+        <div class="formbtns"><button class="btn primary" onclick="exchangeExport()">▼ Выгрузить (${J.length})</button></div>
+      </div>
+      <div class="panel">
+        <h3>▲ Принять файлы обмена</h3>
+        <div class="note">Выберите один или несколько файлов «Обмен ЛНК …». Новые записи добавятся,
+          изменённые обновятся по свежести. Ваши записи не пострадают.</div>
+        <div class="formbtns"><button class="btn primary" onclick="exchangeImport()">▲ Выбрать файлы…</button></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Как это работает</h3>
+      <div class="plist" style="font-size:13.5px;line-height:1.6">
+        <div class="pr" style="cursor:default"><b>1.</b><span class="g" style="white-space:normal">Каждое место нажимает «Выгрузить» → относит файл мастеру (флешка/общая папка).</span></div>
+        <div class="pr" style="cursor:default"><b>2.</b><span class="g" style="white-space:normal">Мастер «Принять файлы» — выбирает файлы всех мест разом. Получается общий журнал (свод).</span></div>
+        <div class="pr" style="cursor:default"><b>3.</b><span class="g" style="white-space:normal">Мастер «Выгрузить» → раздаёт файл-свод обратно. Каждое место его «Принимает» и видит общую картину.</span></div>
+      </div>
+      <div class="note">Файлы обмена — обычные документы с понятным именем: не спутать и случайно не испортить.
+        Пока не переносится <b>удаление</b> записей — если запись удалили на одном месте, у других она
+        останется (сделаем отдельно, аккуратно, чтобы не терять чужое).</div>
+    </div>`;
+}
 
 // ── Общее ─────────────────────────────────────────────────
 function wireSearch(re){const qb=document.getElementById("q");if(!qb)return;
@@ -855,6 +1000,7 @@ function applyTheme(t){
 })();
 
 J = loadJournal();
+document.getElementById("wsName").textContent = getWS().код;
 setChrome(); switchView("dash");
 </script>
 </body>

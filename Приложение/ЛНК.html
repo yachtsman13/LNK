@@ -169,6 +169,16 @@
   .placeholder{display:grid;place-items:center;height:65%;color:var(--muted);text-align:center}
   .placeholder .big{font-size:44px;margin-bottom:10px;opacity:.5}
 
+  /* Фильтры журнала */
+  .filters{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:-4px 0 12px}
+  .filters label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+  .filters select{font:inherit;font-size:13px;color:var(--ink);background:var(--input-bg);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 8px;cursor:pointer}
+  .filters .btn{padding:5px 10px;box-shadow:none}
+  .filters .fnote{font-size:12px;color:var(--faint);margin-left:auto}
+  th.sortable{cursor:pointer;user-select:none}
+  th.sortable:hover{color:var(--brand-d);background:var(--brand-soft)}
+
   /* Пульт */
   .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:14px;margin-bottom:18px}
   .tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--card-radius);
@@ -416,11 +426,62 @@ function setChrome(){
   document.getElementById("verTag").textContent="v"+(DB.версия||"?")+" • реальные данные";
 }
 
+// ── Журнал: фильтры и сортировка ──────────────────────────
+// Фильтры намеренно НЕ запоминаются между открытиями: иначе можно
+// открыть журнал, увидеть 12 записей вместо 315 и решить, что данные
+// пропали. Сортировка запоминается — она ничего не прячет.
+let jf={год:"",метод:"",статус:""};
+let jsort=(function(){ try{ const r=localStorage.getItem("lnk_jsort");
+  if(r){ const o=JSON.parse(r); if(o&&o.c) return {c:o.c,d:o.d===1?1:-1}; } }catch(e){}
+  return {c:"дата", d:-1}; })();   // по умолчанию — свежие сверху
+
+function jsortSave(){ try{ localStorage.setItem("lnk_jsort",JSON.stringify(jsort)); }catch(e){} }
+function setJF(k,v){ jf[k]=v; renderJournal(); }
+function resetJF(){ jf={год:"",метод:"",статус:""}; query=""; renderJournal(); }
+function sortJournal(c){
+  if(jsort.c===c) jsort.d=-jsort.d; else { jsort.c=c; jsort.d=(c==="дата")?-1:1; }
+  jsortSave(); renderJournal();
+}
+// Отобранные и отсортированные записи. Одна функция на список, экспорт
+// и печать — чтобы в Excel уходило ровно то, что видно на экране.
+function journalRows(){
+  const q=(query||"").toLowerCase();
+  const rows=liveJ().filter(z=>{
+    if(jf.год && (z.дата||"").slice(0,4)!==jf.год) return false;
+    if(jf.метод && !(z.методы&&z.методы[jf.метод])) return false;
+    if(jf.статус && (z.статус||"")!==jf.статус) return false;
+    if(q && !((z.объект||"")+(z.акт||"")+(z.наименование||"")+(z.зав||"")+(z.рег||"")+
+              methodsOf(z).join(" ")+(z.дата||"")).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const key=z=>{ switch(jsort.c){
+    case "акт": return z.акт||"";
+    case "объект": return z.объект||"";
+    case "методы": return methodsOf(z).join(" ");
+    case "статус": return z.статус||"";
+    default: return z.дата||""; } };
+  // Пустые значения всегда внизу — и по возрастанию, и по убыванию:
+  // иначе сортировка по № акта поднимает наверх записи без номера.
+  return rows.sort((a,b)=>{
+    const A=String(key(a)||""), B=String(key(b)||"");
+    if(!A && !B) return 0;
+    if(!A) return 1;
+    if(!B) return -1;
+    return A.localeCompare(B,"ru",{numeric:true})*jsort.d;
+  });
+}
+
 // ── Журнал ────────────────────────────────────────────────
 function renderJournal(){
-  const q=query.toLowerCase();
-  const rows=liveJ().filter(z=>!q ||
-    (z.объект+z.акт+z.наименование+z.зав+z.рег+methodsOf(z).join(" ")+z.дата).toLowerCase().includes(q));
+  const rows=journalRows();
+  const годы=[...new Set(liveJ().map(z=>(z.дата||"").slice(0,4)).filter(Boolean))].sort().reverse();
+  const статусы=[...new Set(liveJ().map(z=>z.статус).filter(Boolean))].sort();
+  const методыЕсть=METHODS.filter(m=>liveJ().some(z=>z.методы&&z.методы[m]));
+  const естьФильтр=jf.год||jf.метод||jf.статус||query;
+  const opt=(cur,arr,пусто)=>`<option value="">${пусто}</option>`+
+    arr.map(v=>`<option value="${esc(v)}"${v===cur?" selected":""}>${esc(v)}</option>`).join("");
+  const стрелка=c=>jsort.c===c?(jsort.d===1?" ▲":" ▼"):"";
+  const th=(c,l)=>`<th class="sortable" onclick="sortJournal('${c}')">${l}${стрелка(c)}</th>`;
   const body=rows.length?rows.map(z=>`
     <tr onclick="showJournal('${esc(z.id)}')">
       <td class="num">${esc(z.акт)||"—"}</td>
@@ -440,8 +501,16 @@ function renderJournal(){
       <button class="btn" onclick="window.print()">⎙ PDF</button>
       <button class="btn" onclick="backupSave()" title="Резервная копия всей базы в файл">▼ Копия</button>
     </div>
+    <div class="filters noprint">
+      <label>Год <select onchange="setJF('год',this.value)">${opt(jf.год,годы,"все")}</select></label>
+      <label>Метод <select onchange="setJF('метод',this.value)">${opt(jf.метод,методыЕсть,"любой")}</select></label>
+      <label>Статус <select onchange="setJF('статус',this.value)">${opt(jf.статус,статусы,"любой")}</select></label>
+      ${естьФильтр?`<button class="btn" onclick="resetJF()">✕ Сбросить отбор</button>
+        <span class="fnote">показано ${rows.length} из ${liveJ().length}</span>`:
+        `<span class="fnote">заголовок таблицы — сортировка по клику</span>`}
+    </div>
     <div class="card"><div class="tblwrap"><table>
-      <thead><tr><th>№ акта</th><th>Дата</th><th>Объект контроля</th><th>Методы</th><th>Статус</th></tr></thead>
+      <thead><tr>${th("акт","№ акта")}${th("дата","Дата")}${th("объект","Объект контроля")}${th("методы","Методы")}${th("статус","Статус")}</tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
   const qb=document.getElementById("q");
   qb.addEventListener("input",()=>{query=qb.value;const p=qb.selectionStart;renderJournal();
@@ -1116,7 +1185,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
 function exportCSV(){
   let head,rowsF,name;
   if(curView==="journal"){head=["№ акта","Дата","Объект","Заводской №","Рег. №","Методы","Статус"];
-    rowsF=liveJ().map(z=>[z.акт,ru(z.дата),z.объект,z.зав,z.рег,methodsOf(z).join(" "),z.статус]);name="Журнал ЛНК";}
+    rowsF=journalRows().map(z=>[z.акт,ru(z.дата),z.объект,z.зав,z.рег,methodsOf(z).join(" "),z.статус]);name="Журнал ЛНК";}
   else if(curView==="objects"){head=["Наименование","Заводской №","Рег. №","Тип","Расположение","Материал"];
     rowsF=live(O).map(o=>[o.наименование,o.зав,o.рег,o.тип,o.место,o.материал]);name="Объекты ЛНК";}
   else if(curView==="si"){head=["Наименование","Тип","Заводской №","Метод","Поверка до","№ свидетельства"];

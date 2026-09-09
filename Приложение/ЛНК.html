@@ -183,16 +183,41 @@
   .formbtns{display:flex;gap:10px;margin-top:20px;align-items:center}
   .btn.danger{color:#fff;background:var(--danger);border-color:var(--danger)}
   .btn.danger:hover{filter:brightness(.92)}
-  .drawer .db .dbtns{display:flex;gap:8px;margin-bottom:10px}
+  .drawer .db .dbtns{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+
+  /* Документ (акт/заключение) */
+  .draftnote{background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);
+    border-radius:var(--radius);padding:9px 13px;font-size:12.5px;margin-bottom:14px}
+  .sheet{background:#fff;color:#111;max-width:820px;margin:0 auto;padding:40px 48px;
+    border:1px solid var(--line);border-radius:var(--card-radius);box-shadow:var(--shadow);
+    font-family:"Times New Roman",Georgia,serif;font-size:15px;line-height:1.5}
+  .sheet .org{text-align:center;font-weight:700;min-height:22px;outline:none}
+  .sheet .org:empty:before,.sheet .concl:empty:before{content:attr(data-ph);color:#aaa;font-weight:400;font-style:italic}
+  .sheet h1{text-align:center;font-size:20px;letter-spacing:1px;margin:16px 0 2px}
+  .sheet .docsub{text-align:center;font-size:14px;margin-bottom:4px}
+  .sheet .docmeta{text-align:center;color:#333;margin-bottom:18px}
+  .sheet .doch{font-weight:700;margin:16px 0 6px}
+  .doctbl{width:100%;border-collapse:collapse;margin:4px 0}
+  .doctbl td,.doctbl th{border:1px solid #8a8a8a;padding:6px 10px;font-size:13.5px;text-align:left;vertical-align:top}
+  .doctbl th{background:#f0f0f0}
+  .doctbl td.k{width:36%;color:#333}
+  .sheet .concl{min-height:70px;border:1px solid #ccc;border-radius:4px;padding:8px 10px;outline:none}
+  .sheet .signs{margin-top:26px}
+  .signrow{display:flex;align-items:flex-end;gap:12px;margin:16px 0 4px}
+  .signrow .line{flex:0 0 200px;border-bottom:1px solid #333;height:16px}
+  .signrow .nm{color:#333;font-size:13.5px}
 
   @media print{
     .app{display:block;height:auto}
-    .top,.side,.foot,.head .btn,.head .search,.veil,.drawer{display:none!important}
+    .top,.side,.foot,.head .btn,.head .search,.veil,.drawer,.noprint{display:none!important}
     .main{padding:0;overflow:visible} .card{border:0;box-shadow:none}
     .tblwrap{max-height:none;overflow:visible} th{position:static}
-    .print-only{display:block!important} @page{margin:12mm}
+    .print-only{display:block!important} @page{margin:14mm}
+    .sheet{border:0;box-shadow:none;max-width:none;padding:0;color:#000}
+    .sheet .concl{border:0;padding:0}
   }
   .print-only{display:none;font-size:17px;font-weight:700;margin-bottom:12px}
+  .noprint{}
 </style>
 </head>
 <body>
@@ -343,6 +368,7 @@ function showJournal(id){
   openDrawer("Акт № "+(z.акт||"—")+" от "+ru(z.дата), `
     <div class="dbtns">
       <button class="btn primary" onclick="closeDrawer();editJournal('${esc(z.id)}')">✎ Изменить</button>
+      <button class="btn" onclick="closeDrawer();renderDoc('${esc(z.id)}')">▦ Документ</button>
       <button class="btn danger" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>
     </div>
     ${F("Статус",z.статус)}${F("Объект",z.объект)}${F("Наименование в документе",z.наименование)}
@@ -352,6 +378,66 @@ function showJournal(id){
     <div class="sect">Движение экземпляров</div>
     ${F("В архив ЛНК",z.архив)}${F("Исходящий",z.исходящий)}${F("Отправитель",z.отправитель)}
     ${F("Примечание",z.примечание)}`);
+}
+
+// ── Документ по записи (печать / PDF) ─────────────────────
+// Структура НЕЙТРАЛЬНАЯ и черновая: точную форму акта/заключения не
+// выдумываю — вы её подтвердите или пришлёте образец, как с шаблонами
+// Word. Здесь показано, как запись ложится в документ и печатается.
+function getOrg(){ try{ return localStorage.getItem("lnk_org")||""; }catch(e){ return ""; } }
+function saveOrg(t){ try{ localStorage.setItem("lnk_org",(t||"").trim()); }catch(e){} }
+function saveConcl(id,t){ const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
+  z.заключение=t; saveJournal(); }
+function renderDoc(id){
+  const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
+  curView="doc";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
+  const o=objByName[z.объект]||objById[z.объект_ид]||{};
+  const row=(k,v)=>v?`<tr><td class="k">${k}</td><td>${esc(v)}</td></tr>`:"";
+  const mrows=methodsOf(z).map(m=>`<tr><td>${m}</td><td>${esc(z.методы[m].н)||"—"}</td><td>${esc(z.методы[m].исп)||"—"}</td></tr>`).join("")
+    ||`<tr><td colspan="3" style="text-align:center">методы не указаны</td></tr>`;
+  const signers=[...new Set(methodsOf(z).map(m=>z.методы[m].исп).filter(Boolean))];
+  const signRows=signers.map(s=>`<div class="signrow"><span class="line"></span><span class="nm">${esc(s)}</span></div>`).join("")
+    ||`<div class="signrow"><span class="line"></span><span class="nm">&nbsp;</span></div>`;
+  document.getElementById("main").innerHTML=`
+    <div class="head noprint">
+      <button class="btn" onclick="switchView('journal')">← Назад</button>
+      <h2 style="font-size:16px">Документ по записи</h2>
+      <div class="spring"></div>
+      <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button>
+    </div>
+    <div class="draftnote noprint">Черновик формы. Точную форму акта/протокола пришлите —
+      подставлю ваши поля и вёрстку. Наименование организации и заключение можно
+      вписать прямо в документе (сохранятся).</div>
+    <div class="sheet">
+      <div class="org" contenteditable="true" data-ph="Наименование организации (нажмите и впишите)"
+           oninput="saveOrg(this.innerText)">${esc(getOrg())}</div>
+      <h1>ЗАКЛЮЧЕНИЕ</h1>
+      <div class="docsub">о результатах неразрушающего контроля</div>
+      <div class="docmeta">№ ${esc(z.акт)||"____"} от ${ru(z.дата)||"__________"}</div>
+
+      <div class="doch">1. Объект контроля</div>
+      <table class="doctbl"><tbody>
+        ${row("Наименование", z.наименование||z.объект)}
+        ${row("Заводской №", z.зав)}${row("Регистрационный / учётный №", z.рег)}
+        ${row("Тип / группа", o.тип)}${row("Материал", o.материал)}
+        ${row("Рабочее давление", o.давление)}${row("Рабочая среда", o.среда)}
+        ${row("Расположение", o.место)}
+      </tbody></table>
+
+      <div class="doch">2. Проведённый контроль</div>
+      <table class="doctbl"><thead><tr><th style="width:26%">Метод</th><th style="width:32%">№ протокола</th><th>Исполнитель</th></tr></thead>
+        <tbody>${mrows}</tbody></table>
+
+      <div class="doch">3. Заключение</div>
+      <div class="concl" contenteditable="true" data-ph="Впишите заключение по результатам контроля…"
+           oninput="saveConcl('${esc(z.id)}',this.innerText)">${esc(z.заключение||"")}</div>
+
+      <div class="signs">
+        <div class="doch" style="border:0">Специалисты, проводившие контроль:</div>
+        ${signRows}
+      </div>
+    </div>`;
 }
 
 // ── Ввод и правка записи ──────────────────────────────────

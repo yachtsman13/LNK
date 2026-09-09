@@ -169,6 +169,22 @@
   .placeholder{display:grid;place-items:center;height:65%;color:var(--muted);text-align:center}
   .placeholder .big{font-size:44px;margin-bottom:10px;opacity:.5}
 
+  /* Редактор записи */
+  .form{max-width:780px}
+  .form .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
+  .form label.wide{grid-column:1/-1}
+  .form input,.form select,.form textarea{padding:8px 10px;border:1px solid var(--line);
+    border-radius:var(--radius);font:inherit;color:var(--ink);background:var(--input-bg)}
+  .form textarea{resize:vertical;min-height:52px}
+  .form .hint{font-size:11.5px;color:var(--faint);min-height:15px}
+  .mrow{display:grid;grid-template-columns:70px 1fr 1.5fr;gap:8px;align-items:center;margin:5px 0}
+  .mrow .mname{font-weight:600;color:var(--muted);font-size:13px}
+  .formbtns{display:flex;gap:10px;margin-top:20px;align-items:center}
+  .btn.danger{color:#fff;background:var(--danger);border-color:var(--danger)}
+  .btn.danger:hover{filter:brightness(.92)}
+  .drawer .db .dbtns{display:flex;gap:8px;margin-bottom:10px}
+
   @media print{
     .app{display:block;height:auto}
     .top,.side,.foot,.head .btn,.head .search,.veil,.drawer{display:none!important}
@@ -235,7 +251,27 @@
 const DB = JSON.parse(document.getElementById("lnk-data").textContent);
 const METHODS = DB.методы || ["ВИК","УЗД","УЗТ","АЭ","ТВ","ТК","ВД","МК"];
 const objById = {}; (DB.объекты||[]).forEach(o=>objById[o.id]=o);
+const objByName = {}; (DB.объекты||[]).forEach(o=>{ if(o.наименование) objByName[o.наименование]=o; });
 let curView="journal", query="";
+
+// ── Рабочий журнал (правки живут в localStorage поверх вшитых данных) ──
+// Данные вшиты в файл, поэтому редактируемая копия журнала хранится в
+// памяти браузера. Ключ привязан к версии данных: пришлёт новый файл с
+// новой версией — сядем на его записи, а не на старую копию.
+const STORE_KEY = "lnk_journal_" + (DB.версия || "0");
+let J;
+function loadJournal(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ const p=JSON.parse(raw); if(Array.isArray(p)) return p; }
+  }catch(e){}
+  return JSON.parse(JSON.stringify(DB.журнал));   // первая загрузка — копия вшитых
+}
+function saveJournal(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(J)); }catch(e){ toast("Не удалось сохранить в память браузера"); }
+  setChrome();
+}
+function newId(){ return "З-" + Date.now().toString(36).toUpperCase(); }
 
 // ── helpers ───────────────────────────────────────────────
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -248,11 +284,11 @@ function statusClass(s){ s=(s||"").toLowerCase();
 function methodsOf(z){ return Object.keys(z.методы||{}); }
 
 function setChrome(){
-  document.getElementById("cJournal").textContent=DB.журнал.length;
+  document.getElementById("cJournal").textContent=J.length;
   document.getElementById("cObjects").textContent=DB.объекты.length;
   document.getElementById("cSi").textContent=DB.си.length;
   document.getElementById("cPeople").textContent=DB.специалисты.length;
-  document.getElementById("fRows").textContent=DB.журнал.length;
+  document.getElementById("fRows").textContent=J.length;
   document.getElementById("fBuilt").textContent=ru(DB.собрано)||DB.собрано||"—";
   document.getElementById("verTag").textContent="v"+(DB.версия||"?")+" • реальные данные";
 }
@@ -260,7 +296,7 @@ function setChrome(){
 // ── Журнал ────────────────────────────────────────────────
 function renderJournal(){
   const q=query.toLowerCase();
-  const rows=DB.журнал.filter(z=>!q ||
+  const rows=J.filter(z=>!q ||
     (z.объект+z.акт+z.наименование+z.зав+z.рег+methodsOf(z).join(" ")+z.дата).toLowerCase().includes(q));
   const body=rows.length?rows.map(z=>`
     <tr onclick="showJournal('${esc(z.id)}')">
@@ -273,11 +309,14 @@ function renderJournal(){
   document.getElementById("main").innerHTML=`
     <div class="print-only">Журнал учёта заключений ЛНК</div>
     <div class="head">
-      <h2>Журнал</h2><span class="sub" id="cnt">${rows.length} из ${DB.журнал.length}</span>
+      <h2>Журнал</h2><span class="sub" id="cnt">${rows.length} из ${J.length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: объект, № акта, зав. №, метод…" value="${esc(query)}"></div>
       <div class="spring"></div>
-      <button class="btn" onclick="exportCSV()">▤ Экспорт в Excel</button>
-      <button class="btn" onclick="window.print()">⎙ Печать / PDF</button>
+      <button class="btn primary" onclick="editJournal(null)">＋ Добавить запись</button>
+      <button class="btn" onclick="exportCSV()">▤ Excel</button>
+      <button class="btn" onclick="window.print()">⎙ PDF</button>
+      <button class="btn" onclick="backupSave()" title="Сохранить копию журнала в файл">▼ Копия</button>
+      <button class="btn" onclick="backupOpen()" title="Восстановить журнал из файла-копии">▲</button>
     </div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>№ акта</th><th>Дата</th><th>Объект контроля</th><th>Методы</th><th>Статус</th></tr></thead>
@@ -287,11 +326,15 @@ function renderJournal(){
     const n=document.getElementById("q");n.focus();n.setSelectionRange(p,p);});
 }
 function showJournal(id){
-  const z=DB.журнал.find(x=>String(x.id)===String(id)); if(!z) return;
+  const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
   const mrows=methodsOf(z).map(m=>`<tr><td>${m}</td><td>${esc(z.методы[m].н)||"—"}</td><td>${esc(z.методы[m].исп)||"—"}</td></tr>`).join("")
     ||`<tr><td colspan="3" class="muted">методы не указаны</td></tr>`;
   const F=(k,v)=>v?`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`:"";
   openDrawer("Акт № "+(z.акт||"—")+" от "+ru(z.дата), `
+    <div class="dbtns">
+      <button class="btn primary" onclick="closeDrawer();editJournal('${esc(z.id)}')">✎ Изменить</button>
+      <button class="btn danger" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>
+    </div>
     ${F("Статус",z.статус)}${F("Объект",z.объект)}${F("Наименование в документе",z.наименование)}
     ${F("Заводской №",z.зав)}${F("Рег. / уч. №",z.рег)}${F("Подразделение",z.подразделение)}
     <div class="sect">Методы контроля</div>
@@ -299,6 +342,128 @@ function showJournal(id){
     <div class="sect">Движение экземпляров</div>
     ${F("В архив ЛНК",z.архив)}${F("Исходящий",z.исходящий)}${F("Отправитель",z.отправитель)}
     ${F("Примечание",z.примечание)}`);
+}
+
+// ── Ввод и правка записи ──────────────────────────────────
+const STATUSES = ["Черновик","В работе","Зарегистрирован","Аннулирован"];
+function editJournal(id){
+  curView="edit";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
+  const z = id ? J.find(x=>String(x.id)===String(id)) : null;
+  const val=(v)=>esc(v==null?"":v);
+  const opts=(arr,cur)=>arr.map(x=>`<option${x===cur?" selected":""}>${esc(x)}</option>`).join("");
+  const objlist = (DB.объекты||[]).map(o=>`<option value="${esc(o.наименование)}">`).join("");
+  const splist = (DB.специалисты||[]).map(p=>`<option value="${esc(p.вдок||p.фио)}">`).join("");
+  const mrows = METHODS.map(m=>{
+    const mm=(z&&z.методы&&z.методы[m])||{};
+    return `<div class="mrow"><div class="mname">${m}</div>
+      <input id="m_${m}_н" placeholder="№" value="${val(mm.н)}">
+      <input id="m_${m}_исп" list="splist" placeholder="исполнитель" value="${val(mm.исп)}"></div>`;
+  }).join("");
+  document.getElementById("main").innerHTML=`
+    <div class="head"><h2>${z?"Правка записи":"Новая запись"}</h2>
+      <span class="sub">${z?("акт № "+(z.акт||"—")):"журнал"}</span></div>
+    <datalist id="objlist">${objlist}</datalist>
+    <datalist id="splist">${splist}</datalist>
+    <div class="card" style="padding:20px" data-id="${z?esc(z.id):""}">
+      <div class="form">
+        <div class="sect" style="margin-top:0">Основное</div>
+        <div class="grid">
+          <label>Статус<select id="e_статус">${opts(STATUSES,z?z.статус:"Черновик")}</select></label>
+          <label>№ акта<input id="e_акт" value="${val(z&&z.акт)}" placeholder="напр.: 128-2026"></label>
+          <label>Дата контроля<input id="e_дата" type="date" value="${z?val(z.дата):new Date().toISOString().slice(0,10)}"></label>
+          <label>Заказывающее подразделение<input id="e_подразделение" value="${val(z&&z.подразделение)}"></label>
+        </div>
+        <div class="sect">Объект контроля</div>
+        <div class="grid">
+          <label class="wide">Объект (из справочника или вручную)
+            <input id="e_объект" list="objlist" value="${val(z&&z.объект)}" oninput="objHint()" placeholder="Начните вводить наименование…">
+            <span class="hint" id="objHint"></span></label>
+          <label class="wide">Наименование в документе (если отличается)
+            <input id="e_наим" value="${val(z&&z.наименование)}"></label>
+        </div>
+        <div class="sect">Методы контроля <span class="hint" style="display:inline">— заполняйте только применённые</span></div>
+        ${mrows}
+        <div class="sect">Движение экземпляров</div>
+        <div class="grid">
+          <label class="wide">В архив ЛНК (№ экз., дата)<input id="e_архив" value="${val(z&&z.архив)}"></label>
+          <label class="wide">Исходящий (№ экз., дата отправки)<input id="e_исходящий" value="${val(z&&z.исходящий)}"></label>
+          <label>Отправитель<input id="e_отправитель" list="splist" value="${val(z&&z.отправитель)}"></label>
+        </div>
+        <div class="sect">Примечание</div>
+        <div class="grid"><label class="wide"><textarea id="e_примечание">${val(z&&z.примечание)}</textarea></label></div>
+        <div class="formbtns">
+          <button class="btn primary" onclick="saveJournalRec('${z?esc(z.id):""}')">✓ Сохранить</button>
+          <button class="btn" onclick="switchView('journal')">Отмена</button>
+          ${z?`<button class="btn danger" style="margin-left:auto" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>`:""}
+        </div>
+      </div>
+    </div>`;
+  objHint();
+  const f=document.getElementById("e_объект"); if(f&&!z) setTimeout(()=>f.focus(),50);
+}
+function objHint(){
+  const name=(document.getElementById("e_объект")||{}).value||"";
+  const o=objByName[name.trim()];
+  const h=document.getElementById("objHint"); if(!h) return;
+  h.textContent = o ? ("Из справочника: зав. № "+(o.зав||"—")+", рег. "+(o.рег||"—")) :
+    (name.trim()? "Нет в справочнике — зав./рег. № подставлены не будут" : "");
+}
+function saveJournalRec(id){
+  const v=(k)=>{const el=document.getElementById(k);return el?el.value.trim():"";};
+  const объект=v("e_объект");
+  if(!объект && !v("e_акт")){ toast("Заполните объект или № акта"); return; }
+  const методы={};
+  METHODS.forEach(m=>{
+    const н=v("m_"+m+"_н"), исп=v("m_"+m+"_исп");
+    if(н||исп) методы[m]={н:н,исп:исп};
+  });
+  const spr=objByName[объект]||{};
+  const дата=v("e_дата");
+  const rec={
+    статус:v("e_статус"), акт:v("e_акт"), дата:дата, год:дата?дата.slice(0,4):"",
+    подразделение:v("e_подразделение"), объект:объект,
+    объект_ид:spr.id||"", наименование:v("e_наим")||объект,
+    зав:spr.зав||"", рег:spr.рег||"", методы:методы,
+    архив:v("e_архив"), исходящий:v("e_исходящий"), отправитель:v("e_отправитель"),
+    примечание:v("e_примечание")
+  };
+  if(id){ const i=J.findIndex(x=>String(x.id)===String(id)); if(i>=0) J[i]=Object.assign({},J[i],rec); }
+  else { rec.id=newId(); rec.нп=J.length+1; J.unshift(rec); }
+  saveJournal(); switchView("journal");
+  toast(id?"Запись изменена":"Запись добавлена");
+}
+function delJournal(id){
+  const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
+  if(!confirm("Удалить запись?\n\nАкт № "+(z.акт||"—")+" · "+(z.объект||""))) return;
+  J=J.filter(x=>String(x.id)!==String(id));
+  saveJournal(); closeDrawer(); switchView("journal"); toast("Запись удалена");
+}
+
+// ── Резервная копия журнала в файл ────────────────────────
+function backupSave(){
+  const name="Журнал ЛНК "+new Date().toISOString().slice(0,10)+".json";
+  const blob=new Blob([JSON.stringify({тип:"журнал ЛНК",версия:DB.версия,записи:J},null,1)],
+    {type:"application/json"}),url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},400);
+  toast("Копия сохранена: "+J.length+" записей");
+}
+let _fileIn;
+function backupOpen(){
+  if(!_fileIn){ _fileIn=document.createElement("input"); _fileIn.type="file"; _fileIn.accept=".json";
+    _fileIn.addEventListener("change",e=>{
+      const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
+      rd.onload=()=>{ try{
+        const d=JSON.parse(rd.result); const arr=Array.isArray(d)?d:d.записи;
+        if(!Array.isArray(arr)) throw new Error("нет записей");
+        if(!confirm("Заменить текущий журнал ("+J.length+" записей) на файл ("+arr.length+" записей)?")) return;
+        J=arr; saveJournal(); switchView("journal"); toast("Загружено записей: "+arr.length);
+      }catch(err){ toast("Не удалось прочитать файл: "+err.message); } e.target.value=""; };
+      rd.readAsText(f);
+    });
+  }
+  _fileIn.click();
 }
 
 // ── Объекты ───────────────────────────────────────────────
@@ -328,7 +493,7 @@ function renderObjects(){
 function showObject(id){
   const o=objById[id]; if(!o) return;
   const F=(k,v)=>v?`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`:"";
-  const cnt=DB.журнал.filter(z=>z.объект===o.наименование).length;
+  const cnt=J.filter(z=>z.объект===o.наименование).length;
   openDrawer(o.наименование,`
     ${F("Заводской №",o.зав)}${F("Регистрационный №",o.рег)}${F("Учётный №",o.учет)}${F("Инвентарный №",o.инв)}
     ${F("Тип / группа",o.тип)}${F("Расположение",o.место)}${F("Изготовитель",o.изготовитель)}${F("Паспорт",o.паспорт)}
@@ -436,7 +601,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
 function exportCSV(){
   let head,rowsF,name;
   if(curView==="journal"){head=["№ акта","Дата","Объект","Заводской №","Рег. №","Методы","Статус"];
-    rowsF=DB.журнал.map(z=>[z.акт,ru(z.дата),z.объект,z.зав,z.рег,methodsOf(z).join(" "),z.статус]);name="Журнал ЛНК";}
+    rowsF=J.map(z=>[z.акт,ru(z.дата),z.объект,z.зав,z.рег,methodsOf(z).join(" "),z.статус]);name="Журнал ЛНК";}
   else if(curView==="objects"){head=["Наименование","Заводской №","Рег. №","Тип","Расположение","Материал"];
     rowsF=DB.объекты.map(o=>[o.наименование,o.зав,o.рег,o.тип,o.место,o.материал]);name="Объекты ЛНК";}
   else if(curView==="si"){head=["Наименование","Тип","Заводской №","Метод","Поверка до","№ свидетельства"];
@@ -476,6 +641,7 @@ function applyTheme(t){
   document.getElementById("theme").addEventListener("change",function(){ applyTheme(this.value); });
 })();
 
+J = loadJournal();
 setChrome(); switchView("journal");
 </script>
 </body>

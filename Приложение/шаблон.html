@@ -438,8 +438,7 @@ function renderJournal(){
       <button class="btn primary" onclick="editJournal(null)">＋ Добавить запись</button>
       <button class="btn" onclick="exportCSV()">▤ Excel</button>
       <button class="btn" onclick="window.print()">⎙ PDF</button>
-      <button class="btn" onclick="backupSave()" title="Сохранить копию журнала в файл">▼ Копия</button>
-      <button class="btn" onclick="backupOpen()" title="Восстановить журнал из файла-копии">▲</button>
+      <button class="btn" onclick="backupSave()" title="Резервная копия всей базы в файл">▼ Копия</button>
     </div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>№ акта</th><th>Дата</th><th>Объект контроля</th><th>Методы</th><th>Статус</th></tr></thead>
@@ -772,14 +771,19 @@ function delJournal(id){
   saveJournal(); closeDrawer(); switchView("journal"); toast("Запись удалена");
 }
 
-// ── Резервная копия журнала в файл ────────────────────────
+// ── Резервная копия ВСЕЙ базы в файл ──────────────────────
+// Копия охватывает журнал и все три справочника: с тех пор как
+// справочники стали редактируемыми, копия только журнала оставляла бы
+// половину работы без страховки. Восстановление — именно замена
+// (в этом смысл копии), поэтому спрашивает подтверждение.
 function backupSave(){
-  const name="Журнал ЛНК "+new Date().toISOString().slice(0,10)+".json";
-  const blob=new Blob([JSON.stringify({тип:"журнал ЛНК",версия:DB.версия,записи:J},null,1)],
-    {type:"application/json"}),url=URL.createObjectURL(blob);
-  const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();
-  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},400);
-  toast("Копия сохранена: "+liveJ().length+" записей");
+  const ws=getWS();
+  const name="Резервная копия ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
+  dl(name, JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
+    версия:DB.версия, сохранено:new Date().toISOString(),
+    записи:J, объекты:O, приборы:S, специалисты:P }, null, 1));
+  toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
+        ", СИ "+live(S).length+", спец. "+live(P).length);
 }
 let _fileIn;
 function backupOpen(){
@@ -787,10 +791,25 @@ function backupOpen(){
     _fileIn.addEventListener("change",e=>{
       const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
       rd.onload=()=>{ try{
-        const d=JSON.parse(rd.result); const arr=Array.isArray(d)?d:d.записи;
-        if(!Array.isArray(arr)) throw new Error("нет записей");
-        if(!confirm("Заменить текущий журнал ("+J.length+" записей) на файл ("+arr.length+" записей)?")) return;
-        J=arr; saveJournal(); switchView("journal"); toast("Загружено записей: "+arr.length);
+        const d=JSON.parse(rd.result);
+        const jarr=Array.isArray(d)?d:d.записи;                 // старая копия — только журнал
+        const полная=d && (d.объекты||d.приборы||d.специалисты);
+        if(!Array.isArray(jarr) && !полная) throw new Error("не файл копии");
+        const было="журнал "+liveJ().length+", объекты "+live(O).length+", СИ "+live(S).length+", спец. "+live(P).length;
+        const станет=(Array.isArray(jarr)?("журнал "+jarr.filter(z=>!z.удалено).length):"журнал без изменений")
+          + (полная? (", объекты "+(d.объекты||[]).filter(z=>!z.удалено).length
+                    +", СИ "+(d.приборы||[]).filter(z=>!z.удалено).length
+                    +", спец. "+(d.специалисты||[]).filter(z=>!z.удалено).length) : "");
+        if(!confirm("ЗАМЕНИТЬ текущие данные копией из файла?\n\nСейчас: "+было+
+                    "\nСтанет: "+станет+"\n\nЭто не слияние — текущие данные будут заменены.")) return;
+        if(Array.isArray(jarr)){ J=jarr; saveJournal(); }
+        if(полная){
+          if(Array.isArray(d.объекты)){ O=d.объекты; saveReg(REG_OBJ,O); }
+          if(Array.isArray(d.приборы)){ S=d.приборы; saveReg(REG_SI,S); }
+          if(Array.isArray(d.специалисты)){ P=d.специалисты; saveReg(REG_PPL,P); }
+          rebuildObjIndex();
+        }
+        setChrome(); switchView("dash"); toast("Восстановлено из копии");
       }catch(err){ toast("Не удалось прочитать файл: "+err.message); } e.target.value=""; };
       rd.readAsText(f);
     });
@@ -1055,8 +1074,21 @@ function renderExchange(){
       </div>
     </div>
 
-    <div class="panel">
-      <h3>Как это работает</h3>
+    <div class="cols">
+      <div class="panel">
+        <h3>◆ Резервная копия всей базы</h3>
+        <div class="note">Копия — это страховка на случай, когда память браузера очистят
+          или понадобится перенести всё на другой компьютер. В файл идёт <b>всё</b>:
+          журнал и три справочника. Раз в день — достаточно.</div>
+        <div class="formbtns">
+          <button class="btn primary" onclick="backupSave()">▼ Сохранить копию</button>
+          <button class="btn" onclick="backupOpen()">▲ Восстановить из копии</button>
+        </div>
+        <div class="note"><b>Восстановление заменяет данные</b>, а не сливает их — в отличие
+          от приёма файлов обмена. Программа покажет, что было и что станет, и переспросит.</div>
+      </div>
+      <div class="panel">
+        <h3>Как это работает</h3>
       <div class="plist" style="font-size:13.5px;line-height:1.6">
         <div class="pr" style="cursor:default"><b>1.</b><span class="g" style="white-space:normal">Каждое место нажимает «Выгрузить» → относит файл мастеру (флешка/общая папка).</span></div>
         <div class="pr" style="cursor:default"><b>2.</b><span class="g" style="white-space:normal">Мастер «Принять файлы» — выбирает файлы всех мест разом. Получается общий журнал (свод).</span></div>

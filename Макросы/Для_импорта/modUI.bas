@@ -43,14 +43,27 @@ Private Const ћ≈Ќё_я„≈… » As String = "Cell"
 ' IRibbonControl Ч из библиотеки Office, она подключена в любом проекте
 ' Excel по умолчанию. ≈сли вдруг окажетс€, что нет, книга не соберЄтс€ с
 ' ошибкой ЂUser-defined type not definedї именно на этой строке.
+' ќшибки перехватываютс€ и здесь, хот€ дальше, в «апуститьѕунктћеню,
+' стоит общий перехват. Ёти несколько строк до него Ч единственное, что
+' осталось без прикрыти€: сбой на них вывел бы окно VBA с кнопкой
+' ЂDebugї, а еЄ нажатие ставит проект на паузу, после которой не
+' работает уже ничего.
 Public Sub ЋентаЌажата(control As IRibbonControl)
     Dim команда As String
+
+    On Error GoTo —бой
     команда = Trim$(CStr(control.Tag))
     If команда = "" Then
         MsgBox "” этой кнопки ленты не задана команда.", vbExclamation, "Ћента ЋЌ "
         Exit Sub
     End If
     modMenu.«апуститьѕунктћеню команда
+    Exit Sub
+
+—бой:
+    MsgBox " нопку ленты не удалось разобрать." & vbCrLf & vbCrLf & _
+           "ќшибка " & Err.Number & ": " & Err.Description, _
+           vbExclamation, "Ћента ЋЌ "
 End Sub
 
 

@@ -43,14 +43,27 @@ Private Const МЕНЮ_ЯЧЕЙКИ As String = "Cell"
 ' IRibbonControl — из библиотеки Office, она подключена в любом проекте
 ' Excel по умолчанию. Если вдруг окажется, что нет, книга не соберётся с
 ' ошибкой «User-defined type not defined» именно на этой строке.
+' Ошибки перехватываются и здесь, хотя дальше, в ЗапуститьПунктМеню,
+' стоит общий перехват. Эти несколько строк до него — единственное, что
+' осталось без прикрытия: сбой на них вывел бы окно VBA с кнопкой
+' «Debug», а её нажатие ставит проект на паузу, после которой не
+' работает уже ничего.
 Public Sub ЛентаНажата(control As IRibbonControl)
     Dim команда As String
+
+    On Error GoTo Сбой
     команда = Trim$(CStr(control.Tag))
     If команда = "" Then
         MsgBox "У этой кнопки ленты не задана команда.", vbExclamation, "Лента ЛНК"
         Exit Sub
     End If
     modMenu.ЗапуститьПунктМеню команда
+    Exit Sub
+
+Сбой:
+    MsgBox "Кнопку ленты не удалось разобрать." & vbCrLf & vbCrLf & _
+           "Ошибка " & Err.Number & ": " & Err.Description, _
+           vbExclamation, "Лента ЛНК"
 End Sub
 
 

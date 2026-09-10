@@ -852,6 +852,7 @@ function срокЛаб(дата){
   return ["ok", "до " + ru(d)];
 }
 function saveЛаб(о){
+  о=Object.assign({}, о, {изменено:new Date().toISOString(), место:getWS().код});
   try{ localStorage.setItem("lnk_lab", JSON.stringify(о)); }catch(e){}
 }
 function saveЛабИзФормы(){
@@ -2335,7 +2336,8 @@ function данныеКопии(){
   const ws=getWS();
   return JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ }, null, 1);
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ,
+    лаборатория:getЛаб() }, null, 1);
 }
 function имяКопии(){
   const d=new Date(), дв=n=>(n<10?"0":"")+n;
@@ -2392,7 +2394,8 @@ function backupSave(){
   const name="Резервная копия ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ }, null, 1));
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ,
+    лаборатория:getЛаб() }, null, 1));
   try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
   toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
         ", СИ "+live(S).length+", спец. "+live(P).length);
@@ -2423,6 +2426,7 @@ function backupOpen(){
           if(Array.isArray(d.ппр)){ ОТМ=d.ппр; saveReg(REG_ППР,ОТМ); }
           if(Array.isArray(d.подразделения)){ ПОДР=d.подразделения; saveReg(REG_ПОДР,ПОДР); }
           if(Array.isArray(d.падежи)){ ПАДЕЖИ=d.падежи; saveReg(REG_ПАДЕЖ,ПАДЕЖИ); }
+          if(d.лаборатория && typeof d.лаборатория==="object") saveЛаб(d.лаборатория);
           rebuildObjIndex();
         }
         setChrome(); switchView("dash"); toast("Восстановлено из копии");
@@ -2633,7 +2637,7 @@ function exchangeExport(){
   const payload={ тип:"обмен ЛНК", формат:2, место:ws.код, мастер:ws.мастер,
     версия:DB.версия, выгружено:new Date().toISOString(),
     записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ,
-    право:getGrant(), названия:имена() };
+    право:getGrant(), названия:имена(), лаборатория:getЛаб() };
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
   try{ localStorage.setItem("lnk_last_export", new Date().toISOString()); }catch(e){}
@@ -2667,6 +2671,10 @@ function exchangeImport(){
             mergeInto(ОТМ,REG_ППР,d.ппр);
             mergeInto(ПОДР,REG_ПОДР,d.подразделения);
             mergeInto(ПАДЕЖИ,REG_ПАДЕЖ,d.падежи);
+            // Карточка лаборатории — свежее побеждает, как право и названия.
+            if(d.лаборатория && d.лаборатория.изменено &&
+               d.лаборатория.изменено > (getЛаб().изменено||""))
+              saveЛаб(d.лаборатория);
             // Названия документов по методам — свежее побеждает.
             if(d.названия && d.названия.изменено && d.названия.изменено > имена().изменено)
               saveИмена({имена:Object.assign({}, имена().имена, d.названия.имена||{}),

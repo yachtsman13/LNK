@@ -456,8 +456,22 @@ function починитьАкты(){
 }
 function saveJournal(){
   try{ localStorage.setItem(STORE_KEY, JSON.stringify({baseVersion:DB.версия, сохранено:new Date().toISOString(), rows:J})); }
-  catch(e){ toast("Не удалось сохранить в память браузера"); }
+  catch(e){ переполнение(e); }
   setChrome();
+  копияПоСлучаю();
+}
+// Отказ записи — не мелочь на полсекунды: правка НЕ сохранена. Молчать
+// об этом нельзя, поэтому не подсказка внизу экрана, а окно с ответом,
+// что делать.
+function переполнение(e){
+  const квота = e && (e.name==="QuotaExceededError" || e.code===22);
+  if(квота) alert("ПАМЯТЬ БРАУЗЕРА ЗАПОЛНЕНА — правка не сохранена.\n\n"+
+    "Что сделать сейчас:\n"+
+    "1. «Обмен» → «Сохранить копию» (файл уйдёт в папку загрузок).\n"+
+    "2. Удалите из журнала то, что уже сдано в архив, либо сообщите мне — "+
+    "перенесу базу в хранилище на 1 ГБ вместо 5 МБ.\n\n"+
+    "Пока память не освободится, новые правки сохраняться не будут.");
+  else toast("Не удалось сохранить в память браузера");
 }
 // ── Рабочее место (код для обмена) ────────────────────────
 // Код места входит в id новых записей — тогда при слиянии журналов
@@ -492,7 +506,9 @@ function loadReg(key, seed){
   return JSON.parse(JSON.stringify(seed||[]));
 }
 function saveReg(key, arr){
-  try{ localStorage.setItem(key, JSON.stringify({версия:DB.версия, сохранено:new Date().toISOString(), rows:arr})); }catch(e){}
+  try{ localStorage.setItem(key, JSON.stringify({версия:DB.версия, сохранено:new Date().toISOString(), rows:arr})); }
+  catch(e){ переполнение(e); }
+  копияПоСлучаю();
 }
 function live(arr){ return arr.filter(z=>!z.удалено); }
 function rebuildObjIndex(){
@@ -1397,8 +1413,17 @@ function renderDash(){
     }
   }
 
+  const дн=днейБезКопии(), об=объёмХранилища();
+  const тревога = дн===null
+    ? `<b>Резервной копии ещё не было.</b> Память браузера могут очистить — и работа пропадёт вся сразу.`
+    : (дн>=3 ? `<b>Резервной копии не было ${дн} дн.</b> Это единственная страховка от очистки памяти браузера.` : "");
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>Пульт</h2><span class="sub">на ${ru(new Date().toISOString().slice(0,10))}</span></div>
+    ${тревога?`<div class="draftnote" style="cursor:pointer" onclick="switchView('exchange')">
+      ◆ ${тревога} Нажмите — открою «Обмен», там одна кнопка.</div>`:""}
+    ${об.доля>0.8?`<div class="draftnote" style="cursor:pointer;border-color:var(--danger);color:var(--danger)"
+      onclick="switchView('exchange')">▲ Память браузера заполнена на ${(об.доля*100).toFixed(0)}%.
+      Скоро правки перестанут сохраняться — откройте «Обмен».</div>`:""}
 
     <div class="tiles">
       ${tile(L.length,"записей журнала","accent","journal")}
@@ -1562,12 +1587,161 @@ function delJournal(id){
 // справочники стали редактируемыми, копия только журнала оставляла бы
 // половину работы без страховки. Восстановление — именно замена
 // (в этом смысл копии), поэтому спрашивает подтверждение.
+// ── База: где живут данные и чем они застрахованы ─────────
+// Данных «в файле рядом с программой» не бывает: страница, открытая с
+// диска, писать в свою папку сама не может. Поэтому рабочая база лежит
+// в памяти браузера, а настоящая страховка — копия в файл.
+//
+// Замерено в этом браузере: предел памяти ~5 МБ, сейчас занято 236 КБ на
+// 315 записей вместе со справочниками (~766 символов на запись) — то есть
+// запас примерно на 6500 записей. Далеко, но предел молчаливый: браузер
+// не предупреждает, он просто отказывает в записи, и правка пропадает.
+// Поэтому ниже и счётчик заполнения, и предупреждение заранее.
+const ПРЕДЕЛ_ХРАНИЛИЩА = 5 * 1024 * 1024;   // символов, проверено замером
+function объёмХранилища(){
+  let занято=0, по={};
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i), v=localStorage.getItem(k)||"";
+      if(k.indexOf("lnk_")!==0) continue;
+      по[k]=k.length+v.length; занято+=k.length+v.length;
+    }
+  }catch(e){}
+  // До первой правки память браузера пуста: данные ещё вшиты в файл
+  // программы. Считать запас по нулю нельзя — получилась бы бессмыслица
+  // вроде «хватит на 103 миллиона записей». Берём то, что реально ляжет
+  // в память при первом же сохранении.
+  let факт=0;
+  try{ факт=(JSON.stringify(J)+JSON.stringify(O)+JSON.stringify(S)+
+             JSON.stringify(P)+JSON.stringify(A)).length; }catch(e){}
+  const всего=Math.max(занято,факт);
+  const наЗапись = liveJ().length ? всего/liveJ().length : 0;
+  return { всего:всего, по:по, занято:занято,
+           доля: всего/ПРЕДЕЛ_ХРАНИЛИЩА,
+           местаНаЗаписей: наЗапись>1 ? Math.round((ПРЕДЕЛ_ХРАНИЛИЩА-всего)/наЗапись) : null };
+}
+
+// Папку для копий надо запомнить между запусками, а localStorage хранит
+// только строки — «ручку» на папку в него не положить. Для этого есть
+// IndexedDB, она в этом браузере из file:// работает (проверено).
+const ФС_БД="lnk_fs", ФС_ХР="ручки";
+function идб(){
+  return new Promise((ок,нет)=>{
+    let r; try{ r=indexedDB.open(ФС_БД,1); }catch(e){ return нет(e); }
+    r.onupgradeneeded=()=>{ try{ r.result.createObjectStore(ФС_ХР); }catch(e){} };
+    r.onsuccess=()=>ок(r.result); r.onerror=()=>нет(r.error);
+  });
+}
+function идбЗапись(ключ,знач){
+  return идб().then(db=>new Promise((ок,нет)=>{
+    const t=db.transaction(ФС_ХР,"readwrite");
+    t.objectStore(ФС_ХР).put(знач,ключ);
+    t.oncomplete=()=>{db.close();ок(true);}; t.onerror=()=>{db.close();нет(t.error);};
+  })).catch(()=>false);
+}
+function идбЧтение(ключ){
+  return идб().then(db=>new Promise((ок)=>{
+    const t=db.transaction(ФС_ХР,"readonly"), z=t.objectStore(ФС_ХР).get(ключ);
+    z.onsuccess=()=>{db.close();ок(z.result||null);}; z.onerror=()=>{db.close();ок(null);};
+  })).catch(()=>null);
+}
+
+const ЕСТЬ_ПАПКИ = (typeof window.showDirectoryPicker==="function");
+let _папка=null;
+async function папкаКопий(){ if(!_папка) _папка=await идбЧтение("папкаКопий"); return _папка; }
+async function правоНаПапку(спросить){
+  const h=await папкаКопий(); if(!h) return "нет папки";
+  try{
+    let p=await h.queryPermission({mode:"readwrite"});
+    if(p==="granted") return "есть";
+    if(спросить){ p=await h.requestPermission({mode:"readwrite"});
+                  if(p==="granted") return "есть"; }
+    return "нужно разрешение";
+  }catch(e){ return "нужно разрешение"; }
+}
+async function выбратьПапкуКопий(){
+  if(!ЕСТЬ_ПАПКИ){
+    alert("Этот браузер не умеет писать копии в выбранную папку.\n\n"+
+      "Так умеют Chrome и Edge. В остальных остаётся кнопка «Сохранить копию» — "+
+      "файл попадёт в папку загрузок.");
+    return;
+  }
+  try{
+    const h=await window.showDirectoryPicker({mode:"readwrite"});
+    _папка=h; await идбЗапись("папкаКопий",h);
+    toast("Папка для копий выбрана");
+    await копияВПапку(false);
+    renderExchange();
+  }catch(e){ if(e.name!=="AbortError") toast("Не удалось выбрать папку: "+e.name); }
+}
+async function забытьПапку(){
+  _папка=null; await идбЗапись("папкаКопий",null);
+  toast("Папка для копий забыта"); renderExchange();
+}
+
+function данныеКопии(){
+  const ws=getWS();
+  return JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
+    версия:DB.версия, сохранено:new Date().toISOString(),
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A }, null, 1);
+}
+function имяКопии(){
+  const d=new Date(), дв=n=>(n<10?"0":"")+n;
+  return "ЛНК копия "+d.getFullYear()+"-"+дв(d.getMonth()+1)+"-"+дв(d.getDate())+
+         " "+дв(d.getHours())+дв(d.getMinutes())+" ("+getWS().код+").json";
+}
+// Копий держим несколько поколений: одна-единственная копия бесполезна,
+// если испортили данные и записали поверх. Старые сверх ДЕРЖАТЬ удаляются.
+const ДЕРЖАТЬ_КОПИЙ=14;
+async function чиститьСтарые(){
+  const h=await папкаКопий(); if(!h) return 0;
+  try{
+    const свои=[];
+    for await (const [имя,ручка] of h.entries())
+      if(/^ЛНК копия .+\.json$/.test(имя) && ручка.kind==="file") свои.push(имя);
+    свои.sort();                                   // имя начинается с даты — сортировка хронологическая
+    const лишние=свои.slice(0, Math.max(0, свои.length-ДЕРЖАТЬ_КОПИЙ));
+    for(const имя of лишние) await h.removeEntry(имя);
+    return лишние.length;
+  }catch(e){ return 0; }
+}
+async function копияВПапку(тихо){
+  const h=await папкаКопий(); if(!h) return false;
+  if(await правоНаПапку(!тихо)!=="есть") return false;
+  try{
+    const ф=await h.getFileHandle(имяКопии(),{create:true});
+    const w=await ф.createWritable();
+    await w.write(данныеКопии()); await w.close();
+    try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
+    await чиститьСтарые();
+    if(!тихо) toast("Копия записана в папку");
+    return true;
+  }catch(e){ if(!тихо) toast("Не удалось записать копию: "+e.name); return false; }
+}
+// Копия делается сама, но не после каждой правки: раз в 10 минут работы
+// достаточно, а чаще — только мешает диску и глазу.
+let _когдаКопия=0;
+function копияПоСлучаю(){
+  const т=Date.now();
+  if(т-_когдаКопия < 10*60*1000) return;
+  _когдаКопия=т;
+  папкаКопий().then(h=>{ if(h) копияВПапку(true); });
+}
+function когдаКопия(){
+  try{ return localStorage.getItem("lnk_last_backup")||""; }catch(e){ return ""; }
+}
+function днейБезКопии(){
+  const t=когдаКопия(); if(!t) return null;
+  return Math.floor((Date.now()-new Date(t).getTime())/86400000);
+}
+
 function backupSave(){
   const ws=getWS();
   const name="Резервная копия ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
     записи:J, объекты:O, приборы:S, специалисты:P, акты:A }, null, 1));
+  try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
   toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
         ", СИ "+live(S).length+", спец. "+live(P).length);
 }
@@ -1842,6 +2016,7 @@ function saveWSfromForm(){
 }
 function renderExchange(){
   const ws=getWS();
+  const об=объёмХранилища(), дн=днейБезКопии();
   const мои=J.filter(z=>z.место===ws.код).length;
   const пометки=J.filter(z=>z.изменено).length;
   const last=(k,l)=>{ let t=""; try{t=localStorage.getItem(k)||"";}catch(e){}
@@ -1910,16 +2085,44 @@ function renderExchange(){
 
     <div class="cols">
       <div class="panel">
-        <h3>◆ Резервная копия всей базы</h3>
-        <div class="note">Копия — это страховка на случай, когда память браузера очистят
-          или понадобится перенести всё на другой компьютер. В файл идёт <b>всё</b>:
-          журнал и три справочника. Раз в день — достаточно.</div>
+        <h3>◆ База и резервные копии</h3>
+        <div class="bar"><span class="g" style="flex:1">Занято в памяти браузера</span>
+          <b>${(об.всего/1024).toFixed(0)} КБ</b></div>
+        <div class="bf"><span style="width:${Math.min(100,об.доля*100).toFixed(1)}%"></span></div>
+        <div class="note">Это ${(об.доля*100).toFixed(1)}% от предела в 5 МБ.
+          ${об.местаНаЗаписей!=null?("Хватит ещё примерно на <b>"+об.местаНаЗаписей.toLocaleString("ru")+"</b> записей."):""}
+          ${об.доля>0.8?"<br><b style=\'color:var(--danger)\'>Пора освобождать место или переносить базу в хранилище на 1 ГБ — скажите, сделаю.</b>":""}</div>
+        <div class="bar"><span class="g" style="flex:1">Последняя копия</span>
+          <b>${когдаКопия()?(ru(когдаКопия().slice(0,10))+" "+когдаКопия().slice(11,16)):"не делалась"}</b></div>
+        ${дн!=null&&дн>=3?`<div class="note" style="color:var(--warn)"><b>Копии не было ${дн} дн.</b> Сделайте сейчас — это одна кнопка.</div>`:""}
         <div class="formbtns">
           <button class="btn primary" onclick="backupSave()">▼ Сохранить копию</button>
           <button class="btn" onclick="backupOpen()">▲ Восстановить из копии</button>
         </div>
         <div class="note"><b>Восстановление заменяет данные</b>, а не сливает их — в отличие
           от приёма файлов обмена. Программа покажет, что было и что станет, и переспросит.</div>
+      </div>
+      <div class="panel">
+        <h3>⟳ Копии сами, в вашу папку</h3>
+        ${ЕСТЬ_ПАПКИ ? `
+          <div class="bar"><span class="g" style="flex:1">Папка для копий</span>
+            <b id="папкаИмя">${_папка?esc(_папка.name):"не выбрана"}</b></div>
+          <div class="note">Укажите папку один раз — дальше программа сама пишет туда копию
+            во время работы (не чаще раза в 10 минут) и держит последние ${ДЕРЖАТЬ_КОПИЙ}
+            копий с датой в имени, старые убирает. Одной-единственной копии мало: если данные
+            испортились, а копию записали поверх — откатываться некуда.</div>
+          <div class="formbtns">
+            <button class="btn primary" onclick="выбратьПапкуКопий()">Указать папку…</button>
+            ${_папка?`<button class="btn" onclick="копияВПапку(false)">Записать сейчас</button>
+                      <button class="btn" onclick="забытьПапку()">Забыть папку</button>`:""}
+          </div>
+          <div class="note">Лучшая папка — <b>на флешке или в общей папке</b>, а не на этом же
+            диске: копия рядом с оригиналом не спасает от пропажи компьютера.</div>
+        ` : `
+          <div class="note">Этот браузер не умеет писать в выбранную папку — так умеют
+            <b>Chrome и Edge</b>. Здесь остаётся ручная кнопка «Сохранить копию»:
+            файл уходит в папку загрузок, оттуда переносите на флешку.</div>
+        `}
       </div>
       <div class="panel">
         <h3>Как это работает</h3>
@@ -1996,6 +2199,7 @@ O = loadReg(REG_OBJ, DB.объекты);
 S = loadReg(REG_SI, DB.си);
 P = loadReg(REG_PPL, DB.специалисты);
 A = loadReg(REG_AKT, []);
+папкаКопий().then(h=>{ if(h && curView==="exchange") renderExchange(); });
 rebuildObjIndex();
 document.getElementById("wsName").textContent = getWS().код;
 setChrome(); switchView("dash");

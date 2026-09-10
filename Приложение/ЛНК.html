@@ -269,7 +269,7 @@
      всех; фамилии — по правому краю. Таблица не отрывается от текста. */
   .signtbl{width:100%;border-collapse:collapse;margin-top:30px;break-inside:avoid}
   .signtbl td{border:0;padding:10px 0;font-size:14.5px;vertical-align:bottom}
-  .signtbl td.pos{width:32.8%;text-align:center}
+  .signtbl td.pos{text-align:center}
   .signtbl td.nm{text-align:right;white-space:nowrap}
   .sheet .aktp.последний{break-after:avoid}
   .aktbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
@@ -1193,7 +1193,8 @@ function актВWord(ключ){
   // на 8 см от левой границы листа, как вы просили. Должности в ней
   // центрированы — одинаково для всех. Фамилии по правому краю.
   // cantSplit не даёт строке подписи разорваться между страницами.
-  const ШИР_ДОЛЖ=2977, ШИР_ФАМ=9071-ШИР_ДОЛЖ;
+  const подп=подписиАкта(ключ,zs);
+  const ШИР_ДОЛЖ=ширинаДолжностей(подп), ШИР_ФАМ=ШИРИНА_ТЕКСТА-ШИР_ДОЛЖ;
   const ячД=(r)=>{
     const абз=(t)=>'<w:p><w:pPr><w:spacing w:after="0" w:line="280" w:lineRule="exact"/>'+
       '<w:jc w:val="center"/>'+rPr(false)+'</w:pPr>'+(t?wRun(t):'')+'</w:p>';
@@ -1203,7 +1204,7 @@ function актВWord(ключ){
   const ячФ=(t)=>'<w:tc><w:tcPr><w:tcW w:w="'+ШИР_ФАМ+'" w:type="dxa"/></w:tcPr>'+
     '<w:p><w:pPr><w:spacing w:after="0" w:line="280" w:lineRule="exact"/><w:jc w:val="right"/>'+
     rPr(false)+'</w:pPr>'+(t?wRun(t):'')+'</w:p></w:tc>';
-  const строки=подписиАкта(ключ,zs).map(r=>
+  const строки=подп.map(r=>
     '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="805"/></w:trPr>'+
     ячД(r)+ячФ(r.ф)+'</w:tr>').join("");
   const нет='<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
@@ -1263,6 +1264,40 @@ function актВWord(ключ){
   dlBlob("Акт "+номерАкта(ключ)+".docx", zipStore(файлы));
   toast("Акт выгружен в Word"+(нетИмени.length?(" · без названия: "+нетИмени.join(", ")):""));
 }
+// Ширина колонки должностей — по САМОЙ ШИРОКОЙ строке в ней, а не всегда
+// по максимуму. Левый край этой строки приходится на левую границу поля,
+// остальные должности центрируются по её ширине. Предел — 8 см от левой
+// границы листа: при листе 11906 твипов и левом поле 1559 это 2977 твипов.
+//
+// Ширину считать по числу букв нельзя: в Times New Roman «ш» шире «і» в
+// несколько раз. Поэтому строка реально измеряется шрифтом документа
+// через canvas — на машине, где документ и составляется, то есть настоящим
+// Times New Roman.
+const ПРЕДЕЛ_ДОЛЖНОСТИ = 2977;      // 8 см от левой границы листа
+const ШИРИНА_ТЕКСТА    = 9071;      // 11906 − 1559 − 1276
+function мераТекста(){
+  if(!мераТекста._к){
+    мераТекста._к=document.createElement("canvas").getContext("2d");
+  }
+  return мераТекста._к;
+}
+// 14 пт = 18,67 px в canvas; 1 px = 15 твипов (px → pt × 0,75 → твипы × 20)
+function твипыСтроки(t){
+  const ctx=мераТекста(); if(!ctx) return 0;
+  ctx.font='14pt "Times New Roman", "Liberation Serif", Georgia, serif';
+  return Math.ceil(ctx.measureText(String(t||"")).width*15);
+}
+function ширинаДолжностей(подписи){
+  let макс=0;
+  (подписи||[]).forEach(r=>{
+    макс=Math.max(макс, твипыСтроки(r.д), твипыСтроки(r.орг));
+  });
+  if(!макс) return ПРЕДЕЛ_ДОЛЖНОСТИ;
+  // небольшой запас: без него длинная должность рискует перенестись на
+  // вторую строку, а это хуже, чем сдвиг центра на треть миллиметра
+  return Math.min(ПРЕДЕЛ_ДОЛЖНОСТИ, макс+40);
+}
+
 // Номер протокола не должен разрываться переносом: ни между знаком № и
 // номером, ни внутри самого номера по дефисам. На экране это делает
 // white-space, в Word — неразрывный дефис (w:noBreakHyphen).
@@ -1376,7 +1411,9 @@ function renderAkt(ключ){
       <p class="aktp noind">Результаты работ отражены в следующих документах.</p>
       ${абзацы}
 
-      <table class="signtbl"><tbody>${строкиП}</tbody></table>
+      <table class="signtbl">
+      <colgroup><col style="width:${(ширинаДолжностей(подписи)/ШИРИНА_ТЕКСТА*100).toFixed(2)}%"><col></colgroup>
+      <tbody>${строкиП}</tbody></table>
     </div>`;
 }
 

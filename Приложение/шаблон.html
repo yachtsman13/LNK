@@ -403,6 +403,7 @@
     <div class="grp">Документы</div>
     <button class="nav" data-view="docs"><span class="ic">▦</span>Акты и протоколы<span class="cnt" id="cDocs">0</span></button>
     <button class="nav" data-view="plan"><span class="ic">◷</span>План работ</button>
+    <button class="nav" data-view="tasks"><span class="ic">✓</span>Задачи<span class="cnt" id="cTasks">0</span></button>
     <div class="grp">Обмен</div>
     <button class="nav" data-view="exchange"><span class="ic">⇄</span>Обмен файлами</button>
   </nav>
@@ -544,8 +545,8 @@ function переполнение(e){
 // с разных мест записи не сталкиваются (у каждого места свои id).
 function getWS(){
   try{ const r=localStorage.getItem("lnk_ws"); if(r){ const o=JSON.parse(r);
-        return {код:(o.код||"М1"), мастер:!!o.мастер}; } }catch(e){}
-  return {код:"М1", мастер:false};
+        return {код:(o.код||"М1"), мастер:!!o.мастер, начальник:!!o.начальник}; } }catch(e){}
+  return {код:"М1", мастер:false, начальник:false};
 }
 function saveWS(o){
   try{ localStorage.setItem("lnk_ws", JSON.stringify(o)); }catch(e){}
@@ -645,6 +646,9 @@ function printSign(){
 function setChrome(){
   document.getElementById("cJournal").textContent=liveJ().length;
   const пд=document.getElementById("cPodr"); if(пд) пд.textContent=live(ПОДР).length;
+  const цз=document.getElementById("cTasks");
+  if(цз){ const n=ЗАД.filter(з=>живаяЗадача(з)&&з.статус!=="закрыта").length;
+          цз.textContent=n; цз.classList.toggle("warn", ЗАД.some(просроченаЗадача)); }
   const пр=document.getElementById("cCheck");
   if(пр){ const n=числоПроблем(); пр.textContent=n; пр.classList.toggle("warn", n>0); }
   document.getElementById("cObjects").textContent=live(O).length;
@@ -2336,7 +2340,7 @@ function данныеКопии(){
   const ws=getWS();
   return JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ,
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ, задачи:ЗАД,
     лаборатория:getЛаб() }, null, 1);
 }
 function имяКопии(){
@@ -2394,7 +2398,7 @@ function backupSave(){
   const name="Резервная копия ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ,
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ, задачи:ЗАД,
     лаборатория:getЛаб() }, null, 1));
   try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
   toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
@@ -2426,6 +2430,7 @@ function backupOpen(){
           if(Array.isArray(d.ппр)){ ОТМ=d.ппр; saveReg(REG_ППР,ОТМ); }
           if(Array.isArray(d.подразделения)){ ПОДР=d.подразделения; saveReg(REG_ПОДР,ПОДР); }
           if(Array.isArray(d.падежи)){ ПАДЕЖИ=d.падежи; saveReg(REG_ПАДЕЖ,ПАДЕЖИ); }
+          if(Array.isArray(d.задачи)){ ЗАД=d.задачи; saveReg(REG_ЗАД,ЗАД); }
           if(d.лаборатория && typeof d.лаборатория==="object") saveЛаб(d.лаборатория);
           rebuildObjIndex();
         }
@@ -2636,7 +2641,7 @@ function exchangeExport(){
   const ws=getWS();
   const payload={ тип:"обмен ЛНК", формат:2, место:ws.код, мастер:ws.мастер,
     версия:DB.версия, выгружено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ,
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ, задачи:ЗАД,
     право:getGrant(), названия:имена(), лаборатория:getЛаб() };
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
@@ -2671,6 +2676,7 @@ function exchangeImport(){
             mergeInto(ОТМ,REG_ППР,d.ппр);
             mergeInto(ПОДР,REG_ПОДР,d.подразделения);
             mergeInto(ПАДЕЖИ,REG_ПАДЕЖ,d.падежи);
+            mergeInto(ЗАД,REG_ЗАД,d.задачи);
             // Карточка лаборатории — свежее побеждает, как право и названия.
             if(d.лаборатория && d.лаборатория.изменено &&
                d.лаборатория.изменено > (getЛаб().изменено||""))
@@ -2710,8 +2716,10 @@ function exchangeImport(){
 function saveWSfromForm(){
   const код=(document.getElementById("wsCode").value||"").trim()||"М1";
   const мастер=document.getElementById("wsMaster").checked;
-  saveWS({код:код, мастер:мастер});
-  toast("Рабочее место: "+код+(мастер?" (мастер)":"")); renderExchange();
+  const нач=document.getElementById("wsChief").checked;
+  saveWS({код:код, мастер:мастер, начальник:нач});
+  toast("Рабочее место: "+код+(мастер?" (мастер)":"")+(нач?" (начальник)":""));
+  renderExchange();
 }
 // ── План ППР: планово-предупредительные осмотры и ремонты ──
 // План взят из вашей книги «План-график ППР 2026-2030», лист «Пятилетний»,
@@ -2941,6 +2949,402 @@ function exportПланXlsx(){
   toast("План "+год+" выгружен: "+строки.length+" позиций");
 }
 
+// ── Задачи: ядро ──────────────────────────────────────────
+// Одна сущность со сроком; день, неделя, месяц, квартал, полугодие и год —
+// шесть способов посмотреть на один список, а не шесть списков. Почему так,
+// расписано в ТЗ/Проработка_менеджер_задач.md: задачи переносят, и при
+// раздельных списках перенесённая задача теряется или задваивается.
+const REG_ЗАД="lnk_tasks";
+let ЗАД;
+
+const ГОРИЗОНТЫ=[["день","День"],["неделя","Неделя"],["месяц","Месяц"],
+                 ["квартал","Квартал"],["полугодие","Полугодие"],["год","Год"]];
+
+// Состояния. Контроль исполнения нужен (ответ заказчика), поэтому после
+// «выполнена» задача не закрывается сама: её принимает постановщик либо
+// возвращает на доработку. «Принята в работу» нужна отдельно, потому что
+// связь между местами только файлами — иначе не видно, дошла ли задача.
+const СОСТОЯНИЯ={
+  назначена:{т:"Назначена",   к:"new"},
+  принята:  {т:"Принята в работу", к:"work"},
+  выполнена:{т:"Выполнена, на проверке", к:"warn"},
+  закрыта:  {т:"Принята начальником", к:"ok"},
+  доработка:{т:"Возвращена на доработку", к:"bad"},
+  отменена: {т:"Отменена",    к:""}
+};
+function состТекст(з){ return (СОСТОЯНИЯ[з.статус]||{}).т || з.статус || ""; }
+function состКласс(з){ return (СОСТОЯНИЯ[з.статус]||{}).к || ""; }
+function живаяЗадача(з){ return !з.удалено && з.статус!=="отменена"; }
+
+// Границы периода. Квартал и полугодие считаются от календарного года,
+// неделя — с понедельника: так их и понимают в отчётности.
+function границыПериода(вид, база){
+  const d=база?new Date(база+"T00:00:00"):new Date();
+  const г=d.getFullYear(), м=d.getMonth();
+  const дата=(y,mo,day)=>new Date(Date.UTC(y,mo,day)).toISOString().slice(0,10);
+  if(вид==="день")     return [дата(г,м,d.getDate()), дата(г,м,d.getDate())];
+  if(вид==="неделя"){
+    const дн=(d.getDay()+6)%7;                       // понедельник = 0
+    const пн=new Date(d); пн.setDate(d.getDate()-дн);
+    const вс=new Date(пн); вс.setDate(пн.getDate()+6);
+    return [дата(пн.getFullYear(),пн.getMonth(),пн.getDate()),
+            дата(вс.getFullYear(),вс.getMonth(),вс.getDate())];
+  }
+  if(вид==="месяц")    return [дата(г,м,1), дата(г,м+1,0)];
+  if(вид==="квартал"){ const к=Math.floor(м/3); return [дата(г,к*3,1), дата(г,к*3+3,0)]; }
+  if(вид==="полугодие"){ const п=м<6?0:6; return [дата(г,п,1), дата(г,п+6,0)]; }
+  return [дата(г,0,1), дата(г,11,31)];               // год
+}
+function имяПериода(вид, база){
+  const [с,по]=границыПериода(вид,база);
+  const d=new Date(с+"T00:00:00"), г=d.getFullYear(), м=d.getMonth();
+  if(вид==="день")      return ru(с);
+  if(вид==="неделя")    return "неделя "+ru(с)+" — "+ru(по);
+  if(вид==="месяц")     return МЕСЯЦЫ[м]+" "+г;
+  if(вид==="квартал")   return (Math.floor(м/3)+1)+"-й квартал "+г;
+  if(вид==="полугодие") return (м<6?"1":"2")+"-е полугодие "+г;
+  return г+" год";
+}
+function вПериоде(дата, вид, база){
+  const [с,по]=границыПериода(вид,база);
+  const d=String(дата||""); return !!d && d>=с && d<=по;
+}
+
+// Перенос срока сохраняет первоначальную дату: без этого отчёт всегда
+// показывал бы сто процентов выполнения в срок.
+function перенести(id, новыйСрок, причина){
+  const з=ЗАД.find(x=>x.id===id); if(!з) return;
+  if(!з.срок_первый) з.срок_первый=з.срок;
+  з.переносы=(з.переносы||[]).concat([{было:з.срок, стало:новыйСрок,
+    причина:причина||"", когда:new Date().toISOString().slice(0,10)}]);
+  з.срок=новыйСрок;
+  отметитьЗадачу(з);
+}
+function отметитьЗадачу(з){
+  з.изменено=new Date().toISOString(); з.место_правки=getWS().код;
+  saveReg(REG_ЗАД,ЗАД);
+}
+function вСрок(з){
+  if(!з.выполнено) return null;
+  const план=з.срок_первый||з.срок;
+  return план ? (з.выполнено<=план) : null;
+}
+function просроченаЗадача(з){
+  if(!живаяЗадача(з) || з.статус==="закрыта") return false;
+  const сегодня=new Date().toISOString().slice(0,10);
+  return !!з.срок && з.срок<сегодня && з.статус!=="выполнена";
+}
+
+// Начальник ставит задачи и принимает работу. Роль — признак рабочего
+// места, рядом с «мастером»: отдельного входа в программу нет и не будет,
+// места и так разделены физически.
+function яНачальник(){ return !!getWS().начальник; }
+function ставитель(з){ return з.постановщик||""; }
+function мояЗадача(з){
+  const ws=getWS();
+  return з.место===ws.код || (з.исполнитель && з.исполнитель===getЛаб().начальник);
+}
+
+// ── Задачи: экран ─────────────────────────────────────────
+let зф={период:"неделя", база:"", статус:"", исполнитель:"", показ:"список"};
+function setЗП(v){ зф.период=v; renderTasks(); }
+function сдвигПериода(шаг){
+  const [с]=границыПериода(зф.период, зф.база);
+  const d=new Date(с+"T00:00:00");
+  if(зф.период==="день")      d.setDate(d.getDate()+шаг);
+  else if(зф.период==="неделя")    d.setDate(d.getDate()+7*шаг);
+  else if(зф.период==="месяц")     d.setMonth(d.getMonth()+шаг);
+  else if(зф.период==="квартал")   d.setMonth(d.getMonth()+3*шаг);
+  else if(зф.период==="полугодие") d.setMonth(d.getMonth()+6*шаг);
+  else d.setFullYear(d.getFullYear()+шаг);
+  зф.база=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())).toISOString().slice(0,10);
+  renderTasks();
+}
+function сегодняПериод(){ зф.база=""; renderTasks(); }
+function задачиПериода(){
+  const q=(query||"").toLowerCase();
+  return ЗАД.filter(з=>!з.удалено)
+    .filter(з=>вПериоде(з.срок, зф.период, зф.база))
+    .filter(з=>!зф.статус || з.статус===зф.статус)
+    .filter(з=>!зф.исполнитель || з.исполнитель===зф.исполнитель)
+    .filter(з=>!q || ((з.что||"")+(з.подробно||"")+(з.исполнитель||"")).toLowerCase().includes(q))
+    .sort((a,b)=>String(a.срок||"").localeCompare(String(b.срок||""))
+              || String(a.что||"").localeCompare(String(b.что||""),"ru"));
+}
+function итогиЗадач(список){
+  const ж=список.filter(живаяЗадача);
+  const закрыто=ж.filter(з=>з.статус==="закрыта");
+  const всрок=закрыто.filter(з=>вСрок(з)===true).length;
+  return { всего:ж.length, закрыто:закрыто.length, всрок:всрок,
+           сПереносом:закрыто.length-всрок,
+           впроверке:ж.filter(з=>з.статус==="выполнена").length,
+           просрочено:ж.filter(просроченаЗадача).length,
+           доработка:ж.filter(з=>з.статус==="доработка").length };
+}
+
+function renderTasks(){
+  curView="tasks";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="tasks"));
+  const список=задачиПериода(), и=итогиЗадач(список);
+  const исполнители=[...new Set(ЗАД.filter(з=>!з.удалено).map(з=>з.исполнитель).filter(Boolean))].sort();
+  const пер=(v,т)=>`<button class="btn ${зф.период===v?"on":""}" onclick="setЗП('${v}')">${т}</button>`;
+  const строки=список.length?список.map(з=>{
+    const пр=просроченаЗадача(з);
+    return `<tr onclick="editTask('${esc(з.id)}')">
+      <td class="num">${ru(з.срок)}${пр?`<br><span class="st bad">просрочена</span>`:""}</td>
+      <td class="obj"><b>${esc(з.что)}</b>${з.подробно?`<br><span class="muted" style="font-size:12px">${esc(String(з.подробно).slice(0,80))}</span>`:""}</td>
+      <td>${esc(з.исполнитель)||"<span class='muted'>—</span>"}</td>
+      <td><span class="pill">${esc((ГОРИЗОНТЫ.find(x=>x[0]===з.горизонт)||["","—"])[1])}</span></td>
+      <td><span class="st ${состКласс(з)}">${esc(состТекст(з))}</span>
+        ${(з.переносы||[]).length?`<br><span class="muted" style="font-size:11.5px">переносов: ${з.переносы.length}</span>`:""}</td>
+    </tr>`;}).join(""):`<tr><td colspan="5" class="empty">На этот период задач нет.</td></tr>`;
+
+  document.getElementById("main").innerHTML=`
+    ${printHead("Задачи", имяПериода(зф.период,зф.база)+" · всего "+и.всего)}
+    <div class="head"><h2>Задачи</h2>
+      <span class="sub">${esc(имяПериода(зф.период,зф.база))}</span>
+      <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск по задаче или исполнителю…" value="${esc(query)}"></div>
+      <div class="spring"></div>
+      ${яНачальник()?`<button class="btn primary" onclick="editTask('')">+ Задача</button>`:""}
+      <button class="btn" onclick="renderОтчёт()">▤ Отчёт</button>
+      <button class="btn" onclick="window.print()">⎙ PDF</button></div>
+
+    <div class="filters noprint seg">
+      ${ГОРИЗОНТЫ.map(([v,т])=>пер(v,т)).join("")}
+      <span class="fnote" style="margin-left:8px">
+        <button class="btn small" onclick="сдвигПериода(-1)">←</button>
+        <button class="btn small" onclick="сегодняПериод()">сейчас</button>
+        <button class="btn small" onclick="сдвигПериода(1)">→</button>
+      </span>
+    </div>
+    <div class="filters noprint">
+      <select onchange="зф.статус=this.value;renderTasks()">
+        <option value="">Все состояния</option>
+        ${Object.keys(СОСТОЯНИЯ).map(k=>`<option value="${k}" ${зф.статус===k?"selected":""}>${СОСТОЯНИЯ[k].т}</option>`).join("")}
+      </select>
+      <select onchange="зф.исполнитель=this.value;renderTasks()">
+        <option value="">Все исполнители</option>
+        ${исполнители.map(и=>`<option ${зф.исполнитель===и?"selected":""}>${esc(и)}</option>`).join("")}
+      </select>
+      ${!яНачальник()?`<span class="fnote">Ставить задачи может место с признаком «Начальник» — вкладка «Обмен»</span>`:""}
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="n">${и.всего}</div><div class="l">задач в периоде</div></div>
+      <div class="tile ${и.закрыто?"ok":""}"><div class="n">${и.закрыто}</div><div class="l">принято начальником</div></div>
+      <div class="tile ${и.впроверке?"warn":""}"><div class="n">${и.впроверке}</div><div class="l">на проверке</div></div>
+      <div class="tile ${и.просрочено?"bad":"ok"}"><div class="n">${и.просрочено}</div><div class="l">просрочено</div></div>
+      <div class="tile ${и.доработка?"bad":""}"><div class="n">${и.доработка}</div><div class="l">на доработке</div></div>
+    </div>
+
+    <div class="card"><div class="tblwrap"><table>
+      <thead><tr><th style="width:110px">Срок</th><th>Задача</th>
+        <th style="width:160px">Исполнитель</th><th style="width:100px">Горизонт</th>
+        <th style="width:190px">Состояние</th></tr></thead>
+      <tbody>${строки}</tbody></table></div></div>
+    <div class="note noprint">Периоды — это шесть способов посмотреть на один список задач,
+      а не шесть разных списков: перенесённая задача не теряется и попадает в отчёт того
+      периода, в котором её выполнили.</div>`;
+  wireSearch(renderTasks);
+}
+
+function editTask(id){
+  const з=id?ЗАД.find(x=>x.id===id):null;
+  if(!з && !яНачальник()){ toast("Ставить задачи может место с признаком «Начальник»"); return; }
+  curView="taskedit";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
+  const v=x=>esc(x==null?"":x);
+  const спецы=live(P).map(p=>p.вдок||p.фио).filter(Boolean);
+  const сегодня=new Date().toISOString().slice(0,10);
+  const я=яНачальник(), пост=з?ставитель(з):getWS().код;
+  const мой=з&&(пост===getWS().код);
+  document.getElementById("main").innerHTML=`
+    <div class="head"><h2>${з?"Задача":"Новая задача"}</h2>
+      ${з?`<span class="sub">${esc(состТекст(з))}</span>`:""}
+      <div class="spring"></div>
+      <button class="btn" onclick="switchView('tasks')">← К списку</button></div>
+    <div class="card" style="padding:20px"><div class="form">
+      <div class="grid">
+        <label class="wide">Что сделать<input id="t_что" value="${v(з&&з.что)}" ${я||!з?"":"disabled"}></label>
+        <label class="wide">Подробно<textarea id="t_подробно" ${я||!з?"":"disabled"}>${v(з&&з.подробно)}</textarea></label>
+        <label>Срок<input id="t_срок" type="date" value="${v(з?з.срок:сегодня)}" ${я||!з?"":"disabled"}></label>
+        <label>Горизонт планирования
+          <select id="t_горизонт" ${я||!з?"":"disabled"}>
+            ${ГОРИЗОНТЫ.map(([k,т])=>`<option value="${k}" ${(з&&з.горизонт===k)||(!з&&k==="неделя")?"selected":""}>${т}</option>`).join("")}
+          </select></label>
+        <label>Исполнитель
+          <select id="t_исполнитель" ${я||!з?"":"disabled"}>
+            <option value="">— не назначен —</option>
+            ${спецы.map(ф=>`<option ${з&&з.исполнитель===ф?"selected":""}>${esc(ф)}</option>`).join("")}
+          </select></label>
+        <label>Рабочее место исполнителя
+          <input id="t_место" value="${v(з?з.место:"")}" placeholder="М1, М2 …" ${я||!з?"":"disabled"}></label>
+      </div>
+      ${з&&(з.срок_первый&&з.срок_первый!==з.срок)?`<div class="note">
+        Первоначальный срок: <b>${ru(з.срок_первый)}</b>, переносов: ${(з.переносы||[]).length}.
+        ${(з.переносы||[]).map(п=>`<br>${ru(п.было)} → ${ru(п.стало)}${п.причина?" — "+esc(п.причина):""}`).join("")}
+      </div>`:""}
+      ${з&&з.причина_возврата?`<div class="draftnote">Возвращена на доработку: ${esc(з.причина_возврата)}</div>`:""}
+      <div class="formbtns">
+        ${(!з||я)?`<button class="btn primary" onclick="saveTask('${з?esc(з.id):""}')">✓ Сохранить</button>`:""}
+        ${з?действияЗадачи(з,я,мой):""}
+        <button class="btn" onclick="switchView('tasks')">Отмена</button>
+        ${з&&я?`<button class="btn danger" style="margin-left:auto" onclick="delTask('${esc(з.id)}')">Удалить</button>`:""}
+      </div>
+      ${з?`<div class="note">Поставил: ${esc(пост)} · создана ${ru(String(з.создано||"").slice(0,10))}
+        ${з.выполнено?" · выполнена "+ru(з.выполнено)+(вСрок(з)===false?" (с переносом)":" (в срок)"):""}</div>`:""}
+    </div></div>`;
+}
+// Кнопки зависят от роли: исполнитель ведёт работу, постановщик принимает.
+function действияЗадачи(з,я,мой){
+  const b=(т,ф,к)=>`<button class="btn ${к||""}" onclick="${ф}">${т}</button>`;
+  let из="";
+  if(з.статус==="назначена")  из+=b("Принять в работу",`ходЗадачи('${esc(з.id)}','принята')`);
+  if(з.статус==="принята"||з.статус==="доработка")
+                              из+=b("Отметить выполненной",`ходЗадачи('${esc(з.id)}','выполнена')`,"primary");
+  if(з.статус==="выполнена" && мой){
+    из+=b("Принять работу",`ходЗадачи('${esc(з.id)}','закрыта')`,"primary");
+    из+=b("Вернуть на доработку",`вернутьЗадачу('${esc(з.id)}')`);
+  }
+  if(з.статус!=="закрыта" && з.статус!=="отменена")
+                              из+=b("Перенести срок",`перенестиДиалог('${esc(з.id)}')`);
+  if(я && з.статус!=="отменена") из+=b("Отменить",`ходЗадачи('${esc(з.id)}','отменена')`);
+  return из;
+}
+function ходЗадачи(id,новый){
+  const з=ЗАД.find(x=>x.id===id); if(!з) return;
+  з.статус=новый;
+  const сегодня=new Date().toISOString().slice(0,10);
+  if(новый==="принята")  з.принято=сегодня;
+  if(новый==="выполнена"){ з.выполнено=сегодня; з.причина_возврата=""; }
+  if(новый==="закрыта")  з.проверено=сегодня;
+  отметитьЗадачу(з); editTask(id);
+}
+function вернутьЗадачу(id){
+  const п=prompt("Причина возврата на доработку:");
+  if(п===null) return;
+  const з=ЗАД.find(x=>x.id===id); if(!з) return;
+  з.статус="доработка"; з.причина_возврата=п; з.выполнено="";
+  отметитьЗадачу(з); editTask(id);
+}
+function перенестиДиалог(id){
+  const з=ЗАД.find(x=>x.id===id); if(!з) return;
+  const н=prompt("Новый срок (ГГГГ-ММ-ДД):", з.срок||"");
+  if(!н) return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(н)){ toast("Дата в виде ГГГГ-ММ-ДД"); return; }
+  const п=prompt("Причина переноса (можно пропустить):")||"";
+  перенести(id,н,п); editTask(id);
+}
+function saveTask(id){
+  const v=k=>{const el=document.getElementById(k);return el?el.value.trim():"";};
+  const что=v("t_что");
+  if(!что){ toast("Напишите, что сделать"); return; }
+  const з=id?ЗАД.find(x=>x.id===id):null;
+  const поля={что:что, подробно:v("t_подробно"), срок:v("t_срок"),
+    горизонт:v("t_горизонт"), исполнитель:v("t_исполнитель"), место:v("t_место")};
+  if(з){
+    // Смена срока через форму — тоже перенос, с сохранением истории
+    if(поля.срок && з.срок && поля.срок!==з.срок){
+      if(!з.срок_первый) з.срок_первый=з.срок;
+      з.переносы=(з.переносы||[]).concat([{было:з.срок, стало:поля.срок, причина:"правка",
+        когда:new Date().toISOString().slice(0,10)}]);
+    }
+    Object.assign(з,поля); отметитьЗадачу(з);
+  } else {
+    ЗАД.push(Object.assign({id:newId("ЗД"), статус:"назначена",
+      постановщик:getWS().код, создано:new Date().toISOString(),
+      изменено:new Date().toISOString(), место_правки:getWS().код}, поля));
+    saveReg(REG_ЗАД,ЗАД);
+  }
+  switchView("tasks"); toast(id?"Задача изменена":"Задача поставлена");
+}
+function delTask(id){
+  const з=ЗАД.find(x=>x.id===id); if(!з) return;
+  if(!confirm("Удалить задачу «"+(з.что||"")+"»?\n\nУдаление перенесётся на другие места при обмене.")) return;
+  з.удалено=new Date().toISOString(); отметитьЗадачу(з);
+  switchView("tasks"); toast("Задача удалена");
+}
+
+// Отчёт за период. Форма отчёта заказчиком ещё не прислана, поэтому здесь
+// внутренний вид: числа, разбивка и список невыполненного. Как пришлют
+// образец — сделаю по нему, как акт.
+function renderОтчёт(){
+  curView="taskreport";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
+  const список=ЗАД.filter(з=>!з.удалено).filter(з=>{
+    const д=з.статус==="закрыта"?(з.проверено||з.выполнено||з.срок):з.срок;
+    return вПериоде(д, зф.период, зф.база);
+  });
+  const и=итогиЗадач(список);
+  const поИсп={};
+  список.filter(живаяЗадача).forEach(з=>{
+    const к=з.исполнитель||"(не назначен)";
+    поИсп[к]=поИсп[к]||{всего:0,закрыто:0,просрочено:0};
+    поИсп[к].всего++;
+    if(з.статус==="закрыта") поИсп[к].закрыто++;
+    if(просроченаЗадача(з)) поИсп[к].просрочено++;
+  });
+  const невып=список.filter(з=>живаяЗадача(з)&&з.статус!=="закрыта")
+    .sort((a,b)=>String(a.срок||"").localeCompare(String(b.срок||"")));
+  const сегодня=new Date().toISOString().slice(0,10);
+  document.getElementById("main").innerHTML=`
+    ${printHead("Отчёт по задачам", имяПериода(зф.период,зф.база))}
+    <div class="head"><h2>Отчёт по задачам</h2>
+      <span class="sub">${esc(имяПериода(зф.период,зф.база))}</span>
+      <div class="spring"></div>
+      <button class="btn" onclick="exportОтчётXlsx()">▤ Excel</button>
+      <button class="btn" onclick="window.print()">⎙ PDF</button>
+      <button class="btn" onclick="switchView('tasks')">← К задачам</button></div>
+    <div class="draftnote noprint">Форму отчёта вы пришлёте — тогда сделаю по ней, как акт.
+      Пока это внутренний вид: числа, разбивка по исполнителям и список невыполненного.</div>
+    <div class="tiles">
+      <div class="tile"><div class="n">${и.всего}</div><div class="l">задач за период</div></div>
+      <div class="tile ok"><div class="n">${и.закрыто}</div><div class="l">выполнено и принято</div></div>
+      <div class="tile"><div class="n">${и.всрок}</div><div class="l">из них в срок</div></div>
+      <div class="tile ${и.сПереносом?"warn":""}"><div class="n">${и.сПереносом}</div><div class="l">с переносом срока</div></div>
+      <div class="tile ${и.просрочено?"bad":"ok"}"><div class="n">${и.просрочено}</div><div class="l">просрочено</div></div>
+    </div>
+    <div class="cols">
+      <div class="panel"><h3>По исполнителям</h3>
+        ${Object.keys(поИсп).length?`<div class="plist">`+Object.keys(поИсп).sort().map(к=>{
+          const x=поИсп[к];
+          return `<div class="pr" style="cursor:default"><span class="g">${esc(к)}</span>
+            <span class="num">${x.закрыто} из ${x.всего}${x.просрочено?" · просрочено "+x.просрочено:""}</span></div>`;
+        }).join("")+`</div>`:`<div class="note">Задач за период нет.</div>`}
+      </div>
+      <div class="panel"><h3>Не выполнено</h3>
+        ${невып.length?`<div class="plist">`+невып.slice(0,12).map(з=>`
+          <div class="pr" onclick="editTask('${esc(з.id)}')">
+            <span class="st ${состКласс(з)}">${esc(состТекст(з))}</span>
+            <span class="g">${esc(з.что)}</span>
+            <span class="num">${ru(з.срок)}${з.срок&&з.срок<сегодня?` · +${Math.round((new Date(сегодня)-new Date(з.срок))/86400000)} дн.`:""}</span>
+          </div>`).join("")+(невып.length>12?`<div class="note">…и ещё ${невып.length-12}</div>`:"")+`</div>`
+          :`<div class="note">Всё выполнено и принято.</div>`}
+      </div>
+    </div>`;
+}
+function exportОтчётXlsx(){
+  const список=ЗАД.filter(з=>!з.удалено).filter(з=>{
+    const д=з.статус==="закрыта"?(з.проверено||з.выполнено||з.срок):з.срок;
+    return вПериоде(д, зф.период, зф.база);
+  });
+  const строки=список.map((з,i)=>[i+1, з.что, з.подробно, з.исполнитель,
+    (ГОРИЗОНТЫ.find(x=>x[0]===з.горизонт)||["",""])[1],
+    з.срок_первый||з.срок, з.срок, з.выполнено, з.проверено, состТекст(з),
+    вСрок(з)===true?"в срок":(вСрок(з)===false?"с переносом":""),
+    (з.переносы||[]).length, з.причина_возврата, з.постановщик]);
+  xlsxФайл("Отчёт по задачам "+имяПериода(зф.период,зф.база)+".xlsx",[{
+    имя:"Задачи",
+    колонки:[{з:"№",ш:6,тип:"число"},{з:"Задача",ш:44},{з:"Подробно",ш:40},
+      {з:"Исполнитель",ш:20},{з:"Горизонт",ш:12},
+      {з:"Первоначальный срок",ш:15,тип:"дата"},{з:"Текущий срок",ш:14,тип:"дата"},
+      {з:"Выполнена",ш:13,тип:"дата"},{з:"Принята",ш:13,тип:"дата"},
+      {з:"Состояние",ш:24},{з:"Отметка",ш:14},{з:"Переносов",ш:11,тип:"число"},
+      {з:"Причина возврата",ш:30},{з:"Поставил",ш:12}],
+    строки:строки}]);
+  toast("Отчёт выгружен: "+строки.length+" задач");
+}
+
 // ── Проверка данных ───────────────────────────────────────
 // Раздел отвечает на один вопрос: что в базе не сходится само с собой.
 // Никаких оценок «правильно ли вы работаете» — только факты, которые
@@ -3122,6 +3526,10 @@ function renderExchange(){
               <span style="display:flex;gap:8px;align-items:center;color:var(--ink)">
                 <input type="checkbox" id="wsMaster" ${ws.мастер?"checked":""} style="width:auto">
                 Мастер (собирает свод)</span></label>
+            <label style="justify-content:flex-end">
+              <span style="display:flex;gap:8px;align-items:center;color:var(--ink)">
+                <input type="checkbox" id="wsChief" ${ws.начальник?"checked":""} style="width:auto">
+                Начальник (ставит задачи и принимает работу)</span></label>
           </div>
           <div class="formbtns"><button class="btn primary" onclick="saveWSfromForm()">Сохранить</button></div>
           <div class="note">Код должен быть у каждого места свой (М1, М2, …). Он входит в номер
@@ -3413,7 +3821,7 @@ let toastT;function toast(m){const t=document.getElementById("toast");t.textCont
 
 function switchView(v){curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,lab:renderLab}[v]
+  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,lab:renderLab,tasks:renderTasks}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b)switchView(b.dataset.view);});
@@ -3442,6 +3850,7 @@ A = loadReg(REG_AKT, []);
 ОТМ = loadReg(REG_ППР, []);
 ПОДР = loadReg(REG_ПОДР, []);
 ПАДЕЖИ = loadReg(REG_ПАДЕЖ, []);
+ЗАД = loadReg(REG_ЗАД, []);
 папкаКопий().then(h=>{ if(h && curView==="exchange") renderExchange(); });
 rebuildObjIndex();
 document.getElementById("wsName").textContent = getWS().код;

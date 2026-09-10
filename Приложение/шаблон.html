@@ -309,6 +309,16 @@
   h3.прз{font-size:14px;margin:20px 0 10px;color:var(--muted);font-weight:600}
   .кстрока{display:flex;gap:7px;align-items:center;margin-bottom:6px}
   .кстрока input{flex:1}
+  .допстрока{display:flex;gap:7px;align-items:center;margin-bottom:6px}
+  .допстрока input{flex:1}
+  .актвыбор{display:flex;flex-direction:column;gap:7px;margin-top:5px}
+  .актвар{display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--ink)}
+  .актвар input[type=radio]{width:auto}
+  .актвар select{flex:0 1 220px}
+  .актподсказ{color:var(--muted);font-size:12.5px}
+  .метки{display:flex;gap:14px;flex-wrap:wrap;margin:4px 0 2px}
+  .метка{display:flex;gap:6px;align-items:center;font-size:13.5px;color:var(--ink)}
+  .метка input{width:auto}
   .пров{background:var(--card);border:1px solid var(--line);border-left-width:4px;
     border-radius:var(--card-radius);padding:11px 14px;margin-bottom:9px}
   .пров.ошибка{border-left-color:var(--danger)}
@@ -389,6 +399,7 @@
     <button class="nav" data-view="si"><span class="ic">⌗</span>Приборы (СИ)<span class="cnt" id="cSi">0</span></button>
     <button class="nav" data-view="people"><span class="ic">☺</span>Специалисты<span class="cnt" id="cPeople">0</span></button>
     <button class="nav" data-view="podr"><span class="ic">◨</span>Подразделения<span class="cnt" id="cPodr">0</span></button>
+    <button class="nav" data-view="lab"><span class="ic">⌂</span>Лаборатория</button>
     <div class="grp">Документы</div>
     <button class="nav" data-view="docs"><span class="ic">▦</span>Акты и протоколы<span class="cnt" id="cDocs">0</span></button>
     <button class="nav" data-view="plan"><span class="ic">◷</span>План работ</button>
@@ -824,17 +835,112 @@ function saveИмяДок(м,t,один){
 // в настройках: организация, при которой состоит ЛНК, и свидетельство об
 // аттестации. В шапку акта они подставляются сами.
 function getЛаб(){
-  try{ const r=localStorage.getItem("lnk_lab"); if(r) return JSON.parse(r); }catch(e){}
-  return {организация:"", свид_номер:"", свид_дата:""};
+  const пусто={организация:"", свид_номер:"", свид_дата:"", свид_до:"",
+               проверка:"", методы:[], доп:[],
+               наименование:"", адрес:"", телефон:"", почта:"", начальник:""};
+  try{ const r=localStorage.getItem("lnk_lab");
+       if(r) return Object.assign({}, пусто, JSON.parse(r)); }catch(e){}
+  return пусто;
+}
+// Сроки лаборатории считаются так же, как поверка приборов: просрочено,
+// истекает в ближайший месяц, в норме.
+function срокЛаб(дата){
+  const d=String(дата||"").trim(); if(!d) return ["", "не указана"];
+  const дней=Math.round((new Date(d+"T00:00:00")-new Date())/86400000);
+  if(дней<0)  return ["bad",  "просрочено " + ru(d)];
+  if(дней<=30) return ["work", "через " + дней + " дн."];
+  return ["ok", "до " + ru(d)];
 }
 function saveЛаб(о){
   try{ localStorage.setItem("lnk_lab", JSON.stringify(о)); }catch(e){}
 }
 function saveЛабИзФормы(){
-  saveЛаб({организация:(document.getElementById("лабОрг").value||"").trim(),
-           свид_номер:(document.getElementById("лабНомер").value||"").trim(),
-           свид_дата:(document.getElementById("лабДата").value||"").trim()});
-  toast("Данные лаборатории сохранены"); renderExchange();
+  const п=id=>{ const el=document.getElementById(id); return el?el.value.trim():""; };
+  const методы=METHODS.filter(м=>{ const c=document.getElementById("лабМ_"+м); return c&&c.checked; });
+  const доп=[];
+  document.querySelectorAll(".допстрока").forEach(стр=>{
+    const к=стр.querySelector(".допк").value.trim(), з=стр.querySelector(".допз").value.trim();
+    if(к||з) доп.push({к:к, з:з});
+  });
+  saveЛаб({организация:п("лабОрг"), наименование:п("лабНаим"), адрес:п("лабАдрес"),
+           телефон:п("лабТел"), почта:п("лабПочта"), начальник:п("лабНач"),
+           свид_номер:п("лабНомер"), свид_дата:п("лабДата"), свид_до:п("лабДо"),
+           проверка:п("лабПроверка"), методы:методы, доп:доп});
+  toast("Карточка лаборатории сохранена"); renderLab();
+}
+function допПлюс(){
+  const л=getЛаб(); л.доп=(л.доп||[]).concat([{к:"",з:""}]); saveЛаб(л); renderLab();
+}
+function допМинус(i){
+  const л=getЛаб(); (л.доп||[]).splice(i,1); saveЛаб(л); renderLab();
+}
+
+function renderLab(){
+  curView="lab";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="lab"));
+  const л=getЛаб();
+  const [кА,тА]=срокЛаб(л.свид_до), [кП,тП]=срокЛаб(л.проверка);
+  const v=x=>esc(x||"");
+  document.getElementById("main").innerHTML=`
+    ${printHead("Карточка лаборатории", л.наименование||л.организация||"")}
+    <div class="head"><h2>Лаборатория</h2>
+      <span class="sub">исходные данные для документов</span>
+      <div class="spring"></div>
+      <button class="btn" onclick="window.print()">⎙ PDF</button></div>
+
+    <div class="tiles">
+      <div class="tile ${кА||"" }"><div class="n" style="font-size:19px">${esc(тА)}</div>
+        <div class="l">аттестация ЛНК</div></div>
+      <div class="tile ${кП||"" }"><div class="n" style="font-size:19px">${esc(тП)}</div>
+        <div class="l">плановая проверка</div></div>
+      <div class="tile"><div class="n">${(л.методы||[]).length}</div>
+        <div class="l">методов в области аттестации</div></div>
+    </div>
+
+    <div class="card" style="padding:20px"><div class="form">
+      <div class="grp" style="padding-left:0">Организация и лаборатория</div>
+      <div class="grid">
+        <label class="wide">Организация, при которой состоит ЛНК
+          <input id="лабОрг" value="${v(л.организация)}"
+            placeholder="подставится после слов «Лаборатория НК»"></label>
+        <label class="wide">Полное наименование лаборатории
+          <input id="лабНаим" value="${v(л.наименование)}"></label>
+        <label class="wide">Адрес <input id="лабАдрес" value="${v(л.адрес)}"></label>
+        <label>Телефон <input id="лабТел" value="${v(л.телефон)}"></label>
+        <label>Электронная почта <input id="лабПочта" value="${v(л.почта)}"></label>
+        <label class="wide">Начальник лаборатории <input id="лабНач" value="${v(л.начальник)}"></label>
+      </div>
+
+      <div class="grp" style="padding-left:0">Аттестация</div>
+      <div class="grid">
+        <label>Свидетельство № <input id="лабНомер" value="${v(л.свид_номер)}"></label>
+        <label>Выдано <input id="лабДата" type="date" value="${v(л.свид_дата)}"></label>
+        <label>Действительно до <input id="лабДо" type="date" value="${v(л.свид_до)}"></label>
+        <label>Дата плановой проверки <input id="лабПроверка" type="date" value="${v(л.проверка)}"></label>
+      </div>
+      <div class="note">В шапку акта идёт: <i>${esc(типографика(шапкаЛаборатории()))}</i></div>
+
+      <div class="grp" style="padding-left:0">Методы, на которые аттестована ЛНК</div>
+      <div class="метки">
+        ${METHODS.map(м=>`<label class="метка"><input type="checkbox" id="лабМ_${м}"
+          ${(л.методы||[]).indexOf(м)>=0?"checked":""}> ${м}</label>`).join("")}
+      </div>
+
+      <div class="grp" style="padding-left:0">Дополнительные сведения</div>
+      <div class="note">Сюда вносится всё, что нужно вашим документам и чего нет
+        в полях выше. Пары «название — значение», в паспорт пойдут как есть.</div>
+      ${(л.доп||[]).map((д,i)=>`
+        <div class="допстрока">
+          <input class="допк" value="${v(д.к)}" placeholder="название сведения">
+          <input class="допз" value="${v(д.з)}" placeholder="значение">
+          <button class="btn small" type="button" onclick="допМинус(${i})">×</button>
+        </div>`).join("")}
+      <button class="btn small" type="button" onclick="допПлюс()">+ Сведение</button>
+
+      <div class="formbtns"><button class="btn primary" onclick="saveЛабИзФормы()">✓ Сохранить</button></div>
+      <div class="note"><b>Паспорт ЛНК</b> собрать пока не из чего: его формы у меня нет.
+        Пришлите образец — сделаю так же, как акт, и подставлю сюда всё, что заполнено.</div>
+    </div>`;
 }
 // Строка шапки акта целиком: «Лаборатория НК <организация>, свидетельство
 // об аттестации № X от ДД.ММ.ГГГГ». Пустые части не оставляют дыр.
@@ -1950,13 +2056,67 @@ function renderDash(){
 
 // ── Ввод и правка записи ──────────────────────────────────
 const STATUSES = ["Черновик","В работе","Зарегистрирован","Аннулирован"];
+// Номер акта выбирается, а не вписывается: либо уже существующий (список
+// от большего номера к меньшему, наверху самый свежий), либо новый —
+// следующий по порядку, либо акт не оформляется.
+function блокНомераАкта(z){
+  const текущий=String(z&&z.акт||"").trim();
+  const год=(z&&годЗаписи(z))||String(new Date().getFullYear());
+  const существующие=списокАктов().map(g=>g.ключ)
+    .sort((a,b)=>b.localeCompare(a,"ru",{numeric:true}));
+  const след="АКТ "+дваЗнака(следующийАкт(год))+"-"+год;
+  const режим = !текущий ? "нет" : (существующие.indexOf(текущий)>=0 ? "есть" : "свой");
+  const rb=(v,т,вн)=>`<label class="актвар">
+      <input type="radio" name="актреж" value="${v}" ${режим===v?"checked":""}
+        onchange="актРежим()"> <span>${т}</span>${вн||""}</label>`;
+  return `<div class="актвыбор" id="актвыбор">
+    ${rb("есть","Существующий акт",
+      `<select id="e_актсущ" onchange="актВыбран()">
+         ${существующие.map(к=>`<option value="${esc(к)}" ${к===текущий?"selected":""}>${esc(к)}</option>`).join("")
+           || `<option value="">— актов пока нет —</option>`}
+       </select>`)}
+    ${rb("новый","Новый номер",`<span class="актподсказ">${esc(след)}</span>`)}
+    ${rb("нет","Без акта")}
+    ${режим==="свой"?rb("свой","Как есть",`<span class="актподсказ">${esc(текущий)}</span>`):""}
+    <input type="hidden" id="e_акт" value="${esc(текущий)}">
+  </div>`;
+}
+function актРежим(){
+  const в=document.querySelector('input[name="актреж"]:checked');
+  if(!в) return;
+  const скрытое=document.getElementById("e_акт");
+  const сп=document.getElementById("e_актсущ");
+  if(в.value==="есть")      скрытое.value=сп?sp_знач(сп):"";
+  else if(в.value==="нет")  скрытое.value="";
+  else if(в.value==="новый"){
+    const п=document.querySelector('input[value="новый"]').parentNode.querySelector(".актподсказ");
+    скрытое.value=п?п.textContent.trim():"";
+  }
+  // «свой» оставляет как было
+}
+function sp_знач(сп){ return сп.value||""; }
+function актВыбран(){
+  const р=document.querySelector('input[name="актреж"][value="есть"]');
+  if(р){ р.checked=true; актРежим(); }
+}
 function editJournal(id){
   curView="edit";
   document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
   const z = id ? J.find(x=>String(x.id)===String(id)) : null;
   const val=(v)=>esc(v==null?"":v);
   const opts=(arr,cur)=>arr.map(x=>`<option${x===cur?" selected":""}>${esc(x)}</option>`).join("");
-  const objlist = live(O).map(o=>`<option value="${esc(o.наименование)}">`).join("");
+  // В списке объектов — наименование ВМЕСТЕ с номерами: так их и ищут.
+  // Браузер отбирает подсказки по любому куску строки, значит поиск по
+  // заводскому или регистрационному номеру работает сам собой.
+  const строкаОбъекта=o=>{
+    const ч=[o.наименование];
+    if(String(o.зав||"").trim()) ч.push("зав. № "+o.зав.trim());
+    if(String(o.рег||"").trim()) ч.push("рег. № "+o.рег.trim());
+    return ч.join(", ");
+  };
+  const objlist = live(O)
+    .slice().sort((a,b)=>String(a.наименование||"").localeCompare(String(b.наименование||""),"ru"))
+    .map(o=>`<option value="${esc(строкаОбъекта(o))}">`).join("");
   const splist = live(P).map(p=>`<option value="${esc(p.вдок||p.фио)}">`).join("");
   const mrows = METHODS.map(m=>{
     const mm=(z&&z.методы&&z.методы[m])||{};
@@ -1974,7 +2134,7 @@ function editJournal(id){
         <div class="sect" style="margin-top:0">Основное</div>
         <div class="grid">
           <label>Статус<select id="e_статус">${opts(STATUSES,z?z.статус:"Черновик")}</select></label>
-          <label>№ акта<input id="e_акт" value="${val(z&&z.акт)}" placeholder="напр.: 128-2026"></label>
+          <label class="wide">Номер акта${блокНомераАкта(z)}</label>
           <label>Дата контроля<input id="e_дата" type="date" value="${z?val(z.дата):new Date().toISOString().slice(0,10)}"></label>
           <label>Заказывающее подразделение<input id="e_подразделение" value="${val(z&&z.подразделение)}"></label>
         </div>
@@ -2030,6 +2190,8 @@ function quickAddObject(){
   toast("Объект заведён. Заводской и рег. номера допишите в разделе «Объекты».");
 }
 function saveJournalRec(id){
+  // Объект выбирается строкой «наименование, зав. № …, рег. № …» —
+  // разбираем её, чтобы номера легли в свои поля, а не только в строку.
   const v=(k)=>{const el=document.getElementById(k);return el?el.value.trim():"";};
   const объект=v("e_объект");
   if(!объект && !v("e_акт")){ toast("Заполните объект или № акта"); return; }
@@ -2038,13 +2200,21 @@ function saveJournalRec(id){
     const н=v("m_"+m+"_н"), исп=v("m_"+m+"_исп");
     if(н||исп) методы[m]={н:н,исп:исп};
   });
-  const spr=objByName[объект]||{};
+  // Строка объекта приходит из списка вместе с номерами: разбираем её,
+  // а карточку ищем по имени вместе с заводским номером — по одному имени
+  // нельзя, у десятков баллонов оно одинаковое.
+  const имяОб=объект.replace(/,?\s*(зав|рег)\.?\s*№.*$/i,"").trim();
+  const мЗав=/зав\.?\s*№\s*([^,;]+)/i.exec(объект), мРег=/рег\.?\s*№\s*([^,;]+)/i.exec(объект);
+  const завОб=мЗав?мЗав[1].trim():"", регОб=мРег?мРег[1].trim():"";
+  const spr=live(O).find(o=>String(o.наименование||"").trim()===имяОб &&
+                            String(o.зав||"").trim()===завОб)
+            || objByName[имяОб] || objByName[объект] || {};
   const дата=v("e_дата");
   const rec={
     статус:v("e_статус"), акт:v("e_акт"), дата:дата, год:дата?дата.slice(0,4):"",
     подразделение:v("e_подразделение"), объект:объект,
-    объект_ид:spr.id||"", наименование:v("e_наим")||объект,
-    зав:spr.зав||"", рег:spr.рег||"", методы:методы,
+    объект_ид:spr.id||"", наименование:v("e_наим")||имяОб,
+    зав:завОб||spr.зав||"", рег:регОб||spr.рег||"", методы:методы,
     архив:v("e_архив"), исходящий:v("e_исходящий"), отправитель:v("e_отправитель"),
     примечание:v("e_примечание"),
     изменено:new Date().toISOString(), место:getWS().код
@@ -2952,17 +3122,11 @@ function renderExchange(){
       </div>
       <div class="panel">
         <h3>⌂ Лаборатория</h3>
-        <div class="form"><div class="grid">
-          <label class="wide">Организация, при которой состоит ЛНК
-            <input id="лабОрг" value="${esc(getЛаб().организация)}"
-              placeholder="подставится после слов «Лаборатория НК»"></label>
-          <label>Свидетельство об аттестации №
-            <input id="лабНомер" value="${esc(getЛаб().свид_номер)}"></label>
-          <label>от <input id="лабДата" type="date" value="${esc(getЛаб().свид_дата)}"></label>
-        </div>
-        <div class="formbtns"><button class="btn primary" onclick="saveЛабИзФормы()">Сохранить</button></div>
-        <div class="note">Идёт в шапку акта — по центру курсивом:<br>
-          <i>${esc(шапкаЛаборатории())}</i></div></div>
+        <div class="note">Организация, свидетельство об аттестации, сроки и методы —
+          в разделе «Лаборатория». Оттуда они идут в шапку акта и в распечатки.</div>
+        <div class="bar"><span class="g" style="flex:1">В шапке акта</span></div>
+        <div class="note"><i>${esc(типографика(шапкаЛаборатории()))}</i></div>
+        <div class="formbtns"><button class="btn" onclick="switchView('lab')">Открыть карточку</button></div>
       </div>
       <div class="panel">
         <h3>№ Право выдачи номеров</h3>
@@ -3241,7 +3405,7 @@ let toastT;function toast(m){const t=document.getElementById("toast");t.textCont
 
 function switchView(v){curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr}[v]
+  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,lab:renderLab}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b)switchView(b.dataset.view);});

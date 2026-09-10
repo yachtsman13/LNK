@@ -285,7 +285,10 @@
   .signtbl td{border:0;padding:10px 0;font-size:14.5px;vertical-align:bottom}
   .signtbl td.pos{text-align:center}
   .signtbl td.nm{text-align:right;white-space:nowrap}
+  /* Последний раздел держится вместе с подписями: иначе лист с одними
+     фамилиями — ровно то, чего быть не должно. */
   .sheet .aktp.последний{break-after:avoid}
+  .sheet .aktp.последний + .fldhint{break-after:avoid}
   .aktbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   .btn.small{padding:4px 9px;font-size:12px}
   td.mets{font-size:12px;color:var(--muted)}
@@ -1441,14 +1444,16 @@ function renderAkt(ключ){
   const фраза=a.объекты || черновикОбъектов(zs);
   const своя=!!a.объекты;
 
-  const абзацы=спискиАкта(zs).map((g,i)=>{
+  const группыАкта=спискиАкта(zs);
+  const абзацы=группыАкта.map((g,i)=>{
     const имя=имяДок(g.м);
+    const последний=(i===группыАкта.length-1);
     const шапка=имя
       ? `<span class="fld" contenteditable="true" data-ph="название документов"
            oninput="saveИмяДок('${g.м}',this.innerText)">${e(имя)}</span>`
       : `<span class="fld" contenteditable="true" data-ph="как называются документы по методу ${g.м} — впишите"
            oninput="saveИмяДок('${g.м}',this.innerText)"></span>`;
-    return `<p class="aktp вис"><span class="нр">${i+1}.</span>${шапка} <span class="nbr">№№</span>&nbsp;${
+    return `<p class="aktp вис${последний?" последний":""}"><span class="нр">${i+1}.</span>${шапка} <span class="nbr">№№</span>&nbsp;${
       g.номера.map(номерНеразрывно).join(", ")}.</p>`+
       (имя?"":`<div class="fldhint">Метода ${g.м} в присланных актах не было — название документов не выдумываю. Впишите один раз, оно запомнится.</div>`);
   }).join("") || `<p class="aktp"><i>Ни у одного метода нет выданного номера — выдайте номера в записях.</i></p>`;

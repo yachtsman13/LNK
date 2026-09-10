@@ -62,6 +62,12 @@ def проверить(путь):
     # 3. Порядок элементов
     for часть in sorted(n for n in имена if n.endswith(".xml") and n.startswith("word/")):
         root = ET.fromstring(z.read(часть))
+        # Внутри w:r содержимое идёт в любом порядке, но rPr обязан быть первым
+        for r in root.iter(W + "r"):
+            дети = [c.tag[len(W):] for c in r if c.tag.startswith(W)]
+            if "rPr" in дети and дети[0] != "rPr":
+                беды.append("%s: в <r> свойства <rPr> не на первом месте (%s)"
+                            % (часть, " → ".join(дети[:6])))
         for эл in root.iter():
             имя = эл.tag[len(W):] if эл.tag.startswith(W) else None
             if имя not in ПОРЯДОК:

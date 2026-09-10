@@ -247,7 +247,10 @@
   .signrow .nm{color:#333;font-size:13.5px}
 
   /* Акт о проведении работ: вёрстка снята с ваших актов 28-2026 и 35-2026 */
-  .sheet .labcert{font-size:12.5px;margin-bottom:30px}
+  /* Свидетельство об аттестации — по центру курсивом */
+  .sheet .labcert{font-size:13px;margin-bottom:28px;text-align:center;font-style:italic}
+  /* Номер протокола не рвётся ни по дефисам, ни от знака № */
+  .ном{white-space:nowrap}
   .sheet h1.akt{margin:0 0 2px;letter-spacing:0}
   .sheet .aktsub{text-align:center;font-size:15px;margin-bottom:20px}
   .sheet .aktp{text-align:justify;margin:0 0 11px;text-indent:1.25cm}
@@ -260,10 +263,15 @@
   .fld.blk{display:block;text-indent:0;border:1px dotted #a07800;border-bottom:1px dotted #a07800;
     border-radius:4px;padding:6px 9px;margin:2px 0}
   .fldhint{font-family:var(--font);font-size:11.5px;color:#a07800;margin:2px 0 10px;text-indent:0}
-  .signtbl{width:100%;border-collapse:collapse;margin-top:30px}
+  /* Подписи: колонка должностей не заходит дальше 8 см от левой границы
+     листа (лист 21 см, левое поле 2,75 см → колонка 5,25 см = 32,8%
+     ширины текста), должности центрированы в этой колонке одинаково для
+     всех; фамилии — по правому краю. Таблица не отрывается от текста. */
+  .signtbl{width:100%;border-collapse:collapse;margin-top:30px;break-inside:avoid}
   .signtbl td{border:0;padding:10px 0;font-size:14.5px;vertical-align:bottom}
-  .signtbl td.pos{width:64%}
+  .signtbl td.pos{width:32.8%;text-align:center}
   .signtbl td.nm{text-align:right;white-space:nowrap}
+  .sheet .aktp.последний{break-after:avoid}
   .aktbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   .btn.small{padding:4px 9px;font-size:12px}
   td.mets{font-size:12px;color:var(--muted)}
@@ -277,6 +285,8 @@
   .плантбл tfoot td{border-top:2px solid var(--line);background:var(--chip)}
   /* Проверка данных */
   h3.прз{font-size:14px;margin:20px 0 10px;color:var(--muted);font-weight:600}
+  .кстрока{display:flex;gap:7px;align-items:center;margin-bottom:6px}
+  .кстрока input{flex:1}
   .пров{background:var(--card);border:1px solid var(--line);border-left-width:4px;
     border-radius:var(--card-radius);padding:11px 14px;margin-bottom:9px}
   .пров.ошибка{border-left-color:var(--danger)}
@@ -356,6 +366,7 @@
     <button class="nav" data-view="objects"><span class="ic">▢</span>Объекты<span class="cnt" id="cObjects">0</span></button>
     <button class="nav" data-view="si"><span class="ic">⌗</span>Приборы (СИ)<span class="cnt" id="cSi">0</span></button>
     <button class="nav" data-view="people"><span class="ic">☺</span>Специалисты<span class="cnt" id="cPeople">0</span></button>
+    <button class="nav" data-view="podr"><span class="ic">◨</span>Подразделения<span class="cnt" id="cPodr">0</span></button>
     <div class="grp">Документы</div>
     <button class="nav" data-view="docs"><span class="ic">▦</span>Акты и протоколы<span class="cnt" id="cDocs">0</span></button>
     <button class="nav" data-view="plan"><span class="ic">◷</span>План работ</button>
@@ -521,7 +532,12 @@ const REG_OBJ="lnk_obj", REG_SI="lnk_si", REG_PPL="lnk_ppl";
 // поэтому у него есть свои поля: контракт, фраза об объектах, подписи.
 // В записи журнала их держать негде — они общие на весь акт.
 const REG_AKT="lnk_akts";
-let O, S, P, A;
+// Заказывающее подразделение — своя карточка: у каждого свой тип контракта,
+// свои реквизиты на каждый год и свой подписант со стороны экспертной
+// организации. Держать это в записи журнала нельзя — повторялось бы в
+// сотнях строк и разъезжалось.
+const REG_ПОДР="lnk_podr";
+let O, S, P, A, ПОДР;
 function loadReg(key, seed){
   try{ const raw=localStorage.getItem(key); if(raw){ const p=JSON.parse(raw);
        const rows=Array.isArray(p)?p:p.rows; if(Array.isArray(rows)) return rows; } }catch(e){}
@@ -585,6 +601,7 @@ function printSign(){
 
 function setChrome(){
   document.getElementById("cJournal").textContent=liveJ().length;
+  const пд=document.getElementById("cPodr"); if(пд) пд.textContent=live(ПОДР).length;
   const пр=document.getElementById("cCheck");
   if(пр){ const n=числоПроблем(); пр.textContent=n; пр.classList.toggle("warn", n>0); }
   document.getElementById("cObjects").textContent=live(O).length;
@@ -817,8 +834,34 @@ function saveИмяДок(м,t){
   п.имена[м]=(t||"").trim(); п.изменено=new Date().toISOString();
   saveИмена(п);
 }
-function getLabCert(){ try{ return localStorage.getItem("lnk_labcert")||""; }catch(e){ return ""; } }
-function saveLabCert(t){ try{ localStorage.setItem("lnk_labcert",(t||"").trim()); }catch(e){} }
+// Данные лаборатории — общие для всех документов, поэтому не на акте, а
+// в настройках: организация, при которой состоит ЛНК, и свидетельство об
+// аттестации. В шапку акта они подставляются сами.
+function getЛаб(){
+  try{ const r=localStorage.getItem("lnk_lab"); if(r) return JSON.parse(r); }catch(e){}
+  return {организация:"", свид_номер:"", свид_дата:""};
+}
+function saveЛаб(о){
+  try{ localStorage.setItem("lnk_lab", JSON.stringify(о)); }catch(e){}
+}
+function saveЛабИзФормы(){
+  saveЛаб({организация:(document.getElementById("лабОрг").value||"").trim(),
+           свид_номер:(document.getElementById("лабНомер").value||"").trim(),
+           свид_дата:(document.getElementById("лабДата").value||"").trim()});
+  toast("Данные лаборатории сохранены"); renderExchange();
+}
+// Строка шапки акта целиком: «Лаборатория НК <организация>, свидетельство
+// об аттестации № X от ДД.ММ.ГГГГ». Пустые части не оставляют дыр.
+function шапкаЛаборатории(){
+  const л=getЛаб();
+  let t="Лаборатория НК"+(л.организация?(" "+л.организация):"");
+  if(л.свид_номер || л.свид_дата){
+    t+=", свидетельство об аттестации";
+    if(л.свид_номер) t+=" № "+л.свид_номер;
+    if(л.свид_дата)  t+=" от "+ru(л.свид_дата)+" г.";
+  }
+  return t;
+}
 
 // Ключ акта — то, что стоит в записи: «АКТ 28-2026».
 function актКлюч(z){ return String(z.акт||"").trim().replace(/\s+/g," "); }
@@ -885,25 +928,37 @@ function спискиАкта(zs){
 // В акте должность пишется короче, чем в справочнике: и в 28-2026, и в
 // 35-2026 стоит «Специалист ЛНК …», а в справочнике — «Специалист по
 // неразрушающему контролю». Поэтому черновик, а строка правится руками.
+// В акте должность пишется короче, чем в справочнике: в ваших актах стоит
+// «Специалист ЛНК», а в справочнике — «Специалист по неразрушающему
+// контролю». Черновик, строка правится руками.
 function должностьВАкте(д){
   const t=String(д||"").trim();
   if(/^специалист/i.test(t)) return "Специалист ЛНК";
   return t;
 }
-function черновикПодписей(zs){
-  const строки=[{д:"Генеральный директор", ф:""}];   // подписант заказчика
-  const поИмени={}; live(P).forEach(x=>{ if(x.вдок) поИмени[x.вдок.trim()]=x; });
-  const глава=live(P).find(x=>/начальник/i.test(x.должность||""));
-  if(глава) строки.push({д:должностьВАкте(глава.должность), ф:глава.вдок||глава.фио||""});
+// Подписи трёх ролей: руководитель экспертной организации (сторона
+// заказчика, у него своя организация в строке), руководитель работ и
+// специалисты, проводившие контроль.
+function черновикПодписей(zs,ключ){
+  const a=актЗапись(ключ,false), п=подрАкта(ключ);
+  const строки=[{роль:"эксперт",
+                 д:(п&&п.эксп_должность)||"Генеральный директор",
+                 орг:(п&&п.эксп_организация)||"",
+                 ф:(п&&п.эксп_фио)||""}];
+  const рук=live(P).find(x=>x.вдок===a.руководитель) ||
+            live(P).find(x=>/начальник/i.test(x.должность||""));
+  if(рук) строки.push({роль:"руководитель", д:должностьВАкте(рук.должность),
+                       орг:"", ф:рук.вдок||рук.фио||""});
   const исп=[];
   zs.forEach(z=>methodsOf(z).forEach(м=>{
     const и=String((z.методы[м]||{}).исп||"").trim();
     if(и && исп.indexOf(и)<0) исп.push(и);
   }));
+  const поИмени={}; live(P).forEach(x=>{ if(x.вдок) поИмени[x.вдок.trim()]=x; });
   исп.forEach(и=>{
-    if(глава && (глава.вдок||"").trim()===и) return;
+    if(рук && (рук.вдок||"").trim()===и) return;
     const c=поИмени[и];
-    строки.push({д:должностьВАкте(c?c.должность:"Специалист"), ф:и});
+    строки.push({роль:"специалист", д:должностьВАкте(c?c.должность:"Специалист"), орг:"", ф:и});
   });
   return строки;
 }
@@ -920,26 +975,60 @@ function saveАкт(ключ,поле,текст){
   a.изменено=new Date().toISOString(); a.место=getWS().код;
   saveReg(REG_AKT,A);
 }
+function saveАктИПеререрисовать(ключ,поле,знач){ saveАкт(ключ,поле,знач); renderAkt(ключ); }
+// Подразделение акта и контракт его года — из карточки подразделения.
+function подрАкта(ключ){
+  const a=актЗапись(ключ,false);
+  return live(ПОДР).find(x=>x.id===a.подр)||null;
+}
+// «Проведены работы в …» требует предложного падежа: «в цехе № 5», а не
+// «в Цех № 5». Склонять автоматически ненадёжно, поэтому в карточке есть
+// отдельное поле для падежной формы; нет его — берётся наименование как
+// есть, и падеж правится прямо в документе.
+function названиеПодразделения(ключ){
+  const a=актЗапись(ключ,false), п=подрАкта(ключ);
+  if(String(a.подразделение||"").trim()) return a.подразделение.trim();
+  if(!п) return "";
+  return String(п.предложный||"").trim() || String(п.наименование||"").trim();
+}
+function годАкта(ключ){
+  const zs=записиАкта(ключ);
+  const m=/^АКТ\s+\d+-(\d{4})$/i.exec(ключ);
+  return m ? m[1] : (zs.length?годЗаписи(zs[0]):"");
+}
+function контрактАкта(ключ){
+  const a=актЗапись(ключ,false), п=подрАкта(ключ);
+  const к=п?контрактГода(п,годАкта(ключ)):null;
+  return { тип: a.контракт_тип || (п&&п.тип_контракта) || "",
+           номер: a.контракт_номер || (к&&к.номер) || "",
+           дата:  a.контракт_дата  || (к&&к.дата)  || "",
+           изКарточки: !!к };
+}
 function подписиАкта(ключ,zs){
   const a=актЗапись(ключ,false);
-  return (Array.isArray(a.подписи)&&a.подписи.length) ? a.подписи : черновикПодписей(zs);
+  return (Array.isArray(a.подписи)&&a.подписи.length) ? a.подписи : черновикПодписей(zs,ключ);
 }
 function saveПодпись(ключ,i,поле,текст){
   const a=актЗапись(ключ,true);
-  if(!Array.isArray(a.подписи)||!a.подписи.length) a.подписи=черновикПодписей(записиАкта(ключ));
-  if(!a.подписи[i]) a.подписи[i]={д:"",ф:""};
+  if(!Array.isArray(a.подписи)||!a.подписи.length) a.подписи=черновикПодписей(записиАкта(ключ),ключ);
+  if(!a.подписи[i]) a.подписи[i]={д:"",ф:"",орг:""};
   a.подписи[i][поле]=String(текст||"").trim();
   a.изменено=new Date().toISOString(); a.место=getWS().код; saveReg(REG_AKT,A);
 }
 function подписьПлюс(ключ){
   const a=актЗапись(ключ,true);
-  if(!Array.isArray(a.подписи)||!a.подписи.length) a.подписи=черновикПодписей(записиАкта(ключ));
-  a.подписи.push({д:"",ф:""}); a.изменено=new Date().toISOString(); saveReg(REG_AKT,A); renderAkt(ключ);
+  if(!Array.isArray(a.подписи)||!a.подписи.length) a.подписи=черновикПодписей(записиАкта(ключ),ключ);
+  a.подписи.push({д:"",ф:"",орг:""}); a.изменено=new Date().toISOString(); saveReg(REG_AKT,A); renderAkt(ключ);
 }
 function подписьМинус(ключ,i){
   const a=актЗапись(ключ,true);
-  if(!Array.isArray(a.подписи)||!a.подписи.length) a.подписи=черновикПодписей(записиАкта(ключ));
+  if(!Array.isArray(a.подписи)||!a.подписи.length) a.подписи=черновикПодписей(записиАкта(ключ),ключ);
   a.подписи.splice(i,1); a.изменено=new Date().toISOString(); saveReg(REG_AKT,A); renderAkt(ключ);
+}
+function сбросПодписей(ключ){
+  if(!confirm("Собрать строки подписей заново из карточки подразделения и записей?\n\nВаша правка подписей будет потеряна.")) return;
+  const a=актЗапись(ключ,true); delete a.подписи;
+  a.изменено=new Date().toISOString(); saveReg(REG_AKT,A); renderAkt(ключ);
 }
 function сбросФразы(ключ){
   if(!confirm("Вернуть черновую фразу об объектах, собранную из записей?\n\nВаша правка этой фразы будет потеряна.")) return;
@@ -1022,9 +1111,46 @@ function wP(t,вид){
   вид=вид||{};
   const jc=вид.jc||"both";
   const ind=вид.отступ===false?'':'<w:ind w:firstLine="709"/>';
-  return '<w:p><w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
-    ind+'<w:jc w:val="'+jc+'"/>'+rPr(вид.жирный)+'</w:pPr>'+
-    (t?wRun(t,вид.жирный):'')+'</w:p>';
+  // keepNext держит абзац вместе со следующим: так таблица подписей не
+  // уезжает на отдельный лист без текста о номерах протоколов.
+  const держать=вид.держать?'<w:keepNext/>':'';
+  const курсив=вид.курсив?'<w:i/>':'';
+  return '<w:p><w:pPr>'+держать+'<w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
+    ind+'<w:jc w:val="'+jc+'"/>'+rPrПолный(вид)+'</w:pPr>'+
+    (t?wRunВид(t,вид):'')+'</w:p>';
+}
+function rPrПолный(вид){
+  return '<w:rPr>'+ФОНТ+(вид.жирный?'<w:b/>':'')+(вид.курсив?'<w:i/>':'')+КЕГЛЬ+'</w:rPr>';
+}
+function wRunВид(t,вид){
+  return '<w:r>'+rPrПолный(вид)+'<w:t xml:space="preserve">'+X(t)+'</w:t></w:r>';
+}
+// Номер протокола «121-2026-ВИК» Word разорвал бы по дефисам. Неразрывный
+// дефис (w:noBreakHyphen) — штатный для этого элемент, не подделка
+// пробелами: номер остаётся целым при любой выключке.
+function wНомер(об){
+  const части=String(об).split("-");
+  let из='';
+  части.forEach((ч,i)=>{
+    if(i) из+='<w:r>'+rPr(false)+'<w:noBreakHyphen/></w:r>';
+    из+='<w:r>'+rPr(false)+'<w:t xml:space="preserve">'+X(ч)+'</w:t></w:r>';
+  });
+  return из;
+}
+// Абзац перечня: «1. Название №№ номер, номер.» — знак № приклеен к
+// первому номеру неразрывным пробелом.
+function wПеречень(н, имя, номера, держать){
+  let из='<w:p><w:pPr>'+(держать?'<w:keepNext/>':'')+
+    '<w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
+    '<w:ind w:firstLine="709"/><w:jc w:val="both"/>'+rPr(false)+'</w:pPr>';
+  из+=wRun(н+". "+имя+" ");
+  из+='<w:r>'+rPr(false)+'<w:t xml:space="preserve">\u2116\u2116\u00a0</w:t></w:r>';
+  номера.forEach((об,i)=>{
+    if(i) из+=wRun(", ");
+    из+=wНомер(об);
+  });
+  из+=wRun(".");
+  return из+'</w:p>';
 }
 function актВWord(ключ){
   const zs=записиАкта(ключ);
@@ -1032,52 +1158,71 @@ function актВWord(ключ){
   const a=актЗапись(ключ,false);
   const пусто=()=>wP("",{отступ:false});
   const фраза=a.объекты||черновикОбъектов(zs);
-  const подр=a.подразделение||[...new Set(zs.map(z=>z.подразделение).filter(Boolean))].join(", ");
+  const подр=названиеПодразделения(ключ);
 
+  const к=контрактАкта(ключ);
+  const тип=(к.тип||"").trim();
+  const датаК=к.дата?ru(к.дата):(a.контракт_дата_текст||"__.__.____");
   let тело="";
   тело+=wP("АКТ № "+номерАкта(ключ),{jc:"center",жирный:true,отступ:false});
   тело+=wP("о проведении работ",{jc:"center",жирный:true,отступ:false});
   тело+=пусто()+пусто()+пусто();
-  тело+=wP("В соответствии с контрактом от "+(a.контракт_дата||"__.__.____")+
-           " № "+(a.контракт_номер||"______")+" проведены работы в "+(подр||"___")+
+  тело+=wP("В соответствии с "+(тип?(тип+" "):"")+"контрактом от "+датаК+
+           " № "+(к.номер||"______")+" проведены работы в "+(подр||"___")+
            " по неразрушающему контролю в рамках экспертизы промышленной безопасности на "+
            фраза+".");
   тело+=пусто();
   тело+=wP("Результаты работ отражены в следующих документах.");
   тело+=пусто();
   const нетИмени=[];
-  спискиАкта(zs).forEach(g=>{
+  const группы=спискиАкта(zs);
+  группы.forEach((g,i)=>{
     const имя=имяДок(g.м);
     if(!имя) нетИмени.push(g.м);
-    тело+=wP((имя||("Документы по методу "+g.м))+" №№ "+g.номера.join(", ")+".");
-    тело+=пусто();
+    // последний абзац перечня держим вместе с подписями
+    const последний=(i===группы.length-1);
+    тело+=wПеречень(i+1, имя||("Документы по методу "+g.м), g.номера, последний);
+    if(!последний) тело+=пусто();
   });
-  тело+=пусто();
+  // Отступ перед подписями, но с keepNext: иначе пустой абзац позволил бы
+  // таблице уехать на отдельный лист без текста о номерах.
+  тело+=wP("",{отступ:false,держать:true});
 
-  // Таблица подписей — без рамок, прижата вправо, как у вас (3963 + 5098)
-  const яч=(t,ш)=>'<w:tc><w:tcPr><w:tcW w:w="'+ш+'" w:type="dxa"/></w:tcPr>'+
-    '<w:p><w:pPr><w:spacing w:after="0" w:line="280" w:lineRule="exact"/><w:jc w:val="center"/>'+
+  // Таблица подписей. Колонка должностей — 2977 твипов: лист А4 шириной
+  // 11906, левое поле 1559, значит правый край колонки приходится ровно
+  // на 8 см от левой границы листа, как вы просили. Должности в ней
+  // центрированы — одинаково для всех. Фамилии по правому краю.
+  // cantSplit не даёт строке подписи разорваться между страницами.
+  const ШИР_ДОЛЖ=2977, ШИР_ФАМ=9071-ШИР_ДОЛЖ;
+  const ячД=(r)=>{
+    const абз=(t)=>'<w:p><w:pPr><w:spacing w:after="0" w:line="280" w:lineRule="exact"/>'+
+      '<w:jc w:val="center"/>'+rPr(false)+'</w:pPr>'+(t?wRun(t):'')+'</w:p>';
+    return '<w:tc><w:tcPr><w:tcW w:w="'+ШИР_ДОЛЖ+'" w:type="dxa"/></w:tcPr>'+
+      абз(r.д)+((r.орг||"").trim()?абз(r.орг):'')+'</w:tc>';
+  };
+  const ячФ=(t)=>'<w:tc><w:tcPr><w:tcW w:w="'+ШИР_ФАМ+'" w:type="dxa"/></w:tcPr>'+
+    '<w:p><w:pPr><w:spacing w:after="0" w:line="280" w:lineRule="exact"/><w:jc w:val="right"/>'+
     rPr(false)+'</w:pPr>'+(t?wRun(t):'')+'</w:p></w:tc>';
   const строки=подписиАкта(ключ,zs).map(r=>
-    '<w:tr><w:trPr><w:trHeight w:val="805"/><w:jc w:val="right"/></w:trPr>'+
-    яч(r.д,3963)+яч(r.ф,5098)+'</w:tr>').join("");
+    '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="805"/></w:trPr>'+
+    ячД(r)+ячФ(r.ф)+'</w:tr>').join("");
   const нет='<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
             '<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
             '<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
             '<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
             '<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
             '<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>';
-  тело+='<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:jc w:val="right"/>'+
+  тело+='<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>'+
     '<w:tblBorders>'+нет+'</w:tblBorders>'+
     '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>'+
-    '</w:tblPr><w:tblGrid><w:gridCol w:w="3963"/><w:gridCol w:w="5098"/></w:tblGrid>'+
+    '</w:tblPr><w:tblGrid><w:gridCol w:w="'+ШИР_ДОЛЖ+'"/><w:gridCol w:w="'+ШИР_ФАМ+'"/></w:tblGrid>'+
     строки+'</w:tbl>'+пусто();
 
   const НС='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '+
            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  // Шапка первой страницы: по центру курсивом, данные из настроек ЛНК
   const шапкаПервой='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
-    '<w:hdr '+НС+'>'+wP(a.шапка||getLabCert()||"Лаборатория НК, св. № ____ от __.__.____ г.",
-                        {jc:"left",отступ:false})+'</w:hdr>';
+    '<w:hdr '+НС+'>'+wP(шапкаЛаборатории(),{jc:"center",отступ:false,курсив:true})+'</w:hdr>';
   const шапкаПрочих='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<w:hdr '+НС+'><w:p><w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
     '<w:jc w:val="center"/>'+rPr(false)+'</w:pPr>'+
@@ -1118,43 +1263,53 @@ function актВWord(ключ){
   dlBlob("Акт "+номерАкта(ключ)+".docx", zipStore(файлы));
   toast("Акт выгружен в Word"+(нетИмени.length?(" · без названия: "+нетИмени.join(", ")):""));
 }
+// Номер протокола не должен разрываться переносом: ни между знаком № и
+// номером, ни внутри самого номера по дефисам. На экране это делает
+// white-space, в Word — неразрывный дефис (w:noBreakHyphen).
+function номерНеразрывно(об){ return '<span class="ном">'+esc(об)+'</span>'; }
 
 function renderAkt(ключ){
   const zs=записиАкта(ключ);
   if(!zs.length){ toast("По акту "+ключ+" записей нет"); return; }
   curView="akt";
   document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
-  const a=актЗапись(ключ,false);
+  const a=актЗапись(ключ,false), п=подрАкта(ключ), к=контрактАкта(ключ);
   const e=(v)=>esc(v||"");
-  const поле=(п,ph,знач)=>`<span class="fld" contenteditable="true" data-ph="${ph}"
-      oninput="saveАкт('${e(ключ)}','${п}',this.innerText)">${e(знач)}</span>`;
+  const поле=(им,ph,знач)=>`<span class="fld" contenteditable="true" data-ph="${ph}"
+      oninput="saveАкт('${e(ключ)}','${им}',this.innerText)">${e(знач)}</span>`;
   const фраза=a.объекты || черновикОбъектов(zs);
   const своя=!!a.объекты;
-  const подр=a.подразделение || [...new Set(zs.map(z=>z.подразделение).filter(Boolean))].join(", ");
 
-  const абзацы=спискиАкта(zs).map(g=>{
+  const абзацы=спискиАкта(zs).map((g,i)=>{
     const имя=имяДок(g.м);
     const шапка=имя
       ? `<span class="fld" contenteditable="true" data-ph="название документов"
            oninput="saveИмяДок('${g.м}',this.innerText)">${e(имя)}</span>`
       : `<span class="fld" contenteditable="true" data-ph="как называются документы по методу ${g.м} — впишите"
            oninput="saveИмяДок('${g.м}',this.innerText)"></span>`;
-    return `<p class="aktp">${шапка} <span class="nbr">№№</span> ${g.номера.map(e).join(", ")}.</p>`+
+    return `<p class="aktp">${i+1}. ${шапка} <span class="nbr">№№</span>&nbsp;${
+      g.номера.map(номерНеразрывно).join(", ")}.</p>`+
       (имя?"":`<div class="fldhint">Метода ${g.м} в присланных актах не было — название документов не выдумываю. Впишите один раз, оно запомнится.</div>`);
   }).join("") || `<p class="aktp"><i>Ни у одного метода нет выданного номера — выдайте номера в записях.</i></p>`;
 
   const подписи=подписиАкта(ключ,zs);
   const строкиП=подписи.map((r,i)=>`
     <tr>
-      <td class="pos"><span class="fld" contenteditable="true" data-ph="должность"
-        oninput="saveПодпись('${e(ключ)}',${i},'д',this.innerText)">${e(r.д)}</span>
-        <button class="btn small noprint" style="margin-left:6px" title="убрать строку"
+      <td class="pos">
+        <span class="fld" contenteditable="true" data-ph="должность"
+          oninput="saveПодпись('${e(ключ)}',${i},'д',this.innerText)">${e(r.д)}</span>${
+        r.роль==="эксперт"||r.орг ? `<br><span class="fld" contenteditable="true" data-ph="наименование организации"
+          oninput="saveПодпись('${e(ключ)}',${i},'орг',this.innerText)">${e(r.орг)}</span>`:""}
+        <button class="btn small noprint" title="убрать строку"
           onclick="подписьМинус('${e(ключ)}',${i})">×</button></td>
       <td class="nm"><span class="fld" contenteditable="true" data-ph="И.О. Фамилия"
         oninput="saveПодпись('${e(ключ)}',${i},'ф',this.innerText)">${e(r.ф)}</span></td>
     </tr>`).join("");
 
   const безНомера=zs.filter(ждётНомеров).length;
+  const списокПодр=live(ПОДР).slice().sort((x,y)=>String(x.наименование||"").localeCompare(String(y.наименование||""),"ru"));
+  const списокРук=live(P).map(x=>x.вдок||x.фио).filter(Boolean);
+
   document.getElementById("main").innerHTML=`
     <div class="head noprint">
       <button class="btn" onclick="switchView('docs')">← К списку</button>
@@ -1164,24 +1319,55 @@ function renderAkt(ключ){
       <button class="btn" onclick="актВWord('${e(ключ)}')">⤓ Word (.docx)</button>
       <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button>
     </div>
-    <div class="aktbar noprint">
-      <button class="btn small" onclick="сбросФразы('${e(ключ)}')">↺ Пересобрать фразу об объектах</button>
-      <button class="btn small" onclick="подписьПлюс('${e(ключ)}')">+ Строка подписи</button>
-      ${безНомера?`<span class="st work">${безНомера} записей ждут номера</span>`:""}
+
+    <div class="card noprint" style="padding:14px 16px;margin-bottom:14px">
+      <div class="grid">
+        <label>Заказывающее подразделение
+          <select onchange="saveАктИПеререрисовать('${e(ключ)}','подр',this.value)">
+            <option value="">— не выбрано —</option>
+            ${списокПодр.map(x=>`<option value="${e(x.id)}" ${a.подр===x.id?"selected":""}>${e(x.наименование)}</option>`).join("")}
+          </select></label>
+        <label>Руководитель работ
+          <select onchange="saveАктИПеререрисовать('${e(ключ)}','руководитель',this.value)">
+            <option value="">— по умолчанию (начальник ЛНК) —</option>
+            ${списокРук.map(ф=>`<option value="${e(ф)}" ${a.руководитель===ф?"selected":""}>${e(ф)}</option>`).join("")}
+          </select></label>
+        <label>Основание работ
+          <select onchange="saveАктИПеререрисовать('${e(ключ)}','вид',this.value)">
+            <option value="" ${!a.вид?"selected":""}>Контракт, экспертиза промышленной безопасности</option>
+            <option value="заявка" ${a.вид==="заявка"?"selected":""}>Дополнительная заявка</option>
+          </select></label>
+      </div>
+      <div class="aktbar" style="margin:10px 0 0">
+        <button class="btn small" onclick="сбросФразы('${e(ключ)}')">↺ Пересобрать фразу об объектах</button>
+        <button class="btn small" onclick="сбросПодписей('${e(ключ)}')">↺ Пересобрать подписи</button>
+        <button class="btn small" onclick="подписьПлюс('${e(ключ)}')">+ Строка подписи</button>
+        ${безНомера?`<span class="st work">${безНомера} записей ждут номера</span>`:""}
+      </div>
+      ${a.вид==="заявка"?`<div class="fldhint" style="margin-top:8px">
+        Для работ по дополнительной заявке форма акта другая — вы её пришлёте.
+        Пока печатается эта форма; когда пришлёте, сделаю отдельную.</div>`:""}
+      ${!a.подр?`<div class="fldhint" style="margin-top:8px">
+        Подразделение не выбрано — тип и реквизиты контракта подставить неоткуда,
+        их придётся вписать прямо в документе. Карточки заводятся в разделе «Подразделения».</div>`
+        :(!к.изКарточки?`<div class="fldhint" style="margin-top:8px">
+        В карточке «${e(п&&п.наименование)}» нет контракта на ${e(годАкта(ключ))} год —
+        реквизиты впишите в документе или добавьте контракт в карточку.</div>`:"")}
     </div>
-    <div class="draftnote noprint">Жёлтым — поля, которые заполняются руками: их неоткуда взять из
-      журнала. Всё вписанное сохраняется и уходит в обмен вместе с актом.
-      <b>Фразу об объектах проверьте по падежу</b>: в акте пишется «на баллонах…», а из
-      справочника приходит «Баллон…». Склонение я не подставляю — на подписываемом
-      документе ошибка в падеже хуже, чем ручная правка один раз.</div>
+
+    <div class="draftnote noprint">Жёлтым — то, что заполняется руками. Всё вписанное сохраняется
+      и уходит в обмен вместе с актом. <b>Фразу об объектах проверьте по падежу</b>: в акте
+      пишется «на баллонах…», а из справочника приходит «Баллон…». Склонение я не подставляю.</div>
+
     <div class="sheet">
-      <div class="labcert">${поле("шапка","Лаборатория НК, св. № ____ от __.__.____ г.",a.шапка||getLabCert())}</div>
+      <div class="labcert">${e(шапкаЛаборатории())}</div>
       <h1 class="akt">АКТ № ${e(номерАкта(ключ))}</h1>
       <div class="aktsub">о проведении работ</div>
 
-      <p class="aktp">В соответствии с контрактом от ${поле("контракт_дата","__.__.____",a.контракт_дата)}
-        № ${поле("контракт_номер","______",a.контракт_номер)} проведены работы
-        в ${поле("подразделение","заказывающее подразделение",подр)}
+      <p class="aktp">В соответствии с ${поле("контракт_тип","тип контракта",к.тип)} контрактом
+        от ${поле("контракт_дата_текст", "__.__.____", к.дата?ru(к.дата):"")}
+        № ${поле("контракт_номер","______",к.номер)} проведены работы
+        в ${поле("подразделение","заказывающее подразделение", названиеПодразделения(ключ))}
         по неразрушающему контролю в рамках экспертизы промышленной безопасности на
         <span class="fld flow" contenteditable="true" data-ph="объекты контроля"
           oninput="saveАкт('${e(ключ)}','объекты',this.innerText)">${e(фраза)}</span>.</p>
@@ -1350,8 +1536,22 @@ const REGS={
       {k:"периодичность",l:"Периодичность, мес."},{k:"хранение",l:"Место хранения"},{k:"состояние",l:"Состояние"}] },
   ppl:{ arr:()=>P, key:REG_PPL, view:"people", pfx:"СП", title:"специалист", name:"фио",
     fields:[{k:"фио",l:"ФИО полностью",wide:1},{k:"вдок",l:"ФИО в документах",wide:1},{k:"должность",l:"Должность"},
-      {k:"функции",l:"Функции в ЛНК",wide:1},{k:"стаж",l:"Стаж по НК с"}] }
+      {k:"функции",l:"Функции в ЛНК",wide:1},{k:"стаж",l:"Стаж по НК с"}] },
+  podr:{ arr:()=>ПОДР, key:REG_ПОДР, view:"podr", pfx:"ПД", title:"подразделение", name:"наименование",
+    контракты:true,
+    fields:[{k:"наименование",l:"Заказывающее подразделение",wide:1},
+      {k:"тип_контракта",l:"Тип контракта (слово перед словом «контрактом»)",wide:1},
+      {k:"эксп_организация",l:"Экспертная организация",wide:1},
+      {k:"эксп_должность",l:"Должность её руководителя"},
+      {k:"эксп_фио",l:"И.О. Фамилия руководителя"},
+      {k:"предложный",l:"Как писать в акте: «проведены работы в …»",wide:1},
+      {k:"примечание",l:"Примечание",wide:1,type:"area"}] }
 };
+// Контракты — по одному на год: «Каждый год разный контракт».
+function контрактыКарточки(z){ return Array.isArray(z && z.контракты) ? z.контракты : []; }
+function контрактГода(подр,год){
+  return контрактыКарточки(подр).find(к=>String(к.год)===String(год))||null;
+}
 function editReg(kind,id){
   const C=REGS[kind], arr=C.arr(), z=id?arr.find(x=>String(x.id)===String(id)):null;
   curView="regedit"; document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
@@ -1364,6 +1564,7 @@ function editReg(kind,id){
     <div class="head"><h2>${z?("Правка: "+C.title):("Новый "+C.title)}</h2></div>
     <div class="card" style="padding:20px"><div class="form">
       <div class="grid">${C.fields.map(inp).join("")}</div>
+      ${C.контракты?блокКонтрактов(z):""}
       <div class="formbtns">
         <button class="btn primary" onclick="saveRegRec('${kind}','${z?esc(z.id):""}')">✓ Сохранить</button>
         <button class="btn" onclick="switchView('${C.view}')">Отмена</button>
@@ -1371,11 +1572,45 @@ function editReg(kind,id){
       </div></div></div>`;
   const f0=document.getElementById("rf_"+C.name); if(f0&&!z) setTimeout(()=>f0.focus(),50);
 }
+// Строки контрактов правятся прямо в карточке: по одному на год.
+let _контракты=[];
+function блокКонтрактов(z){
+  _контракты = контрактыКарточки(z).map(к=>Object.assign({},к));
+  return `<div class="wide" style="margin-top:6px">
+    <div class="grp" style="padding-left:0">Контракты по годам</div>
+    <div id="контракты">${строкиКонтрактов()}</div>
+    <button class="btn small" type="button" onclick="контрактПлюс()">+ Контракт</button>
+    <div class="note">Год, реквизиты. В акт подставится контракт того года, к
+      которому относится акт. Тип контракта берётся из поля выше.</div>
+  </div>`;
+}
+function строкиКонтрактов(){
+  if(!_контракты.length) return `<div class="note">Контрактов пока нет.</div>`;
+  return _контракты.map((к,i)=>`
+    <div class="кстрока">
+      <input value="${esc(к.год||"")}" placeholder="год" style="width:78px"
+        oninput="_контракты[${i}].год=this.value">
+      <input value="${esc(к.номер||"")}" placeholder="номер контракта"
+        oninput="_контракты[${i}].номер=this.value">
+      <input type="date" value="${esc(к.дата||"")}"
+        oninput="_контракты[${i}].дата=this.value">
+      <button class="btn small" type="button" onclick="контрактМинус(${i})">×</button>
+    </div>`).join("");
+}
+function контрактПлюс(){
+  _контракты.push({год:String(new Date().getFullYear()),номер:"",дата:""});
+  document.getElementById("контракты").innerHTML=строкиКонтрактов();
+}
+function контрактМинус(i){
+  _контракты.splice(i,1);
+  document.getElementById("контракты").innerHTML=строкиКонтрактов();
+}
 function saveRegRec(kind,id){
   const C=REGS[kind], arr=C.arr(), rec={};
   C.fields.forEach(f=>{ const el=document.getElementById("rf_"+f.k); rec[f.k]=el?el.value.trim():""; });
   if(!rec[C.name]){ toast("Заполните: "+C.fields.find(f=>f.k===C.name).l); return; }
   rec.изменено=new Date().toISOString(); rec.место=getWS().код;
+  if(C.контракты) rec.контракты=_контракты.filter(к=>String(к.год||"").trim());
   if(id){ const i=arr.findIndex(x=>String(x.id)===String(id)); if(i>=0) arr[i]=Object.assign({},arr[i],rec); }
   else { rec.id=newId(C.pfx); arr.push(rec); }
   saveReg(C.key,arr); if(C.reindex) rebuildObjIndex();
@@ -1726,7 +1961,7 @@ function данныеКопии(){
   const ws=getWS();
   return JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ }, null, 1);
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР }, null, 1);
 }
 function имяКопии(){
   const d=new Date(), дв=n=>(n<10?"0":"")+n;
@@ -1783,7 +2018,7 @@ function backupSave(){
   const name="Резервная копия ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ }, null, 1));
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР }, null, 1));
   try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
   toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
         ", СИ "+live(S).length+", спец. "+live(P).length);
@@ -1812,6 +2047,7 @@ function backupOpen(){
           if(Array.isArray(d.специалисты)){ P=d.специалисты; saveReg(REG_PPL,P); }
           if(Array.isArray(d.акты)){ A=d.акты; saveReg(REG_AKT,A); }
           if(Array.isArray(d.ппр)){ ОТМ=d.ппр; saveReg(REG_ППР,ОТМ); }
+          if(Array.isArray(d.подразделения)){ ПОДР=d.подразделения; saveReg(REG_ПОДР,ПОДР); }
           rebuildObjIndex();
         }
         setChrome(); switchView("dash"); toast("Восстановлено из копии");
@@ -1823,6 +2059,38 @@ function backupOpen(){
 }
 
 // ── Объекты ───────────────────────────────────────────────
+function renderPodr(){
+  const q=(query||"").toLowerCase();
+  const rows=live(ПОДР).filter(x=>!q||((x.наименование||"")+(x.эксп_организация||"")).toLowerCase().includes(q))
+    .sort((a,b)=>String(a.наименование||"").localeCompare(String(b.наименование||""),"ru"));
+  const body=rows.length?rows.map(x=>{
+    const к=контрактыКарточки(x).slice().sort((a,b)=>String(b.год).localeCompare(String(a.год)));
+    return `<tr onclick="editReg('podr','${esc(x.id)}')">
+      <td class="obj"><b>${esc(x.наименование)}</b></td>
+      <td>${esc(x.тип_контракта)||"<span class='muted'>тип не задан</span>"}</td>
+      <td class="obj">${esc(x.эксп_организация)||"<span class='muted'>—</span>"}</td>
+      <td class="obj">${esc(x.эксп_фио)||"<span class='muted'>—</span>"}</td>
+      <td>${к.length?к.slice(0,3).map(y=>`<span class="pill">${esc(y.год)}</span>`).join("")+
+            (к.length>3?`<span class="muted"> +${к.length-3}</span>`:"")
+          :"<span class='st new'>контрактов нет</span>"}</td>
+    </tr>`;}).join(""):`<tr><td colspan="5" class="empty">Подразделений пока нет.</td></tr>`;
+  document.getElementById("main").innerHTML=`
+    ${printHead("Заказывающие подразделения","карточек "+rows.length)}
+    <div class="head"><h2>Подразделения</h2><span class="sub">${rows.length}</span>
+      <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск по названию…" value="${esc(query)}"></div>
+      <div class="spring"></div>
+      <button class="btn primary" onclick="editReg('podr','')">+ Добавить</button>
+      <button class="btn" onclick="window.print()">⎙ PDF</button></div>
+    <div class="note noprint">Карточка нужна акту: из неё берутся тип контракта, реквизиты
+      контракта на нужный год и подписант со стороны экспертной организации.
+      Контракт свой на каждый год — так у вас и заведено.</div>
+    <div class="card"><div class="tblwrap"><table>
+      <thead><tr><th>Подразделение</th><th style="width:180px">Тип контракта</th>
+        <th style="width:220px">Экспертная организация</th><th style="width:150px">Руководитель</th>
+        <th style="width:150px">Контракты</th></tr></thead>
+      <tbody>${body}</tbody></table></div></div>`;
+  wireSearch(renderPodr);
+}
 function renderObjects(){
   const q=query.toLowerCase();
   const rows=live(O).filter(o=>!q||(o.наименование+o.зав+o.рег+o.тип+o.место).toLowerCase().includes(q));
@@ -1989,7 +2257,7 @@ function exchangeExport(){
   const ws=getWS();
   const payload={ тип:"обмен ЛНК", формат:2, место:ws.код, мастер:ws.мастер,
     версия:DB.версия, выгружено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ,
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР,
     право:getGrant(), названия:имена() };
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
@@ -2022,6 +2290,7 @@ function exchangeImport(){
             const rp=mergeInto(P,REG_PPL,d.специалисты);
             mergeInto(A,REG_AKT,d.акты);
             mergeInto(ОТМ,REG_ППР,d.ппр);
+            mergeInto(ПОДР,REG_ПОДР,d.подразделения);
             // Названия документов по методам — свежее побеждает.
             if(d.названия && d.названия.изменено && d.названия.изменено > имена().изменено)
               saveИмена({имена:Object.assign({}, имена().имена, d.названия.имена||{}),
@@ -2475,6 +2744,20 @@ function renderExchange(){
         </div>
       </div>
       <div class="panel">
+        <h3>⌂ Лаборатория</h3>
+        <div class="form"><div class="grid">
+          <label class="wide">Организация, при которой состоит ЛНК
+            <input id="лабОрг" value="${esc(getЛаб().организация)}"
+              placeholder="подставится после слов «Лаборатория НК»"></label>
+          <label>Свидетельство об аттестации №
+            <input id="лабНомер" value="${esc(getЛаб().свид_номер)}"></label>
+          <label>от <input id="лабДата" type="date" value="${esc(getЛаб().свид_дата)}"></label>
+        </div>
+        <div class="formbtns"><button class="btn primary" onclick="saveЛабИзФормы()">Сохранить</button></div>
+        <div class="note">Идёт в шапку акта — по центру курсивом:<br>
+          <i>${esc(шапкаЛаборатории())}</i></div></div>
+      </div>
+      <div class="panel">
         <h3>№ Право выдачи номеров</h3>
         <div class="bar"><span class="g" style="flex:1">Сейчас у места</span>
           <b>${getGrant().место?esc(getGrant().место):"не назначено"}</b></div>
@@ -2751,7 +3034,7 @@ let toastT;function toast(m){const t=document.getElementById("toast");t.textCont
 
 function switchView(v){curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck}[v]
+  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b)switchView(b.dataset.view);});
@@ -2778,6 +3061,7 @@ S = loadReg(REG_SI, DB.си);
 P = loadReg(REG_PPL, DB.специалисты);
 A = loadReg(REG_AKT, []);
 ОТМ = loadReg(REG_ППР, []);
+ПОДР = loadReg(REG_ПОДР, []);
 папкаКопий().then(h=>{ if(h && curView==="exchange") renderExchange(); });
 rebuildObjIndex();
 document.getElementById("wsName").textContent = getWS().код;

@@ -178,6 +178,7 @@
   .filters .fnote{font-size:12px;color:var(--faint);margin-left:auto}
   .filters.seg .btn.on{background:var(--brand);color:#fff;border-color:var(--brand)}
   .filters.seg .btn b{font-weight:700;opacity:.85}
+  .pill.nonum{background:transparent;color:var(--muted);border:1px dashed var(--line)}
   th.sortable{cursor:pointer;user-select:none}
   th.sortable:hover{color:var(--brand-d);background:var(--brand-soft)}
 
@@ -347,6 +348,54 @@ function liveJ(){ return J.filter(z=>!z.удалено); }
 // слияние решает, чья версия свежее (в т.ч. «удалено» против «изменено»).
 function lastTs(z){ const a=z.изменено||"", b=z.удалено||""; return a>b?a:b; }
 
+// ── Номера протоколов и актов ─────────────────────────────
+// Счётчик не хранится отдельно: следующий номер — это «максимум из уже
+// выданных + 1». Так счётчик не может разойтись с данными и не требует
+// отдельной синхронизации при обмене — журналы сливаются, и множество
+// занятых номеров сливается вместе с ними.
+//
+// Считаем по ВСЕМ записям, включая удалённые и аннулированные: номер
+// повторно не используется, дыра от аннулированной записи остаётся
+// навсегда (правило заказчика).
+function годЗаписи(z){ return (z.дата||"").slice(0,4); }
+function номерМетода(z,м){ const v=(z.методы||{})[м]; return v?String(v.н||"").trim():""; }
+function следующийПротокол(метод, год){
+  let max=0;
+  J.forEach(z=>{ if(годЗаписи(z)!==String(год)) return;
+    const н=номерМетода(z,метод);
+    if(/^\d+$/.test(н)) max=Math.max(max, +н); });
+  return max+1;
+}
+function следующийАкт(год){
+  let max=0;
+  J.forEach(z=>{ if(годЗаписи(z)!==String(год)) return;
+    const m=/^АКТ\s+(\d+)-(\d{4})$/.exec(String(z.акт||"").trim());
+    if(m && m[2]===String(год)) max=Math.max(max, +m[1]); });
+  return max+1;
+}
+function дваЗнака(n){ return n<10 ? "0"+n : String(n); }
+// Полное обозначение протокола: 01-2026-ТК. Идёт в поле #Номер документа.
+function обозначениеПротокола(z,м){
+  const н=номерМетода(z,м), г=годЗаписи(z);
+  return (/^\d+$/.test(н) && г) ? дваЗнака(+н)+"-"+г+"-"+м : "";
+}
+function методыБезНомера(z){ return methodsOf(z).filter(м=>!/^\d+$/.test(номерМетода(z,м))); }
+function ждётНомеров(z){ return methodsOf(z).length>0 && методыБезНомера(z).length>0; }
+
+// ── Право выдачи номеров (эстафета) ───────────────────────
+// Право в каждый момент у одного места. Оно лежит в общих данных и
+// ходит с обменом: два места не выдадут один номер, потому что выдавать
+// может только держатель. Приём тот же, что у «роли мастера».
+const GRANT_KEY="lnk_grant";
+function getGrant(){
+  try{ const r=localStorage.getItem(GRANT_KEY); if(r){ const o=JSON.parse(r);
+        return {место:o.место||"", изменено:o.изменено||""}; } }catch(e){}
+  return {место:"", изменено:""};
+}
+function saveGrant(g){ try{ localStorage.setItem(GRANT_KEY, JSON.stringify(g)); }catch(e){} }
+function правоМоё(){ const g=getGrant(); return !!g.место && g.место===getWS().код; }
+function правоСвободно(){ return !getGrant().место; }
+
 // ── Рабочий журнал (правки живут в localStorage поверх вшитых данных) ──
 // Данные вшиты в файл, поэтому редактируемая копия журнала хранится в
 // памяти браузера. КЛЮЧ НЕ ЗАВИСИТ ОТ ВЕРСИИ ПРОГРАММЫ — иначе новая
@@ -368,6 +417,15 @@ function loadJournal(){
              if(Array.isArray(rows)) return rows; }
   }catch(e){}
   return JSON.parse(JSON.stringify(DB.журнал));   // первый запуск — копия вшитых
+}
+// Разовая чистка переноса: в 22 записях в «№ акта» лежал номер протокола
+// вида 01-2026-ТК. Он и так стоит в колонке своего метода, а по правилу
+// заказчика для ТК и ВД акт не оформляется — значит поле просто лишнее.
+function починитьАкты(){
+  let n=0;
+  J.forEach(z=>{ if(/^\d+-\d{4}-[А-Я]{2}$/.test(String(z.акт||"").trim())){ z.акт=""; n++; } });
+  if(n) saveJournal();
+  return n;
 }
 function saveJournal(){
   try{ localStorage.setItem(STORE_KEY, JSON.stringify({baseVersion:DB.версия, сохранено:new Date().toISOString(), rows:J})); }
@@ -462,7 +520,7 @@ function setChrome(){
   document.getElementById("cSi").textContent=live(S).length;
   document.getElementById("cPeople").textContent=live(P).length;
   const cd=document.getElementById("cDocs");
-  if(cd) cd.textContent=liveJ().filter(z=>!String(z.заключение||"").trim()).length;
+  if(cd) cd.textContent=liveJ().filter(ждётНомеров).length;
   document.getElementById("fRows").textContent=liveJ().length;
   document.getElementById("fBuilt").textContent=ru(DB.собрано)||DB.собрано||"—";
   document.getElementById("verTag").textContent="v"+(DB.версия||"?")+" • реальные данные";
@@ -532,8 +590,10 @@ function renderJournal(){
       <td class="num">${esc(z.акт)||"—"}</td>
       <td class="num">${ru(z.дата)}</td>
       <td class="obj">${esc(z.объект)}${z.зав?`<div class="muted" style="font-size:11.5px">зав. № ${esc(z.зав)}${z.рег?` · рег. ${esc(z.рег)}`:""}</div>`:""}</td>
-      <td>${methodsOf(z).map(m=>`<span class="pill">${m}</span>`).join("")||"<span class='muted'>—</span>"}</td>
-      <td><span class="st ${statusClass(z.статус)}">${esc(z.статус)||"—"}</span></td>
+      <td>${methodsOf(z).map(m=>{const н=номерМетода(z,m);
+        return `<span class="pill${н?"":" nonum"}" title="${н?"протокол "+esc(обозначениеПротокола(z,m)):"номер не выдан"}">${m}${н?" "+esc(н):""}</span>`;
+        }).join("")||"<span class='muted'>—</span>"}</td>
+      <td><span class="st ${statusClass(z.статус)}">${esc(z.статус)||"—"}</span>${ждётНомеров(z)?`<div class="muted" style="font-size:11px">ждёт номера</div>`:""}</td>
     </tr>`).join(""):`<tr><td colspan="6" class="empty">Ничего не найдено.</td></tr>`;
   // Что именно отобрано — попадёт в подзаголовок распечатки.
   const отбор=[jf.год?("год "+jf.год):"", jf.метод?("метод "+jf.метод):"",
@@ -568,13 +628,16 @@ function renderJournal(){
 }
 function showJournal(id){
   const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
-  const mrows=methodsOf(z).map(m=>`<tr><td>${m}</td><td>${esc(z.методы[m].н)||"—"}</td><td>${esc(z.методы[m].исп)||"—"}</td></tr>`).join("")
-    ||`<tr><td colspan="3" class="muted">методы не указаны</td></tr>`;
+  const mrows=methodsOf(z).map(m=>{const об=обозначениеПротокола(z,m);
+    return `<tr><td>${m}</td><td>${об?esc(об):"<span class='muted'>номер не выдан</span>"}</td><td>${esc(z.методы[m].исп)||"—"}</td></tr>`;
+    }).join("")||`<tr><td colspan="3" class="muted">методы не указаны</td></tr>`;
   const F=(k,v)=>v?`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`:"";
   openDrawer("Акт № "+(z.акт||"—")+" от "+ru(z.дата), `
     <div class="dbtns">
       <button class="btn primary" onclick="closeDrawer();editJournal('${esc(z.id)}')">✎ Изменить</button>
       <button class="btn" onclick="closeDrawer();renderDoc('${esc(z.id)}')">▦ Документ</button>
+      ${ждётНомеров(z)?`<button class="btn" onclick="выдатьНомера('${esc(z.id)}')">№ Выдать номера</button>`:""}
+      ${String(z.акт||"").trim()?"":`<button class="btn" onclick="выдатьАкт('${esc(z.id)}')">№ Номер акта</button>`}
       <button class="btn danger" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>
     </div>
     ${F("Статус",z.статус)}${F("Объект",z.объект)}${F("Наименование в документе",z.наименование)}
@@ -600,8 +663,9 @@ function renderDoc(id){
   document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
   const o=objByName[z.объект]||objById[z.объект_ид]||{};
   const row=(k,v)=>v?`<tr><td class="k">${k}</td><td>${esc(v)}</td></tr>`:"";
-  const mrows=methodsOf(z).map(m=>`<tr><td>${m}</td><td>${esc(z.методы[m].н)||"—"}</td><td>${esc(z.методы[m].исп)||"—"}</td></tr>`).join("")
-    ||`<tr><td colspan="3" style="text-align:center">методы не указаны</td></tr>`;
+  const mrows=methodsOf(z).map(m=>{const об=обозначениеПротокола(z,m);
+    return `<tr><td>${m}</td><td>${об?esc(об):"—"}</td><td>${esc(z.методы[m].исп)||"—"}</td></tr>`;
+    }).join("")||`<tr><td colspan="3" style="text-align:center">методы не указаны</td></tr>`;
   const signers=[...new Set(methodsOf(z).map(m=>z.методы[m].исп).filter(Boolean))];
   const signRows=signers.map(s=>`<div class="signrow"><span class="line"></span><span class="nm">${esc(s)}</span></div>`).join("")
     ||`<div class="signrow"><span class="line"></span><span class="nm">&nbsp;</span></div>`;
@@ -632,7 +696,7 @@ function renderDoc(id){
       </tbody></table>
 
       <div class="doch">2. Проведённый контроль</div>
-      <table class="doctbl"><thead><tr><th style="width:26%">Метод</th><th style="width:32%">№ протокола</th><th>Исполнитель</th></tr></thead>
+      <table class="doctbl"><thead><tr><th style="width:26%">Метод</th><th style="width:32%">№ протокола (#Номер)</th><th>Исполнитель</th></tr></thead>
         <tbody>${mrows}</tbody></table>
 
       <div class="doch">3. Заключение</div>
@@ -646,18 +710,84 @@ function renderDoc(id){
     </div>`;
 }
 
+// ── Выдача номеров ────────────────────────────────────────
+function нетПрава(){
+  const g=getGrant();
+  alert("Выдавать номера может только место, у которого сейчас право выдачи.\n\n"+
+    (g.место ? ("Сейчас право у места: "+g.место) : "Право пока никому не назначено.")+
+    "\n\nВкладка «Обмен» → «Право выдачи номеров»: там можно принять право на себя "+
+    "или передать его другому месту.\n\nЗаписи при этом вводятся как обычно — они просто ждут номера.");
+  switchView("exchange");
+}
+function выдатьНомера(id){
+  if(!правоМоё()){ нетПрава(); return; }
+  const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
+  const г=годЗаписи(z);
+  if(!г){ toast("У записи не заполнена дата — год берётся из неё"); return; }
+  const нет=методыБезНомера(z);
+  if(!нет.length){ toast("У всех методов записи номера уже есть"); return; }
+  const выдано=[];
+  нет.forEach(м=>{
+    const н=следующийПротокол(м,г);
+    z.методы[м]=Object.assign({}, z.методы[м], {н:String(н)});
+    выдано.push(дваЗнака(н)+"-"+г+"-"+м);
+  });
+  z.изменено=new Date().toISOString(); z.место=getWS().код;
+  saveJournal();
+  if(curView==="journal") renderJournal(); else if(curView==="docs") renderDocs();
+  showJournal(id);
+  alert("Выданы номера протоколов:\n\n"+выдано.join("\n"));
+}
+function выдатьАкт(id){
+  if(!правоМоё()){ нетПрава(); return; }
+  const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
+  const г=годЗаписи(z);
+  if(!г){ toast("У записи не заполнена дата — год берётся из неё"); return; }
+  if(String(z.акт||"").trim()){ toast("У записи уже есть номер акта"); return; }
+  const мет=methodsOf(z);
+  const толькоТКВД = мет.length>0 && мет.every(м=>м==="ТК"||м==="ВД");
+  if(толькоТКВД && !confirm("По методам "+мет.join(", ")+" акт, как правило, не оформляется.\n\nВсё равно выдать номер акта?")) return;
+  const н=следующийАкт(г);
+  z.акт="АКТ "+дваЗнака(н)+"-"+г;
+  z.изменено=new Date().toISOString(); z.место=getWS().код;
+  saveJournal();
+  if(curView==="journal") renderJournal(); else if(curView==="docs") renderDocs();
+  showJournal(id);
+  toast("Выдан номер акта: "+z.акт);
+}
+function принятьПраво(){
+  const g=getGrant(), ws=getWS();
+  if(g.место===ws.код){ toast("Право уже у вас"); return; }
+  const было = g.место ? ("Сейчас право у места: "+g.место+".\n\nЕсли там сейчас тоже выдают номера и вы "+
+      "оба возьмёте право порознь, два места могут выдать один номер. Программа покажет такое "+
+      "столкновение при обмене, но исправлять придётся вручную.\n\n") : "Право пока никому не назначено.\n\n";
+  if(!confirm(было+"Принять право выдачи номеров на место "+ws.код+"?")) return;
+  saveGrant({место:ws.код, изменено:new Date().toISOString()});
+  renderExchange(); toast("Право выдачи номеров теперь у места "+ws.код);
+}
+function передатьПраво(){
+  if(!правоМоё()){ toast("Передать можно только своё право"); return; }
+  const кому=(prompt("Кому передать право выдачи номеров?\nУкажите код места (например М2):","")||"").trim();
+  if(!кому) return;
+  if(кому===getWS().код){ toast("Это ваше же место"); return; }
+  saveGrant({место:кому, изменено:new Date().toISOString()});
+  renderExchange();
+  alert("Право передано месту "+кому+".\n\nОно получит его после обмена: выгрузите файл и передайте туда.");
+}
+
 // ── Акты и протоколы ──────────────────────────────────────
 // Раздел отвечает на один рабочий вопрос: по каким записям документ уже
 // оформлен, а по каким ещё нет. «Оформлен» = в документе вписано
 // заключение (оно и хранится в записи).
-let df="нужно";                         // готовые | нужно | все
+let df="без";                           // без | нужно | готовые | все
 function setDF(v){ df=v; renderDocs(); }
 function оформлен(z){ return !!String(z.заключение||"").trim(); }
 function docsRows(){
   const q=(query||"").toLowerCase();
   return liveJ().filter(z=>{
-    if(df==="готовые" && !оформлен(z)) return false;
-    if(df==="нужно" && оформлен(z)) return false;
+    if(df==="без" && !ждётНомеров(z)) return false;
+    if(df==="готовые" && !(оформлен(z) && !ждётНомеров(z))) return false;
+    if(df==="нужно" && (оформлен(z) || ждётНомеров(z))) return false;
     if(q && !((z.объект||"")+(z.акт||"")+(z.заключение||"")).toLowerCase().includes(q)) return false;
     return true;
   }).sort((a,b)=>String(b.дата||"").localeCompare(String(a.дата||"")));
@@ -665,7 +795,8 @@ function docsRows(){
 function renderDocs(){
   const rows=docsRows();
   const всего=liveJ().length;
-  const гот=liveJ().filter(оформлен).length;
+  const гот=liveJ().filter(z=>оформлен(z)&&!ждётНомеров(z)).length;
+  const безном=liveJ().filter(ждётНомеров).length;
   const seg=(v,l,n)=>`<button class="btn ${df===v?"on":""}" onclick="setDF('${v}')">${l} <b>${n}</b></button>`;
   const body=rows.length?rows.map(z=>`
     <tr onclick="renderDoc('${esc(z.id)}')">
@@ -673,13 +804,13 @@ function renderDocs(){
       <td class="num">${ru(z.дата)}</td>
       <td class="obj">${esc(z.объект)}</td>
       <td>${methodsOf(z).map(m=>`<span class="pill">${m}</span>`).join("")||"<span class='muted'>—</span>"}</td>
-      <td>${оформлен(z)
-        ? `<span class="st ok">оформлен</span>`
-        : `<span class="st work">нет заключения</span>`}</td>
+      <td>${ждётНомеров(z) ? `<span class="st work">ждёт номера</span>`
+        : оформлен(z) ? `<span class="st ok">готов</span>`
+        : `<span class="st new">нет заключения</span>`}</td>
       <td class="obj muted" style="font-size:12px">${esc(String(z.заключение||"").slice(0,90))}${String(z.заключение||"").length>90?"…":""}</td>
     </tr>`).join(""):`<tr><td colspan="6" class="empty">Ничего не найдено.</td></tr>`;
   document.getElementById("main").innerHTML=`
-    ${printHead("Акты и протоколы", (df==="готовые"?"оформленные":df==="нужно"?"требуют оформления":"все")+" · записей "+rows.length)}
+    ${printHead("Акты и протоколы", (df==="без"?"ждут номера":df==="готовые"?"готовые":df==="нужно"?"без заключения":"все")+" · записей "+rows.length)}
     <div class="head">
       <h2>Акты и протоколы</h2><span class="sub">${rows.length} из ${всего}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: объект, № акта, текст заключения…" value="${esc(query)}"></div>
@@ -687,8 +818,9 @@ function renderDocs(){
       <button class="btn" onclick="window.print()">⎙ PDF</button>
     </div>
     <div class="filters noprint seg">
-      ${seg("нужно","Требуют оформления",всего-гот)}
-      ${seg("готовые","Оформлены",гот)}
+      ${seg("без","Ждут номера",безном)}
+      ${seg("нужно","Без заключения",всего-гот-безном)}
+      ${seg("готовые","Готовы",гот)}
       ${seg("все","Все",всего)}
       <span class="fnote">клик по строке — открыть документ</span>
     </div>
@@ -809,6 +941,8 @@ function renderDash(){
       ${tile(live(O).length,"объектов","","objects")}
       ${tile(live(S).length,"приборов (СИ)","","si")}
       ${tile(live(P).length,"специалистов","","people")}
+      ${tile(L.filter(ждётНомеров).length,"ждут номера",
+        L.filter(ждётНомеров).length?"warn":"ok","docs")}
     </div>
 
     <div class="cols">
@@ -1148,11 +1282,30 @@ function mergeJournal(incoming){
   if(added||updated) saveJournal();
   return {added,updated,skipped};
 }
+// Два места могли выдать один номер, если оба брали право порознь.
+// Молчать об этом нельзя: номер уже мог уйти на подписанный документ.
+function проверитьСтолкновения(){
+  const карта={}, из=[];
+  liveJ().forEach(z=>{ const г=годЗаписи(z); if(!г) return;
+    methodsOf(z).forEach(м=>{ const н=номерМетода(z,м); if(!/^\d+$/.test(н)) return;
+      const ключ=м+"-"+г+"-"+н; (карта[ключ]=карта[ключ]||[]).push(z); });
+    const m=/^АКТ\s+(\d+)-(\d{4})$/.exec(String(z.акт||"").trim());
+    if(m){ const ключ="АКТ-"+m[2]+"-"+m[1]; (карта[ключ]=карта[ключ]||[]).push(z); }
+  });
+  Object.keys(карта).forEach(k=>{
+    const сп=карта[k];
+    // Акт законно повторяется: один акт охватывает несколько объектов.
+    if(k.indexOf("АКТ-")===0) return;
+    if(сп.length>1) из.push(k.replace(/^(\S+?)-(\d{4})-(\d+)$/,"$3-$2-$1")+
+      ": " + сп.map(z=>(z.объект||"без объекта").slice(0,28)).join(" / "));
+  });
+  return из;
+}
 function exchangeExport(){
   const ws=getWS();
   const payload={ тип:"обмен ЛНК", формат:2, место:ws.код, мастер:ws.мастер,
     версия:DB.версия, выгружено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P };
+    записи:J, объекты:O, приборы:S, специалисты:P, право:getGrant() };
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
   try{ localStorage.setItem("lnk_last_export", new Date().toISOString()); }catch(e){}
@@ -1175,6 +1328,10 @@ function exchangeImport(){
             if(!Array.isArray(jarr) && !d.объекты && !d.приборы && !d.специалисты)
               throw new Error("не файл обмена");
             const rj=Array.isArray(jarr)?mergeJournal(jarr):{added:0,updated:0,skipped:0};
+            // Право выдачи — свежее побеждает, как и всё остальное.
+            if(d.право && d.право.изменено && d.право.изменено > getGrant().изменено){
+              saveGrant({место:d.право.место||"", изменено:d.право.изменено});
+            }
             const ro=mergeInto(O,REG_OBJ,d.объекты);
             const rs=mergeInto(S,REG_SI,d.приборы);
             const rp=mergeInto(P,REG_PPL,d.специалисты);
@@ -1187,6 +1344,11 @@ function exchangeImport(){
           if(++done===files.length){
             try{ localStorage.setItem("lnk_last_import", new Date().toISOString()); }catch(e){}
             renderExchange();
+            const столк=проверитьСтолкновения();
+            if(столк.length) alert("ВНИМАНИЕ: одинаковые номера у разных записей.\n\n"+
+              столк.slice(0,12).join("\n")+(столк.length>12?("\n… всего "+столк.length):"")+
+              "\n\nТакое бывает, если два места выдавали номера порознь. Исправьте вручную: "+
+              "откройте записи и задайте верные номера.");
             alert("Принято файлов: "+files.length+"\n\n"+отчёт.join("\n")+
               "\n\nВсего изменений: журнал "+tot.j+", объекты "+tot.o+", приборы "+tot.s+", специалисты "+tot.p+
               ".\n(в записи «+новых/обновлено»)");
@@ -1231,6 +1393,19 @@ function renderExchange(){
           <div class="formbtns"><button class="btn primary" onclick="saveWSfromForm()">Сохранить</button></div>
           <div class="note">Код должен быть у каждого места свой (М1, М2, …). Он входит в номер
             новых записей, поэтому при слиянии места не затирают друг друга.</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>№ Право выдачи номеров</h3>
+        <div class="bar"><span class="g" style="flex:1">Сейчас у места</span>
+          <b>${getGrant().место?esc(getGrant().место):"не назначено"}</b></div>
+        <div class="note">Номера выдаёт только место с этим правом — так два места не выдадут
+          один номер. Записи вводятся везде и просто ждут номера.</div>
+        <div class="formbtns">
+          ${правоМоё()
+            ? `<button class="btn" onclick="передатьПраво()">Передать другому месту</button>
+               <span class="fnote">право у вас</span>`
+            : `<button class="btn primary" onclick="принятьПраво()">Принять право на себя</button>`}
         </div>
       </div>
       <div class="panel">
@@ -1344,6 +1519,7 @@ function applyTheme(t){
 })();
 
 J = loadJournal();
+починитьАкты();
 O = loadReg(REG_OBJ, DB.объекты);
 S = loadReg(REG_SI, DB.си);
 P = loadReg(REG_PPL, DB.специалисты);

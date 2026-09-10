@@ -275,6 +275,18 @@
   .плантбл td.мес.просрочено{background:#fadcdc;color:#a11;font-weight:700;cursor:pointer}
   .плантбл td.мес.пусто{background:transparent}
   .плантбл tfoot td{border-top:2px solid var(--line);background:var(--chip)}
+  /* Проверка данных */
+  h3.прз{font-size:14px;margin:20px 0 10px;color:var(--muted);font-weight:600}
+  .пров{background:var(--card);border:1px solid var(--line);border-left-width:4px;
+    border-radius:var(--card-radius);padding:11px 14px;margin-bottom:9px}
+  .пров.ошибка{border-left-color:var(--danger)}
+  .пров.внимание{border-left-color:var(--warn)}
+  .пров.наблюдение{border-left-color:var(--line)}
+  .пг{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap}
+  .пз{font-weight:700;width:16px;text-align:center}
+  .пров.ошибка .пз{color:var(--danger)} .пров.внимание .пз{color:var(--warn)}
+  .пт{color:var(--muted)}
+  ul.пп{margin:7px 0 0 30px;padding:0;font-size:12.5px;color:var(--muted);line-height:1.65}
 
   @media print{
     .app{display:block;height:auto}
@@ -338,6 +350,7 @@
   <nav class="side" id="side">
     <div class="grp">Обзор</div>
     <button class="nav on" data-view="dash"><span class="ic">◈</span>Пульт</button>
+    <button class="nav" data-view="check"><span class="ic">✓</span>Проверка данных<span class="cnt" id="cCheck">0</span></button>
     <div class="grp">Работа</div>
     <button class="nav" data-view="journal"><span class="ic">▤</span>Журнал<span class="cnt" id="cJournal">0</span></button>
     <button class="nav" data-view="objects"><span class="ic">▢</span>Объекты<span class="cnt" id="cObjects">0</span></button>
@@ -572,6 +585,8 @@ function printSign(){
 
 function setChrome(){
   document.getElementById("cJournal").textContent=liveJ().length;
+  const пр=document.getElementById("cCheck");
+  if(пр){ const n=числоПроблем(); пр.textContent=n; пр.classList.toggle("warn", n>0); }
   document.getElementById("cObjects").textContent=live(O).length;
   document.getElementById("cSi").textContent=live(S).length;
   document.getElementById("cPeople").textContent=live(P).length;
@@ -2272,6 +2287,165 @@ function exportПланXlsx(){
   toast("План "+год+" выгружен: "+строки.length+" позиций");
 }
 
+// ── Проверка данных ───────────────────────────────────────
+// Раздел отвечает на один вопрос: что в базе не сходится само с собой.
+// Никаких оценок «правильно ли вы работаете» — только факты, которые
+// видно из самих данных: дубль, пропуск, ссылка в никуда, пустое поле.
+//
+// Разделено на три уровня, и это важно. «Ошибка» — то, что не может
+// быть верным ни при каких условиях. «Внимание» — то, что обычно
+// означает недоделку, но может быть и нормой. «Наблюдение» — то, где
+// я не знаю вашего порядка и потому НЕ называю это ошибкой, а просто
+// показываю. Спорное в первые два уровня не попадает.
+function проверки(){
+  const из=[];
+  const доб=(ур,тема,текст,подробно)=>из.push({ур,тема,текст,подробно:подробно||[]});
+  const L=liveJ();
+
+  // ── Ошибки ──────────────────────────────────────────────
+  const без=L.filter(z=>!z.дата);
+  if(без.length) доб("ошибка","Журнал", без.length+" записей без даты контроля",
+    без.slice(0,10).map(z=>z.id+" · "+(z.объект||"без объекта")));
+
+  const безОб=L.filter(z=>!z.объект && !z.наименование);
+  if(безОб.length) доб("ошибка","Журнал", безОб.length+" записей без объекта контроля",
+    безОб.slice(0,10).map(z=>z.id+" · "+ru(z.дата)));
+
+  const столк=проверитьСтолкновения();
+  if(столк.length) доб("ошибка","Нумерация",
+    "Один номер протокола у разных записей: "+столк.length, столк.slice(0,10));
+
+  const прос=live(S).filter(x=>{ const[c]=siStatus(x); return c==="bad"; });
+  if(прос.length) доб("ошибка","Приборы", прос.length+" приборов с просроченной поверкой",
+    прос.slice(0,10).map(x=>x.наименование+(x.зав?(" · зав. "+x.зав):"")+" — до "+ru(x.поверка_до)));
+
+  // ── Внимание ────────────────────────────────────────────
+  const безП=live(S).filter(x=>!x.поверка_до);
+  if(безП.length) доб("внимание","Приборы",
+    безП.length+" из "+live(S).length+" приборов без даты поверки — срок не отслеживается",
+    безП.slice(0,10).map(x=>x.наименование+(x.зав?(" · зав. "+x.зав):"")));
+
+  // Пропуск в нумерации — обычно аннулированный протокол, но проверить стоит
+  const дыры=[];
+  METHODS.forEach(м=>{
+    const поГодам={};
+    L.forEach(z=>{ const н=номерМетода(z,м), г=годЗаписи(z);
+      if(/^\d+$/.test(н) && г){ (поГодам[г]=поГодам[г]||new Set()).add(+н); } });
+    Object.keys(поГодам).sort().forEach(г=>{
+      const н=[...поГодам[г]], макс=Math.max(...н), есть=new Set(н), нет=[];
+      for(let i=1;i<макс;i++) if(!есть.has(i)) нет.push(i);
+      if(нет.length) дыры.push(м+" "+г+": пропущены "+нет.slice(0,15).join(", ")+
+        (нет.length>15?(" …всего "+нет.length):""));
+    });
+  });
+  if(дыры.length) доб("внимание","Нумерация",
+    "Пропуски в сплошной нумерации: "+дыры.length, дыры.slice(0,10));
+
+  const ждут=L.filter(ждётНомеров);
+  if(ждут.length) доб("внимание","Нумерация", ждут.length+" записей ждут номера",
+    ждут.slice(0,10).map(z=>ru(z.дата)+" · "+(z.объект||"")+" — "+методыБезНомера(z).join(", ")));
+
+  let безИсп=[];
+  L.forEach(z=>methodsOf(z).forEach(м=>{
+    if(!String((z.методы[м]||{}).исп||"").trim())
+      безИсп.push(ru(z.дата)+" · "+(z.объект||"")+" · "+м); }));
+  if(безИсп.length) доб("внимание","Журнал",
+    безИсп.length+" методов без исполнителя", безИсп.slice(0,10));
+
+  // Дубли объектов: одно имя и один заводской номер у нескольких карточек
+  const поКлючу={};
+  live(O).forEach(o=>{ const к=(o.наименование||"").trim()+"|"+(o.зав||"").trim();
+    (поКлючу[к]=поКлючу[к]||[]).push(o); });
+  const дубО=Object.keys(поКлючу).filter(к=>поКлючу[к].length>1);
+  if(дубО.length) доб("внимание","Объекты",
+    "Одинаковых карточек объектов: "+дубО.length+" групп",
+    дубО.slice(0,10).map(к=>{ const г=поКлючу[к], o=г[0];
+      return (o.наименование||"без имени")+(o.зав?(" · зав. "+o.зав):" · без заводского №")+
+             " — "+г.length+" шт."; }));
+
+  const спр=new Set(); live(P).forEach(x=>{ if(x.вдок) спр.add(x.вдок.trim()); if(x.фио) спр.add(x.фио.trim()); });
+  const чужие=new Set();
+  L.forEach(z=>methodsOf(z).forEach(м=>{ const и=String((z.методы[м]||{}).исп||"").trim();
+    if(и && !спр.has(и)) чужие.add(и); }));
+  if(чужие.size) доб("внимание","Специалисты",
+    "Исполнители из журнала, которых нет в справочнике: "+чужие.size, [...чужие].slice(0,10));
+
+  // ── Наблюдения ──────────────────────────────────────────
+  if(ППР.позиции && ППР.позиции.length){
+    const завСИ=new Set(); live(S).forEach(x=>{ if(x.зав) завСИ.add(String(x.зав).trim()); });
+    const нет=ППР.позиции.filter(п=>{
+      const м=String(п.наименование||"").match(/№\s*([0-9A-Za-zА-Яа-я\-\/]+)/g)||[];
+      return !м.some(x=>завСИ.has(x.replace(/^№\s*/,"")));
+    });
+    if(нет.length) доб("наблюдение","План ППР",
+      нет.length+" позиций плана не нашлись в справочнике приборов по заводскому номеру",
+      нет.slice(0,10).map(п=>п.наименование).concat(
+        ["Возможно, так и должно быть: в справочнике — средства измерения, "+
+         "а в плане ППР ещё и оснастка (меры, образцы, плиты). Не считаю ошибкой."]));
+    if(ППР.замечания && ППР.замечания.length)
+      доб("наблюдение","План ППР","Расхождения в книге плана-графика: "+ППР.замечания.length,
+          ППР.замечания);
+  }
+  return из;
+}
+function числоПроблем(){
+  return проверки().filter(x=>x.ур!=="наблюдение").length;
+}
+
+function renderCheck(){
+  curView="check";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="check"));
+  const сп=проверки();
+  const счёт=у=>сп.filter(x=>x.ур===у).length;
+  const знак={ошибка:"✕", внимание:"!", наблюдение:"·"};
+  const блок=у=>{
+    const свои=сп.filter(x=>x.ур===у);
+    if(!свои.length) return "";
+    return свои.map(x=>`
+      <div class="пров ${у}">
+        <div class="пг"><span class="пз">${знак[у]}</span>
+          <b>${esc(x.тема)}</b><span class="пт">${esc(x.текст)}</span></div>
+        ${x.подробно.length?`<ul class="пп">${x.подробно.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:""}
+      </div>`).join("");
+  };
+  const всёЧисто = !сп.length;
+  document.getElementById("main").innerHTML=`
+    ${printHead("Проверка данных", "на "+ru(new Date().toISOString().slice(0,10))+
+      " · ошибок "+счёт("ошибка")+", внимания "+счёт("внимание"))}
+    <div class="head">
+      <h2>Проверка данных</h2>
+      <span class="sub">что в базе не сходится само с собой</span>
+      <div class="spring"></div>
+      <button class="btn" onclick="exportПроверкуXlsx()">▤ Excel</button>
+      <button class="btn" onclick="window.print()">⎙ PDF</button>
+    </div>
+    <div class="tiles">
+      <div class="tile ${счёт("ошибка")?"bad":"ok"}"><div class="n">${счёт("ошибка")}</div><div class="l">ошибок</div></div>
+      <div class="tile ${счёт("внимание")?"warn":"ok"}"><div class="n">${счёт("внимание")}</div><div class="l">требует внимания</div></div>
+      <div class="tile"><div class="n">${счёт("наблюдение")}</div><div class="l">наблюдений</div></div>
+    </div>
+    ${всёЧисто?`<div class="card"><div class="empty" style="padding:30px">
+      Расхождений не найдено: номера сплошные и без дублей, ссылки на объекты целы,
+      обязательные поля заполнены.</div></div>`:""}
+    ${счёт("ошибка")?`<h3 class="прз">Ошибки — так быть не может</h3>${блок("ошибка")}`:""}
+    ${счёт("внимание")?`<h3 class="прз">Требует внимания — обычно недоделка, но бывает и нормой</h3>${блок("внимание")}`:""}
+    ${счёт("наблюдение")?`<h3 class="прз">Наблюдения — вашего порядка не знаю, ошибкой не считаю</h3>${блок("наблюдение")}`:""}
+    <div class="note noprint">Списки показаны до десяти строк — полный перечень выгружается в Excel.
+      Проверка считается заново при каждом открытии раздела: исправили — пункт исчезнет.</div>`;
+}
+function exportПроверкуXlsx(){
+  const строки=[];
+  проверки().forEach(x=>{
+    строки.push([x.ур, x.тема, x.текст, ""]);
+    x.подробно.forEach(t=>строки.push(["", "", "", t]));
+  });
+  if(!строки.length) строки.push(["", "", "Расхождений не найдено", ""]);
+  xlsxФайл("Проверка данных ЛНК "+сегодня()+".xlsx",[{имя:"Проверка",
+    колонки:[{з:"Уровень",ш:14},{з:"Раздел",ш:16},{з:"Что найдено",ш:64},{з:"Подробности",ш:70}],
+    строки:строки}]);
+  toast("Проверка выгружена: "+строки.length+" строк");
+}
+
 function renderExchange(){
   const ws=getWS();
   const об=объёмХранилища(), дн=днейБезКопии();
@@ -2577,7 +2751,7 @@ let toastT;function toast(m){const t=document.getElementById("toast");t.textCont
 
 function switchView(v){curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan}[v]
+  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b)switchView(b.dataset.view);});

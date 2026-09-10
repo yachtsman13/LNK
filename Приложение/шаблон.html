@@ -267,6 +267,14 @@
   .aktbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   .btn.small{padding:4px 9px;font-size:12px}
   td.mets{font-size:12px;color:var(--muted)}
+  /* План ППР: месяц — узкая ячейка-кнопка */
+  .плантбл th.мес,.плантбл td.мес{width:40px;text-align:center;padding:4px 2px;font-size:12px}
+  .плантбл th.мес.тек{color:var(--accent);font-weight:700}
+  .плантбл td.мес.план{background:var(--chip);cursor:pointer}
+  .плантбл td.мес.сделано{background:#d8f0dd;color:#17692c;font-weight:700;cursor:pointer}
+  .плантбл td.мес.просрочено{background:#fadcdc;color:#a11;font-weight:700;cursor:pointer}
+  .плантбл td.мес.пусто{background:transparent}
+  .плантбл tfoot td{border-top:2px solid var(--line);background:var(--chip)}
 
   @media print{
     .app{display:block;height:auto}
@@ -360,6 +368,7 @@
 <div class="toast" id="toast"></div>
 
 <script id="lnk-data" type="application/json">/*ДАННЫЕ*/</script>
+<script id="lnk-ppr" type="application/json">/*ППР*/</script>
 <script>
 "use strict";
 const DB = JSON.parse(document.getElementById("lnk-data").textContent);
@@ -1433,7 +1442,26 @@ function renderDash(){
       ${tile(live(P).length,"специалистов","","people")}
       ${tile(L.filter(ждётНомеров).length,"ждут номера",
         L.filter(ждётНомеров).length?"warn":"ok","docs")}
+      ${ППР.позиции.length?tile(ппрМесяца().осталось,"ППР в этом месяце",
+        ппрМесяца().осталось?"warn":"ok","plan"):""}
     </div>
+    ${(()=>{ const м=ппрМесяца();
+      if(!ППР.позиции.length || !м.всего) return "";
+      return `<div class="panel" style="margin-bottom:14px">
+        <h3>◷ Обслуживание приборов в этом месяце</h3>
+        <div class="bar"><span class="g" style="flex:1">По плану ППР на ${esc(м.имя)}</span>
+          <b>${м.всего}</b></div>
+        <div class="bar"><span class="g" style="flex:1">Отмечено выполненными</span><b>${м.сделано}</b></div>
+        <div class="bf"><span style="width:${м.всего?Math.round(м.сделано/м.всего*100):0}%"></span></div>
+        ${м.осталось?`<div class="plist">`+м.список.slice(0,6).map(р=>
+          `<div class="pr" onclick="switchView('plan')">
+             <span class="st work">${р.часы} ч</span>
+             <span class="g">${esc(р.поз.наименование)}</span>
+             <span class="num">${esc(р.поз.вид)}</span></div>`).join("")+
+          (м.осталось>6?`<div class="pr" style="cursor:pointer" onclick="switchView('plan')">
+             <span class="g">…и ещё ${м.осталось-6}</span></div>`:"")+`</div>`
+          :`<div class="note">Всё за месяц отмечено выполненным.</div>`}
+      </div>`; })()}
 
     <div class="cols">
       <div class="panel">
@@ -1683,7 +1711,7 @@ function данныеКопии(){
   const ws=getWS();
   return JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A }, null, 1);
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ }, null, 1);
 }
 function имяКопии(){
   const d=new Date(), дв=n=>(n<10?"0":"")+n;
@@ -1740,7 +1768,7 @@ function backupSave(){
   const name="Резервная копия ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A }, null, 1));
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ }, null, 1));
   try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
   toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
         ", СИ "+live(S).length+", спец. "+live(P).length);
@@ -1768,6 +1796,7 @@ function backupOpen(){
           if(Array.isArray(d.приборы)){ S=d.приборы; saveReg(REG_SI,S); }
           if(Array.isArray(d.специалисты)){ P=d.специалисты; saveReg(REG_PPL,P); }
           if(Array.isArray(d.акты)){ A=d.акты; saveReg(REG_AKT,A); }
+          if(Array.isArray(d.ппр)){ ОТМ=d.ппр; saveReg(REG_ППР,ОТМ); }
           rebuildObjIndex();
         }
         setChrome(); switchView("dash"); toast("Восстановлено из копии");
@@ -1945,7 +1974,7 @@ function exchangeExport(){
   const ws=getWS();
   const payload={ тип:"обмен ЛНК", формат:2, место:ws.код, мастер:ws.мастер,
     версия:DB.версия, выгружено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A,
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ,
     право:getGrant(), названия:имена() };
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
@@ -1977,6 +2006,7 @@ function exchangeImport(){
             const rs=mergeInto(S,REG_SI,d.приборы);
             const rp=mergeInto(P,REG_PPL,d.специалисты);
             mergeInto(A,REG_AKT,d.акты);
+            mergeInto(ОТМ,REG_ППР,d.ппр);
             // Названия документов по методам — свежее побеждает.
             if(d.названия && d.названия.изменено && d.названия.изменено > имена().изменено)
               saveИмена({имена:Object.assign({}, имена().имена, d.названия.имена||{}),
@@ -2014,6 +2044,234 @@ function saveWSfromForm(){
   saveWS({код:код, мастер:мастер});
   toast("Рабочее место: "+код+(мастер?" (мастер)":"")); renderExchange();
 }
+// ── План ППР: планово-предупредительные осмотры и ремонты ──
+// План взят из вашей книги «План-график ППР 2026-2030», лист «Пятилетний»,
+// и ничего в нём не досочинено. Периодичность записана долей года и видом
+// обслуживания («0,25 ТО-4»): доля подтверждается самой разметкой —
+// 0,25 стоит раз в квартал, 0,083 ежемесячно, 0,027 примерно каждые десять
+// дней, 0,0027 по рабочим дням. А что именно означают номера ТО-1…ТО-4, в
+// книге не написано — они показаны как есть, расшифровку не выдумываю.
+//
+// Главное, чего в книге нет и ради чего раздел нужен: ОТМЕТКА О ВЫПОЛНЕНИИ.
+// План на бумаге отвечает, что надо сделать; отметки отвечают, что сделано.
+const ППР = (function(){
+  try{ const t=document.getElementById("lnk-ppr").textContent.trim();
+       const d=t?JSON.parse(t):null;
+       return (d && Array.isArray(d.позиции)) ? d : {годы:[],позиции:[],замечания:[]};
+  }catch(e){ return {годы:[],позиции:[],замечания:[]}; }
+})();
+const МЕСЯЦЫ=["Январь","Февраль","Март","Апрель","Май","Июнь","Июль",
+              "Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+const МЕС3=["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+
+// Отметки — рабочие данные: правятся, ходят в обмене, попадают в копию.
+const REG_ППР="lnk_ppr";
+let ОТМ;
+function ключОтметки(п,год,мес){ return п.id+"|"+год+"|"+мес; }
+function отметка(п,год,мес){
+  return live(ОТМ).find(о=>о.id===ключОтметки(п,год,мес))||null;
+}
+function отметить(идПоз,год,мес,кто){
+  const п=ППР.позиции.find(x=>x.id===идПоз); if(!п) return;
+  const к=ключОтметки(п,год,мес);
+  const был=ОТМ.find(о=>о.id===к);
+  if(был && !был.удалено){                       // повторное нажатие снимает отметку
+    был.удалено=new Date().toISOString(); был.изменено=был.удалено;
+  } else if(был){
+    был.удалено=""; был.выполнено=new Date().toISOString().slice(0,10);
+    был.кто=кто||был.кто||""; был.изменено=new Date().toISOString();
+  } else {
+    ОТМ.push({id:к, поз:идПоз, год:год, мес:мес,
+              выполнено:new Date().toISOString().slice(0,10), кто:кто||"",
+              место:getWS().код, изменено:new Date().toISOString()});
+  }
+  saveReg(REG_ППР,ОТМ);
+  renderPlan();
+}
+
+let план={год:null, толькоНеВыполненные:false};
+function годПлана(){
+  if(план.год) return план.год;
+  const т=new Date().getFullYear();
+  план.год = ППР.годы.indexOf(т)>=0 ? т : (ППР.годы[0]||т);
+  return план.год;
+}
+function setПланГод(г){ план.год=+г; renderPlan(); }
+function setПланФильтр(){ план.толькоНеВыполненные=!план.толькоНеВыполненные; renderPlan(); }
+
+function работыМесяца(год,мес){
+  const из=[];
+  ППР.позиции.forEach(п=>{
+    const ч=((п.план||{})[String(год)]||{})[String(мес)];
+    if(ч) из.push({поз:п, часы:ч, отм:отметка(п,год,мес)});
+  });
+  return из;
+}
+function итогиГода(год){
+  let работ=0, часы=0, сделано=0, часовСделано=0;
+  for(let м=1;м<=12;м++){
+    работыМесяца(год,м).forEach(р=>{
+      работ++; часы+=р.часы;
+      if(р.отм){ сделано++; часовСделано+=р.часы; }
+    });
+  }
+  return {работ, часы:+часы.toFixed(2), сделано,
+          часовСделано:+часовСделано.toFixed(2),
+          доля: работ?сделано/работ:0};
+}
+// Один источник правды о «сейчас»: и подсветка ячеек, и счёт просроченного
+// должны считать прошедшим одно и то же, иначе цифра и цвет разойдутся.
+function прошедший(год,мес){
+  const н=new Date(), тг=н.getFullYear(), тм=н.getMonth()+1;
+  return год<тг || (год===тг && мес<тм);
+}
+function текущийМесяц(год,мес){
+  const н=new Date(); return год===н.getFullYear() && мес===н.getMonth()+1;
+}
+// Просрочено — запланированное на прошедшие месяцы и не отмеченное.
+// Текущий месяц не в счёт: он ещё идёт.
+function просрочено(год){
+  const тг=new Date().getFullYear();
+  if(год>тг) return [];
+  const до = (год<тг) ? 12 : new Date().getMonth();
+  const из=[];
+  for(let м=1;м<=до;м++)
+    работыМесяца(год,м).forEach(р=>{ if(!р.отм) из.push({мес:м, поз:р.поз, часы:р.часы}); });
+  return из;
+}
+
+// Что по ППР приходится на текущий месяц — для пульта.
+function ппрМесяца(){
+  const н=new Date(), год=н.getFullYear(), мес=н.getMonth()+1;
+  const р=работыМесяца(год,мес);
+  const осталось=р.filter(x=>!x.отм);
+  return {год, мес, имя:МЕСЯЦЫ[мес-1], всего:р.length,
+          сделано:р.length-осталось.length, осталось:осталось.length,
+          список:осталось};
+}
+function renderPlan(){
+  curView="plan";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="plan"));
+  if(!ППР.позиции.length){
+    document.getElementById("main").innerHTML=
+      `<div class="head"><h2>План работ</h2></div>
+       <div class="placeholder"><div><div class="big">◷</div>
+       План-график ППР не вшит в программу.</div></div>`;
+    return;
+  }
+  const год=годПлана(), и=итогиГода(год), пр=просрочено(год);
+
+  // Итоги по месяцам — чтобы видеть, где нагрузка
+  const помес=[];
+  for(let м=1;м<=12;м++){
+    const р=работыМесяца(год,м);
+    помес.push({м, работ:р.length, часы:+р.reduce((a,x)=>a+x.часы,0).toFixed(2),
+                сделано:р.filter(x=>x.отм).length});
+  }
+
+  const строки=ППР.позиции.map(п=>{
+    const погод=(п.план||{})[String(год)]||{};
+    if(!Object.keys(погод).length) return "";
+    if(план.толькоНеВыполненные){
+      const естьНе=Object.keys(погод).some(м=>!отметка(п,год,+м));
+      if(!естьНе) return "";
+    }
+    const ячейки=[];
+    for(let м=1;м<=12;м++){
+      const ч=погод[String(м)];
+      if(!ч){ ячейки.push(`<td class="мес пусто"></td>`); continue; }
+      const о=отметка(п,год,м);
+      const кл = о ? "сделано" : (прошедший(год,м) ? "просрочено" : "план");
+      ячейки.push(`<td class="мес ${кл}" title="${о?("выполнено "+ru(о.выполнено)+(о.кто?(", "+esc(о.кто)):"")):(МЕСЯЦЫ[м-1]+", "+ч+" ч — нажмите, чтобы отметить")}"
+        onclick="отметить('${esc(п.id)}',${год},${м})">${о?"✓":ч}</td>`);
+    }
+    return `<tr>
+      <td class="num">${п.нп||""}</td>
+      <td class="obj">${esc(п.наименование)}</td>
+      <td class="num">${esc(п.карточка)}</td>
+      <td><span class="pill">${esc(п.вид)}</span></td>
+      <td class="num">${п.норма!=null?п.норма:""}</td>
+      <td class="num">${п.кол!=null?п.кол:""}</td>
+      ${ячейки.join("")}
+      <td class="num"><b>${(+Object.values(погод).reduce((a,b)=>a+b,0).toFixed(2))}</b></td>
+    </tr>`;
+  }).filter(Boolean).join("");
+
+  const шапкаМес=МЕС3.map((м,i)=>`<th class="мес${текущийМесяц(год,i+1)?" тек":""}">${м}</th>`).join("");
+  const итогМес=помес.map(x=>`<td class="мес"><b>${x.часы||""}</b></td>`).join("");
+
+  document.getElementById("main").innerHTML=`
+    ${printHead("План-график ППР", год+" г. · работ "+и.работ+", трудозатрат "+и.часы)}
+    <div class="head">
+      <h2>План работ</h2><span class="sub">планово-предупредительные осмотры, ${год} г.</span>
+      <div class="spring"></div>
+      <button class="btn" onclick="exportПланXlsx()">▤ Excel</button>
+      <button class="btn" onclick="window.print()">⎙ PDF</button>
+    </div>
+    <div class="filters noprint seg">
+      ${ППР.годы.map(г=>`<button class="btn ${г===год?"on":""}" onclick="setПланГод(${г})">${г}</button>`).join("")}
+      <span class="fnote" style="margin-left:8px">
+        <button class="btn small ${план.толькоНеВыполненные?"on":""}" onclick="setПланФильтр()">
+          ${план.толькоНеВыполненные?"показаны только невыполненные":"показать только невыполненные"}</button>
+      </span>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="n">${и.работ}</div><div class="l">работ по плану</div></div>
+      <div class="tile ${и.сделано?"ok":""}"><div class="n">${и.сделано}</div><div class="l">отмечено выполненными</div></div>
+      <div class="tile ${пр.length?"bad":"ok"}"><div class="n">${пр.length}</div>
+        <div class="l">${и.сделано?"просрочено":"без отметки"}</div></div>
+      <div class="tile"><div class="n">${и.часы}</div><div class="l">трудозатрат, всего</div></div>
+    </div>
+    ${!и.сделано && пр.length ? `<div class="draftnote noprint">
+      Раздел новый, отметок о выполнении ещё нет — поэтому все прошедшие месяцы
+      показаны красным. Это не просрочка, а пустой журнал отметок. Отметьте
+      сделанное — цифра станет настоящей.</div>` : ""}
+    ${ППР.замечания && ППР.замечания.length ? `<div class="draftnote noprint">
+      <b>Замечание к вашей книге</b> (ничего не исправлял, показываю как есть):<br>
+      ${ППР.замечания.map(з=>esc(з)).join("<br>")}</div>` : ""}
+    <div class="card"><div class="tblwrap"><table class="плантбл">
+      <thead><tr>
+        <th style="width:44px">№</th><th>Средство контроля</th>
+        <th style="width:70px">Карточка</th><th style="width:62px">Вид</th>
+        <th style="width:56px">Норма</th><th style="width:44px">Кол.</th>
+        ${шапкаМес}<th style="width:58px">Всего</th>
+      </tr></thead>
+      <tbody>${строки||`<tr><td colspan="19" class="empty">На ${год} год работ нет.</td></tr>`}</tbody>
+      <tfoot><tr>
+        <td colspan="6" class="num"><b>Итого за ${год}</b></td>
+        ${итогМес}<td class="num"><b>${и.часы}</b></td>
+      </tr></tfoot>
+    </table></div></div>
+    <div class="note noprint">Нажатие на месяц ставит отметку о выполнении, повторное — снимает.
+      Отметки уходят в обмен и в резервную копию, как всё остальное.
+      Серым — по плану впереди, красным — прошедший месяц без отметки, зелёным — выполнено.</div>`;
+}
+
+function exportПланXlsx(){
+  const год=годПлана();
+  const колонки=[{з:"№ п/п",ш:7,тип:"число"},{з:"Средство контроля",ш:46},
+    {з:"№ карточки",ш:12},{з:"Вид ТО",ш:9},{з:"Периодичность, доля года",ш:12,тип:"число"},
+    {з:"Норма трудозатрат",ш:11,тип:"число"},{з:"Количество",ш:10,тип:"число"}];
+  МЕСЯЦЫ.forEach(м=>колонки.push({з:м,ш:11}));
+  колонки.push({з:"Всего трудозатрат",ш:13,тип:"число"});
+  const строки=[];
+  ППР.позиции.forEach(п=>{
+    const погод=(п.план||{})[String(год)]||{};
+    if(!Object.keys(погод).length) return;
+    const р=[п.нп,п.наименование,п.карточка,п.вид,п.доля_года,п.норма,п.кол];
+    for(let м=1;м<=12;м++){
+      const ч=погод[String(м)];
+      if(!ч){ р.push(""); continue; }
+      const о=отметка(п,год,м);
+      р.push(о ? ("выполнено "+ru(о.выполнено)+(о.кто?(" · "+о.кто):"")) : String(ч));
+    }
+    р.push(+Object.values(погод).reduce((a,b)=>a+b,0).toFixed(2));
+    строки.push(р);
+  });
+  xlsxФайл("План ППР "+год+".xlsx",[{имя:"План "+год, колонки:колонки, строки:строки}]);
+  toast("План "+год+" выгружен: "+строки.length+" позиций");
+}
+
 function renderExchange(){
   const ws=getWS();
   const об=объёмХранилища(), дн=днейБезКопии();
@@ -2319,7 +2577,7 @@ let toastT;function toast(m){const t=document.getElementById("toast");t.textCont
 
 function switchView(v){curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange}[v]
+  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b)switchView(b.dataset.view);});
@@ -2345,6 +2603,7 @@ O = loadReg(REG_OBJ, DB.объекты);
 S = loadReg(REG_SI, DB.си);
 P = loadReg(REG_PPL, DB.специалисты);
 A = loadReg(REG_AKT, []);
+ОТМ = loadReg(REG_ППР, []);
 папкаКопий().then(h=>{ if(h && curView==="exchange") renderExchange(); });
 rebuildObjIndex();
 document.getElementById("wsName").textContent = getWS().код;

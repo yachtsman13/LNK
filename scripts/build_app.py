@@ -15,8 +15,10 @@ import io, os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ШАБЛОН = os.path.join(ROOT, "Приложение", "шаблон.html")
 ДАННЫЕ = os.path.join(ROOT, "Приложение", "данные.json")
+ППР = os.path.join(ROOT, "Приложение", "ппр.json")
 ИТОГ = os.path.join(ROOT, "Приложение", "ЛНК.html")
 МЕТКА = "/*ДАННЫЕ*/"
+МЕТКА_ППР = "/*ППР*/"
 
 
 def main():
@@ -26,6 +28,9 @@ def main():
 
     шаблон = io.open(ШАБЛОН, encoding="utf-8").read()
     данные = io.open(ДАННЫЕ, encoding="utf-8").read()
+    # План ППР живёт своим файлом: он собирается из другой книги заказчика
+    # и меняется независимо от журнала. Нет файла — раздел просто пустой.
+    ппр = io.open(ППР, encoding="utf-8").read() if os.path.exists(ППР) else "null"
 
     if МЕТКА not in шаблон:
         raise SystemExit("В шаблоне нет метки %s — некуда вставлять данные." % МЕТКА)
@@ -36,8 +41,11 @@ def main():
     # В JSON прямой косой черты быть не должно, но подстрахуемся: экранируем
     # так, что для JSON.parse строка не меняется, а тег закрыться не может.
     данные = данные.replace("</", "<\\/")
+    ппр = ппр.replace("</", "<\\/")
 
-    готово = шаблон.replace(МЕТКА, данные)
+    if шаблон.count(МЕТКА_ППР) != 1:
+        raise SystemExit("Метка %s должна встречаться ровно один раз." % МЕТКА_ППР)
+    готово = шаблон.replace(МЕТКА, данные).replace(МЕТКА_ППР, ппр)
 
     with io.open(ИТОГ, "w", encoding="utf-8") as f:
         f.write(готово)
@@ -50,6 +58,7 @@ def main():
 
     print("Собрано: %s (%.0f КБ)" % (ИТОГ, os.path.getsize(ИТОГ) / 1024.0))
     print("  внешних ссылок нет — откроется без сети")
+    print("  план ППР: %s" % ("вшит" if ппр != "null" else "нет файла ппр.json"))
     return 0
 
 

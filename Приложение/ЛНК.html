@@ -255,6 +255,19 @@
   .sheet .aktsub{text-align:center;font-size:15px;margin-bottom:20px}
   .sheet .aktp{text-align:justify;margin:0 0 11px;text-indent:1.25cm}
   .sheet .aktp.noind{text-indent:0}
+  /* Номер раздела: висячий отступ, текст всех разделов от 2 см — как
+     табуляция в Word, чтобы нумерация выглядела одинаково */
+  .sheet .aktp.вис{text-indent:0;padding-left:2cm}
+  .sheet .aktp.вис .нр{display:inline-block;width:2cm;margin-left:-2cm;
+    text-indent:1.25cm;box-sizing:border-box}
+  .sheet sup{font-size:.7em;line-height:0}
+  .падежи{background:var(--chip);border:1px solid var(--line);border-radius:var(--radius);
+    padding:10px 12px;margin:8px 0 14px;font-family:var(--font)}
+  .падежи .пзаг{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+  .пстрока{display:flex;gap:9px;align-items:center;margin-bottom:6px;font-size:13px}
+  .пстрока .писх{flex:0 0 42%;color:var(--ink)}
+  .пстрока .пстрелка{color:var(--muted)}
+  .пстрока input{flex:1}
   .nbr{white-space:nowrap;display:inline-block}
   .fld{background:#fff8dc;border-bottom:1px dotted #a07800;padding:0 3px;outline:none;
     min-width:70px;display:inline-block}
@@ -537,7 +550,14 @@ const REG_AKT="lnk_akts";
 // организации. Держать это в записи журнала нельзя — повторялось бы в
 // сотнях строк и разъезжалось.
 const REG_ПОДР="lnk_podr";
-let O, S, P, A, ПОДР;
+// Падеж объекта. Склонять автоматически ненадёжно, а вписывать фразу
+// заново в каждом акте — работа впустую: наименования повторяются.
+// Поэтому форма запоминается ЗА НАИМЕНОВАНИЕМ и дальше подставляется
+// сама во все акты. В журнале 315 записей, но уникальных наименований
+// 127, а два десятка самых частых покрывают две трети записей — то есть
+// это разовая работа, а не постоянная.
+const REG_ПАДЕЖ="lnk_padezh";
+let O, S, P, A, ПОДР, ПАДЕЖИ;
 function loadReg(key, seed){
   try{ const raw=localStorage.getItem(key); if(raw){ const p=JSON.parse(raw);
        const rows=Array.isArray(p)?p:p.rows; if(Array.isArray(rows)) return rows; } }catch(e){}
@@ -890,6 +910,27 @@ function регЗаписи(z){
   const m=/рег\.?\s*№\s*([^,;]+)/i.exec(String(z.объект||""));
   return m?m[1].trim():"";
 }
+// Наименование в предложном падеже: «Баллон (хладон) V=40 л» →
+// «баллонах (хладон) V=40 л». Нет в словаре — вернётся как есть.
+function вПадеже(имя){
+  const н=String(имя||"").trim(); if(!н) return "";
+  const з=live(ПАДЕЖИ).find(x=>x.id===н);
+  return (з && String(з.форма||"").trim()) || н;
+}
+function падежЗадан(имя){
+  const н=String(имя||"").trim();
+  const з=live(ПАДЕЖИ).find(x=>x.id===н);
+  return !!(з && String(з.форма||"").trim());
+}
+function saveПадеж(имя,форма){
+  const н=String(имя||"").trim(); if(!н) return;
+  const был=ПАДЕЖИ.find(x=>x.id===н);
+  if(был){ был.форма=String(форма||"").trim(); был.удалено="";
+           был.изменено=new Date().toISOString(); был.место=getWS().код; }
+  else ПАДЕЖИ.push({id:н, форма:String(форма||"").trim(),
+                    изменено:new Date().toISOString(), место:getWS().код});
+  saveReg(REG_ПАДЕЖ,ПАДЕЖИ);
+}
 function именоватьОбъект(z){
   let n=String(z.наименование||"").trim();
   if(!n){ n=String(z.объект||"").replace(/,?\s*(зав|рег)\.?\s*№.*$/i,"").trim(); }
@@ -902,10 +943,10 @@ function черновикОбъектов(zs){
   const имена=[...new Set(zs.map(именоватьОбъект).filter(Boolean))];
   if(имена.length===1){
     const завы=zs.map(завЗаписи).filter(Boolean);
-    return имена[0]+(завы.length?(", зав. №№ "+завы.join(", ")):"");
+    return вПадеже(имена[0])+(завы.length?(", зав. №№ "+завы.join(", ")):"");
   }
   const части=zs.map(z=>{
-    const ч=[именоватьОбъект(z)];
+    const ч=[вПадеже(именоватьОбъект(z))];
     if(завЗаписи(z)) ч.push("зав. № "+завЗаписи(z));
     if(регЗаписи(z)) ч.push("рег. № "+регЗаписи(z));
     return ч.filter(Boolean).join(", ");
@@ -1139,12 +1180,20 @@ function wНомер(об){
 }
 // Абзац перечня: «1. Название №№ номер, номер.» — знак № приклеен к
 // первому номеру неразрывным пробелом.
+// После номера раздела — табуляция с жёсткой позицией: тогда текст всех
+// разделов начинается с одного места и нумерация выглядит одинаково,
+// сколько бы разделов ни было — и при двузначных номерах тоже.
+const ТАБ_РАЗДЕЛА = 1134;                 // 2 см от левого поля
 function wПеречень(н, имя, номера, держать){
   let из='<w:p><w:pPr>'+(держать?'<w:keepNext/>':'')+
+    '<w:tabs><w:tab w:val="left" w:pos="'+ТАБ_РАЗДЕЛА+'"/></w:tabs>'+
     '<w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
-    '<w:ind w:firstLine="709"/><w:jc w:val="both"/>'+rPr(false)+'</w:pPr>';
-  из+=wRun(н+". "+имя+" ");
-  из+='<w:r>'+rPr(false)+'<w:t xml:space="preserve">\u2116\u2116\u00a0</w:t></w:r>';
+    '<w:ind w:firstLine="709"/><w:jc w:val="both"/>'+
+    rPr(false)+'</w:pPr>';
+  из+=wRun(н+".");
+  из+='<w:r>'+rPr(false)+'<w:tab/></w:r>';
+  из+=wТекстСоСтепенями(имя);
+  из+='<w:r>'+rPr(false)+'<w:t xml:space="preserve"> \u2116\u2116\u00a0</w:t></w:r>';
   номера.forEach((об,i)=>{
     if(i) из+=wRun(", ");
     из+=wНомер(об);
@@ -1167,10 +1216,14 @@ function актВWord(ключ){
   тело+=wP("АКТ № "+номерАкта(ключ),{jc:"center",жирный:true,отступ:false});
   тело+=wP("о проведении работ",{jc:"center",жирный:true,отступ:false});
   тело+=пусто()+пусто()+пусто();
-  тело+=wP("В соответствии с "+(тип?(тип+" "):"")+"контрактом от "+датаК+
-           " № "+(к.номер||"______")+" проведены работы в "+(подр||"___")+
-           " по неразрушающему контролю в рамках экспертизы промышленной безопасности на "+
-           фраза+".");
+  // После «от» и после «№» — неразрывные пробелы: дата и номер контракта
+  // не должны отрываться от своих слов переносом строки.
+  тело+='<w:p><w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
+    '<w:ind w:firstLine="709"/><w:jc w:val="both"/>'+rPr(false)+'</w:pPr>'+
+    wRun("В соответствии с "+(тип?(тип+" "):"")+"контрактом от\u00a0"+датаК+
+         " \u2116\u00a0"+(к.номер||"______")+" проведены работы в "+(подр||"___")+
+         " по неразрушающему контролю в рамках экспертизы промышленной безопасности на ")+
+    wТекстСоСтепенями(фраза)+wRun(".")+'</w:p>';
   тело+=пусто();
   тело+=wP("Результаты работ отражены в следующих документах.");
   тело+=пусто();
@@ -1213,8 +1266,13 @@ function актВWord(ключ){
             '<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
             '<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
             '<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>';
-  тело+='<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>'+
+  // Ширины колонок соблюдаются только при фиксированной раскладке. При
+  // «auto» Word пересчитывает их по содержимому и вправе сузить колонку —
+  // из-за этого должность переносилась на вторую строку, хотя до предела
+  // в 8 см ей было далеко.
+  тело+='<w:tbl><w:tblPr><w:tblW w:w="'+ШИРИНА_ТЕКСТА+'" w:type="dxa"/>'+
     '<w:tblBorders>'+нет+'</w:tblBorders>'+
+    '<w:tblLayout w:type="fixed"/>'+
     '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>'+
     '</w:tblPr><w:tblGrid><w:gridCol w:w="'+ШИР_ДОЛЖ+'"/><w:gridCol w:w="'+ШИР_ФАМ+'"/></w:tblGrid>'+
     строки+'</w:tbl>'+пусто();
@@ -1298,11 +1356,62 @@ function ширинаДолжностей(подписи){
   return Math.min(ПРЕДЕЛ_ДОЛЖНОСТИ, макс+40);
 }
 
+// Размерность со степенью: «10 м3» и «кгс/см2» правильно пишутся как
+// м³ и см². Список единиц закрытый и короткий — гадать тут не о чем, а
+// цифра после «№» или внутри марки («РГС-10 №3») под правило не попадает.
+const ЕДИНИЦЫ_СО_СТЕПЕНЬЮ = "(мм|см|дм|км|м)([23])(?![0-9А-Яа-яA-Za-z])";
+function разбитьСтепени(t){
+  const s=String(t||""), ре=new RegExp(ЕДИНИЦЫ_СО_СТЕПЕНЬЮ,"g");
+  const части=[]; let поз=0, m;
+  while((m=ре.exec(s))!==null){
+    if(m.index>поз) части.push({т:s.slice(поз,m.index)});
+    части.push({т:m[1]});
+    части.push({т:m[2], степень:true});
+    поз=m.index+m[0].length;
+  }
+  if(поз<s.length) части.push({т:s.slice(поз)});
+  return части.length?части:[{т:s}];
+}
+function степениВHTML(t){
+  return разбитьСтепени(t).map(ч=>ч.степень?("<sup>"+esc(ч.т)+"</sup>"):esc(ч.т)).join("");
+}
+function wТекстСоСтепенями(t){
+  return разбитьСтепени(t).map(ч=>{
+    if(!ч.степень) return wRun(ч.т);
+    // По схеме CT_RPr надстрочность идёт ПОСЛЕ кегля: rFonts → sz → szCs → vertAlign
+    return '<w:r><w:rPr>'+ФОНТ+КЕГЛЬ+'<w:vertAlign w:val="superscript"/></w:rPr>'+
+           '<w:t xml:space="preserve">'+X(ч.т)+'</w:t></w:r>';
+  }).join("");
+}
+
 // Номер протокола не должен разрываться переносом: ни между знаком № и
 // номером, ни внутри самого номера по дефисам. На экране это делает
 // white-space, в Word — неразрывный дефис (w:noBreakHyphen).
 function номерНеразрывно(об){ return '<span class="ном">'+esc(об)+'</span>'; }
 
+// Падежные формы наименований этого акта: заполняются один раз и дальше
+// подставляются во все акты сами. Показываются только когда фразу ещё не
+// правили руками — правка руками отменяет надобность.
+function блокПадежей(zs,ключ){
+  const имена=[...new Set(zs.map(именоватьОбъект).filter(Boolean))];
+  if(!имена.length) return "";
+  const нет=имена.filter(н=>!падежЗадан(н));
+  return `<div class="падежи noprint">
+    <div class="пзаг">${нет.length
+      ? "Падеж: впишите, как эти наименования пишутся после слов «работы на …»"
+      : "Падежные формы заданы — подставляются сами"}</div>
+    ${имена.map(н=>`
+      <div class="пстрока">
+        <span class="писх">${esc(н)}</span>
+        <span class="пстрелка">→</span>
+        <input value="${esc(падежЗадан(н)?вПадеже(н):"")}"
+          placeholder="${esc(н.charAt(0).toLowerCase()+н.slice(1))}"
+          onchange="saveПадеж('${esc(н).replace(/'/g,"\\'")}',this.value);renderAkt('${esc(ключ)}')">
+      </div>`).join("")}
+    <div class="note">Запоминается за наименованием: заполнили один раз — дальше
+      подставляется во все акты. Уходит в обмен, как остальные данные.</div>
+  </div>`;
+}
 function renderAkt(ключ){
   const zs=записиАкта(ключ);
   if(!zs.length){ toast("По акту "+ключ+" записей нет"); return; }
@@ -1322,7 +1431,7 @@ function renderAkt(ключ){
            oninput="saveИмяДок('${g.м}',this.innerText)">${e(имя)}</span>`
       : `<span class="fld" contenteditable="true" data-ph="как называются документы по методу ${g.м} — впишите"
            oninput="saveИмяДок('${g.м}',this.innerText)"></span>`;
-    return `<p class="aktp">${i+1}. ${шапка} <span class="nbr">№№</span>&nbsp;${
+    return `<p class="aktp вис"><span class="нр">${i+1}.</span>${шапка} <span class="nbr">№№</span>&nbsp;${
       g.номера.map(номерНеразрывно).join(", ")}.</p>`+
       (имя?"":`<div class="fldhint">Метода ${g.м} в присланных актах не было — название документов не выдумываю. Впишите один раз, оно запомнится.</div>`);
   }).join("") || `<p class="aktp"><i>Ни у одного метода нет выданного номера — выдайте номера в записях.</i></p>`;
@@ -1400,13 +1509,14 @@ function renderAkt(ключ){
       <div class="aktsub">о проведении работ</div>
 
       <p class="aktp">В соответствии с ${поле("контракт_тип","тип контракта",к.тип)} контрактом
-        от ${поле("контракт_дата_текст", "__.__.____", к.дата?ru(к.дата):"")}
-        № ${поле("контракт_номер","______",к.номер)} проведены работы
+        от&nbsp;${поле("контракт_дата_текст", "__.__.____", к.дата?ru(к.дата):"")}
+        №&nbsp;${поле("контракт_номер","______",к.номер)} проведены работы
         в ${поле("подразделение","заказывающее подразделение", названиеПодразделения(ключ))}
         по неразрушающему контролю в рамках экспертизы промышленной безопасности на
         <span class="fld flow" contenteditable="true" data-ph="объекты контроля"
-          oninput="saveАкт('${e(ключ)}','объекты',this.innerText)">${e(фраза)}</span>.</p>
+          oninput="saveАкт('${e(ключ)}','объекты',this.innerText)">${степениВHTML(фраза)}</span>.</p>
       <div class="fldhint">${своя?"Фраза об объектах правлена вами.":"Фраза об объектах — черновик из "+zs.length+" записей журнала."}</div>
+      ${своя?"":блокПадежей(zs,ключ)}
 
       <p class="aktp noind">Результаты работ отражены в следующих документах.</p>
       ${абзацы}
@@ -1998,7 +2108,7 @@ function данныеКопии(){
   const ws=getWS();
   return JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР }, null, 1);
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ }, null, 1);
 }
 function имяКопии(){
   const d=new Date(), дв=n=>(n<10?"0":"")+n;
@@ -2055,7 +2165,7 @@ function backupSave(){
   const name="Резервная копия ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР }, null, 1));
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ }, null, 1));
   try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
   toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
         ", СИ "+live(S).length+", спец. "+live(P).length);
@@ -2085,6 +2195,7 @@ function backupOpen(){
           if(Array.isArray(d.акты)){ A=d.акты; saveReg(REG_AKT,A); }
           if(Array.isArray(d.ппр)){ ОТМ=d.ппр; saveReg(REG_ППР,ОТМ); }
           if(Array.isArray(d.подразделения)){ ПОДР=d.подразделения; saveReg(REG_ПОДР,ПОДР); }
+          if(Array.isArray(d.падежи)){ ПАДЕЖИ=d.падежи; saveReg(REG_ПАДЕЖ,ПАДЕЖИ); }
           rebuildObjIndex();
         }
         setChrome(); switchView("dash"); toast("Восстановлено из копии");
@@ -2294,7 +2405,7 @@ function exchangeExport(){
   const ws=getWS();
   const payload={ тип:"обмен ЛНК", формат:2, место:ws.код, мастер:ws.мастер,
     версия:DB.версия, выгружено:new Date().toISOString(),
-    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР,
+    записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ,
     право:getGrant(), названия:имена() };
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
@@ -2328,6 +2439,7 @@ function exchangeImport(){
             mergeInto(A,REG_AKT,d.акты);
             mergeInto(ОТМ,REG_ППР,d.ппр);
             mergeInto(ПОДР,REG_ПОДР,d.подразделения);
+            mergeInto(ПАДЕЖИ,REG_ПАДЕЖ,d.падежи);
             // Названия документов по методам — свежее побеждает.
             if(d.названия && d.названия.изменено && d.названия.изменено > имена().изменено)
               saveИмена({имена:Object.assign({}, имена().имена, d.названия.имена||{}),
@@ -3099,6 +3211,7 @@ P = loadReg(REG_PPL, DB.специалисты);
 A = loadReg(REG_AKT, []);
 ОТМ = loadReg(REG_ППР, []);
 ПОДР = loadReg(REG_ПОДР, []);
+ПАДЕЖИ = loadReg(REG_ПАДЕЖ, []);
 папкаКопий().then(h=>{ if(h && curView==="exchange") renderExchange(); });
 rebuildObjIndex();
 document.getElementById("wsName").textContent = getWS().код;

@@ -615,7 +615,10 @@ function methodsOf(z){ return Object.keys(z.методы||{}); }
 // заголовок, что именно отобрано и когда сформировано. Без этого
 // распечатка не документ, а безымянная таблица.
 function printHead(title, подзаголовок){
-  const орг=getOrg();
+  // Организация берётся из карточки лаборатории — там же, откуда её берёт
+  // акт. Отдельное поле «наименование организации» жило в удалённом
+  // черновике документа и разошлось бы с настройками.
+  const орг=getЛаб().организация;
   return `<div class="print-only print-head">
     ${орг?`<div class="ph-sub" style="margin:0 0 6px">${esc(орг)}</div>`:""}
     <div class="ph-title">${esc(title)}</div>
@@ -752,7 +755,7 @@ function showJournal(id){
   openDrawer("Акт № "+(z.акт||"—")+" от "+ru(z.дата), `
     <div class="dbtns">
       <button class="btn primary" onclick="closeDrawer();editJournal('${esc(z.id)}')">✎ Изменить</button>
-      <button class="btn" onclick="closeDrawer();renderDoc('${esc(z.id)}')">▦ Документ</button>
+      <button class="btn" onclick="closeDrawer();открытьДокумент('${esc(z.id)}')">▦ Документ</button>
       ${ждётНомеров(z)?`<button class="btn" onclick="выдатьНомера('${esc(z.id)}')">№ Выдать номера</button>`:""}
       ${String(z.акт||"").trim()?"":`<button class="btn" onclick="выдатьАкт('${esc(z.id)}')">№ Номер акта</button>`}
       <button class="btn danger" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>
@@ -766,66 +769,6 @@ function showJournal(id){
     ${F("Примечание",z.примечание)}`);
 }
 
-// ── Документ по записи (печать / PDF) ─────────────────────
-// Структура НЕЙТРАЛЬНАЯ и черновая: точную форму акта/заключения не
-// выдумываю — вы её подтвердите или пришлёте образец, как с шаблонами
-// Word. Здесь показано, как запись ложится в документ и печатается.
-function getOrg(){ try{ return localStorage.getItem("lnk_org")||""; }catch(e){ return ""; } }
-function saveOrg(t){ try{ localStorage.setItem("lnk_org",(t||"").trim()); }catch(e){} }
-function saveConcl(id,t){ const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
-  z.заключение=t; saveJournal(); }
-function renderDoc(id){
-  const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
-  curView="doc";
-  document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
-  const o=objByName[z.объект]||objById[z.объект_ид]||{};
-  const row=(k,v)=>v?`<tr><td class="k">${k}</td><td>${esc(v)}</td></tr>`:"";
-  const mrows=methodsOf(z).map(m=>{const об=обозначениеПротокола(z,m);
-    return `<tr><td>${m}</td><td>${об?esc(об):"—"}</td><td>${esc(z.методы[m].исп)||"—"}</td></tr>`;
-    }).join("")||`<tr><td colspan="3" style="text-align:center">методы не указаны</td></tr>`;
-  const signers=[...new Set(methodsOf(z).map(m=>z.методы[m].исп).filter(Boolean))];
-  const signRows=signers.map(s=>`<div class="signrow"><span class="line"></span><span class="nm">${esc(s)}</span></div>`).join("")
-    ||`<div class="signrow"><span class="line"></span><span class="nm">&nbsp;</span></div>`;
-  document.getElementById("main").innerHTML=`
-    <div class="head noprint">
-      <button class="btn" onclick="switchView('journal')">← Назад</button>
-      <h2 style="font-size:16px">Документ по записи</h2>
-      <div class="spring"></div>
-      <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button>
-    </div>
-    <div class="draftnote noprint">Черновик формы. Точную форму акта/протокола пришлите —
-      подставлю ваши поля и вёрстку. Наименование организации и заключение можно
-      вписать прямо в документе (сохранятся).</div>
-    <div class="sheet">
-      <div class="org" contenteditable="true" data-ph="Наименование организации (нажмите и впишите)"
-           oninput="saveOrg(this.innerText)">${esc(getOrg())}</div>
-      <h1>ЗАКЛЮЧЕНИЕ</h1>
-      <div class="docsub">о результатах неразрушающего контроля</div>
-      <div class="docmeta">№ ${esc(z.акт)||"____"} от ${ru(z.дата)||"__________"}</div>
-
-      <div class="doch">1. Объект контроля</div>
-      <table class="doctbl"><tbody>
-        ${row("Наименование", z.наименование||z.объект)}
-        ${row("Заводской №", z.зав)}${row("Регистрационный / учётный №", z.рег)}
-        ${row("Тип / группа", o.тип)}${row("Материал", o.материал)}
-        ${row("Рабочее давление", o.давление)}${row("Рабочая среда", o.среда)}
-        ${row("Расположение", o.место)}
-      </tbody></table>
-
-      <div class="doch">2. Проведённый контроль</div>
-      <table class="doctbl"><thead><tr><th style="width:26%">Метод</th><th style="width:32%">№ протокола (#Номер)</th><th>Исполнитель</th></tr></thead>
-        <tbody>${mrows}</tbody></table>
-
-      <div class="doch">3. Заключение</div>
-      <div class="concl" contenteditable="true" data-ph="Впишите заключение по результатам контроля…"
-           oninput="saveConcl('${esc(z.id)}',this.innerText)">${esc(z.заключение||"")}</div>
-
-      <div class="signs">
-        <div class="doch" style="border:0">Специалисты, проводившие контроль:</div>
-        ${signRows}
-      </div>
-    </div>`;
-}
 
 // ── Акт о проведении работ ────────────────────────────────
 // Форма снята с ваших актов 28-2026 и 35-2026, а не придумана: заголовок,
@@ -840,6 +783,17 @@ const ДОК_ИМЕНА={
   ТВ :"Протоколы измерения твердости металла",
   АЭ :"Заключения по результатам акустико-эмиссионного контроля"
 };
+// Когда по методу документ ОДИН, пишется единственное число и один знак
+// номера: «Акт визуального и (или) измерительного контроля № 121-2026-ВИК».
+// В присланных актах были только множественные формы — единственные ниже
+// это мой ЧЕРНОВИК. Строка правится прямо в документе и запоминается.
+const ДОК_ИМЕНА_ЕД={
+  ВИК:"Акт визуального и (или) измерительного контроля",
+  УЗТ:"Протокол ультразвуковой толщинометрии",
+  УЗД:"Заключение по результатам ультразвукового контроля",
+  ТВ :"Протокол измерения твердости металла",
+  АЭ :"Заключение по результатам акустико-эмиссионного контроля"
+};
 // Порядок абзацев в акте — как в ваших образцах (в обоих одинаковый).
 const ПОРЯДОК_В_АКТЕ=["ВИК","УЗТ","УЗД","ТВ","АЭ","МК","ТК","ВД"];
 // Названия документов по методам — общие для лаборатории, а не для одного
@@ -847,20 +801,23 @@ const ПОРЯДОК_В_АКТЕ=["ВИК","УЗТ","УЗД","ТВ","АЭ","МК
 // они ходят в файле обмена и сливаются по свежести, как право выдачи.
 function имена(){
   try{ const o=JSON.parse(localStorage.getItem("lnk_docnames")||"{}");
-       if(o && o.имена) return {имена:o.имена, изменено:o.изменено||""};
-       if(o && typeof o==="object") return {имена:o, изменено:""};   // старый вид
+       if(o && o.имена) return {имена:o.имена, ед:o.ед||{}, изменено:o.изменено||""};
+       if(o && typeof o==="object") return {имена:o, ед:{}, изменено:""};   // старый вид
   }catch(e){}
-  return {имена:{}, изменено:""};
+  return {имена:{}, ед:{}, изменено:""};
 }
 function saveИмена(п){
   try{ localStorage.setItem("lnk_docnames", JSON.stringify(п)); }catch(e){}
 }
-function имяДок(м){
-  const п=имена(); return п.имена[м] || ДОК_ИМЕНА[м] || "";
-}
-function saveИмяДок(м,t){
+function имяДок(м,один){
   const п=имена();
-  п.имена[м]=(t||"").trim(); п.изменено=new Date().toISOString();
+  if(один) return п.ед[м] || ДОК_ИМЕНА_ЕД[м] || "";
+  return п.имена[м] || ДОК_ИМЕНА[м] || "";
+}
+function saveИмяДок(м,t,один){
+  const п=имена();
+  if(один) п.ед[м]=(t||"").trim(); else п.имена[м]=(t||"").trim();
+  п.изменено=new Date().toISOString();
   saveИмена(п);
 }
 // Данные лаборатории — общие для всех документов, поэтому не на акте, а
@@ -1201,6 +1158,7 @@ function wНомер(об){
 // сколько бы разделов ни было — и при двузначных номерах тоже.
 const ТАБ_РАЗДЕЛА = 1134;                 // 2 см от левого поля
 function wПеречень(н, имя, номера, держать){
+  const один=(номера.length===1);
   // keepLines не даёт разорвать раздел между страницами: не помещается —
   // Word целиком переносит его на следующую. Это прямее, чем подгонять
   // пустые строки между разделами, и не зависит от того, сколько их.
@@ -1212,7 +1170,8 @@ function wПеречень(н, имя, номера, держать){
   из+=wRun(н+".");
   из+='<w:r>'+rPr(false)+'<w:tab/></w:r>';
   из+=wТекстСоСтепенями(типографика(имя));
-  из+='<w:r>'+rPr(false)+'<w:t xml:space="preserve"> \u2116\u2116\u00a0</w:t></w:r>';
+  из+='<w:r>'+rPr(false)+'<w:t xml:space="preserve"> '+
+      (один?"\u2116":"\u2116\u2116")+'\u00a0</w:t></w:r>';
   номера.forEach((об,i)=>{
     if(i) из+=wRun(", ");
     из+=wНомер(об);
@@ -1249,11 +1208,13 @@ function актВWord(ключ){
   const нетИмени=[];
   const группы=спискиАкта(zs);
   группы.forEach((g,i)=>{
-    const имя=имяДок(g.м);
+    const один=(g.номера.length===1);
+    const имя=имяДок(g.м,один);
     if(!имя) нетИмени.push(g.м);
     // последний абзац перечня держим вместе с подписями
     const последний=(i===группы.length-1);
-    тело+=wПеречень(i+1, имя||("Документы по методу "+g.м), g.номера, последний);
+    тело+=wПеречень(i+1, имя||((один?"Документ":"Документы")+" по методу "+g.м),
+                    g.номера, последний);
     if(!последний) тело+=пусто();
   });
   // Отступ перед подписями, но с keepNext: иначе пустой абзац позволил бы
@@ -1394,7 +1355,16 @@ const ВИСЯЧИЕ = ("а,и,в,к,о,с,у,я,б,ж,"+                       
                  "не,ни,но,же,ли,бы,да,то").split(",");
 const ВИСЯЧИЕ_ДЛИННЫЕ = ("при,для,над,под,про,без,изо,ото,что,как,или,"+
                          "если,чем,так,перед,между,через,после").split(",");
+// «500л» пишется как «500 л»: между числом и единицей нужен пробел.
+// Список единиц закрытый — иначе пробел влезет в марку вроде «РГС-10»
+// или «АР40/160».
+const ЕДИНИЦЫ = "мм|см|дм|км|мг|кг|т|л|г|м|шт|ч|мин|с|%|°C|°|МПа|кгс|Н|В|А|Вт";
+function пробелПередЕдиницей(t){
+  const ре=new RegExp("(\\d)("+ЕДИНИЦЫ+")(?![А-Яа-яA-Za-z0-9])","g");
+  return String(t==null?"":t).replace(ре,"$1 $2");
+}
 function типографика(t){
+  t=пробелПередЕдиницей(t);
   let s=String(t==null?"":t);
   const набор=ВИСЯЧИЕ.concat(ВИСЯЧИЕ_ДЛИННЫЕ)
     .map(w=>w.replace(/[-]/g,"\\-")).join("|");
@@ -1472,6 +1442,16 @@ function блокПадежей(zs,ключ){
       подставляется во все акты. Уходит в обмен, как остальные данные.</div>
   </div>`;
 }
+// Из журнала открывается ТОТ ЖЕ акт, что и из раздела документов, — а не
+// отдельная форма. Раньше здесь висел черновик «ЗАКЛЮЧЕНИЕ», сделанный до
+// получения вашего образца; он вводил в заблуждение и удалён.
+function открытьДокумент(id){
+  const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
+  const ключ=актКлюч(z);
+  if(ключ){ renderAkt(ключ); return; }
+  if(confirm("У записи нет номера акта, а документ оформляется по акту.\n\n"+
+             "Присвоить номер акта сейчас?")) выдатьАкт(id);
+}
 function renderAkt(ключ){
   const zs=записиАкта(ключ);
   if(!zs.length){ toast("По акту "+ключ+" записей нет"); return; }
@@ -1486,14 +1466,15 @@ function renderAkt(ключ){
 
   const группыАкта=спискиАкта(zs);
   const абзацы=группыАкта.map((g,i)=>{
-    const имя=имяДок(g.м);
+    const один=(g.номера.length===1);
+    const имя=имяДок(g.м,один);
     const последний=(i===группыАкта.length-1);
     const шапка=имя
       ? `<span class="fld" contenteditable="true" data-ph="название документов"
-           oninput="saveИмяДок('${g.м}',this.innerText)">${e(типографика(имя))}</span>`
-      : `<span class="fld" contenteditable="true" data-ph="как называются документы по методу ${g.м} — впишите"
-           oninput="saveИмяДок('${g.м}',this.innerText)"></span>`;
-    return `<p class="aktp вис${последний?" последний":""}"><span class="нр">${i+1}.</span>${шапка} <span class="nbr">№№</span>&nbsp;${
+           oninput="saveИмяДок('${g.м}',this.innerText,${один})">${e(типографика(имя))}</span>`
+      : `<span class="fld" contenteditable="true" data-ph="как называ${один?"ется документ":"ются документы"} по методу ${g.м} — впишите"
+           oninput="saveИмяДок('${g.м}',this.innerText,${один})"></span>`;
+    return `<p class="aktp вис${последний?" последний":""}"><span class="нр">${i+1}.</span>${шапка} <span class="nbr">${один?"№":"№№"}</span>&nbsp;${
       g.номера.map(номерНеразрывно).join(", ")}.</p>`+
       (имя?"":`<div class="fldhint">Метода ${g.м} в присланных актах не было — название документов не выдумываю. Впишите один раз, оно запомнится.</div>`);
   }).join("") || `<p class="aktp"><i>Ни у одного метода нет выданного номера — выдайте номера в записях.</i></p>`;
@@ -1598,8 +1579,22 @@ function нетПрава(){
     "или передать его другому месту.\n\nЗаписи при этом вводятся как обычно — они просто ждут номера.");
   switchView("exchange");
 }
+// Если право не назначено НИКОМУ — берём его на это место молча-понятно.
+// Иначе на первом же запуске программа отказывается выдавать номера, и это
+// выглядит поломкой, хотя механизм задуман для другого: не пускать ВТОРОЕ
+// место выдавать номера одновременно с первым.
+function правоЕслиНичьё(){
+  if(правоМоё()) return true;
+  const g=getGrant();
+  if(!g.место){
+    saveGrant({место:getWS().код, изменено:new Date().toISOString()});
+    toast("Право выдачи номеров закреплено за местом "+getWS().код);
+    return true;
+  }
+  return false;
+}
 function выдатьНомера(id){
-  if(!правоМоё()){ нетПрава(); return; }
+  if(!правоЕслиНичьё()){ нетПрава(); return; }
   const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
   const г=годЗаписи(z);
   if(!г){ toast("У записи не заполнена дата — год берётся из неё"); return; }
@@ -1618,7 +1613,7 @@ function выдатьНомера(id){
   alert("Выданы номера протоколов:\n\n"+выдано.join("\n"));
 }
 function выдатьАкт(id){
-  if(!правоМоё()){ нетПрава(); return; }
+  if(!правоЕслиНичьё()){ нетПрава(); return; }
   const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
   const г=годЗаписи(z);
   if(!г){ toast("У записи не заполнена дата — год берётся из неё"); return; }
@@ -1693,7 +1688,7 @@ function renderDocs(){
         ${ждут?`<span class="st work" style="margin-left:6px">${ждут} без номера</span>`:""}</td>
     </tr>`;}).join(""):`<tr><td colspan="5" class="empty">Актов не найдено.</td></tr>`;
   const body=rows.length?rows.map(z=>`
-    <tr onclick="renderDoc('${esc(z.id)}')">
+    <tr onclick="открытьДокумент('${esc(z.id)}')">
       <td class="num">${esc(z.акт)||"—"}</td>
       <td class="num">${ru(z.дата)}</td>
       <td class="obj">${esc(z.объект)}</td>
@@ -2505,6 +2500,7 @@ function exchangeImport(){
             // Названия документов по методам — свежее побеждает.
             if(d.названия && d.названия.изменено && d.названия.изменено > имена().изменено)
               saveИмена({имена:Object.assign({}, имена().имена, d.названия.имена||{}),
+                         ед:Object.assign({}, имена().ед, d.названия.ед||{}),
                          изменено:d.названия.изменено});
             if(ro.added||ro.updated) rebuildObjIndex();
             tot.j+=rj.added+rj.updated; tot.o+=ro.added+ro.updated; tot.s+=rs.added+rs.updated; tot.p+=rp.added+rp.updated;

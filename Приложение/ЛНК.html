@@ -653,7 +653,7 @@ function renderJournal(){
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: объект, № акта, зав. №, метод…" value="${esc(query)}"></div>
       <div class="spring"></div>
       <button class="btn primary" onclick="editJournal(null)">＋ Добавить запись</button>
-      <button class="btn" onclick="exportCSV()">▤ Excel</button>
+      <button class="btn" onclick="exportXlsx()">▤ Excel</button>
       <button class="btn" onclick="window.print()">⎙ PDF</button>
       <button class="btn" onclick="backupSave()" title="Резервная копия всей базы в файл">▼ Копия</button>
     </div>
@@ -1796,7 +1796,7 @@ function renderObjects(){
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: наименование, зав. №, тип…" value="${esc(query)}"></div>
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('obj',null)">＋ Добавить</button>
-      <button class="btn" onclick="exportCSV()">▤ Excel</button>
+      <button class="btn" onclick="exportXlsx()">▤ Excel</button>
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Рег. / уч. №</th><th>Тип / группа</th><th>Расположение</th></tr></thead>
@@ -1850,7 +1850,7 @@ function renderSi(){
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: наименование, тип, метод…" value="${esc(query)}"></div>
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('si',null)">＋ Добавить</button>
-      <button class="btn" onclick="exportCSV()">▤ Excel</button>
+      <button class="btn" onclick="exportXlsx()">▤ Excel</button>
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Метод</th><th>Поверка до</th><th>Статус</th></tr></thead>
@@ -1887,7 +1887,7 @@ function renderPeople(){
     <div class="head"><h2>Специалисты</h2><span class="sub">${live(P).length}</span>
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('ppl',null)">＋ Добавить</button>
-      <button class="btn" onclick="exportCSV()">▤ Excel</button>
+      <button class="btn" onclick="exportXlsx()">▤ Excel</button>
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>ФИО</th><th>Должность</th><th>Функции в ЛНК</th><th>Стаж с</th></tr></thead>
@@ -2073,7 +2073,8 @@ function renderExchange(){
           «Обмен ЛНК … (${esc(ws.код)}).json» в папку загрузок. Скопируйте его на флешку
           или в общую папку «Обмен».
           ${ws.мастер?"Как мастер — сначала примите файлы всех мест, потом выгрузите: это будет свод.":""}</div>
-        <div class="formbtns"><button class="btn primary" onclick="exchangeExport()">▼ Выгрузить всё</button></div>
+        <div class="formbtns"><button class="btn primary" onclick="exchangeExport()">▼ Выгрузить всё</button>
+          <button class="btn" onclick="exportXlsxВсё()">▤ Вся база в Excel</button></div>
       </div>
       <div class="panel">
         <h3>▲ Принять файлы обмена</h3>
@@ -2150,24 +2151,169 @@ function closeDrawer(){document.getElementById("drawer").classList.remove("show"
   document.getElementById("veil").classList.remove("show");}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
 
-function exportCSV(){
-  let head,rowsF,name;
-  if(curView==="journal"){head=["№ акта","Дата","Объект","Заводской №","Рег. №","Методы","Статус"];
-    rowsF=journalRows().map(z=>[z.акт,ru(z.дата),z.объект,z.зав,z.рег,methodsOf(z).join(" "),z.статус]);name="Журнал ЛНК";}
-  else if(curView==="objects"){head=["Наименование","Заводской №","Рег. №","Тип","Расположение","Материал"];
-    rowsF=live(O).map(o=>[o.наименование,o.зав,o.рег,o.тип,o.место,o.материал]);name="Объекты ЛНК";}
-  else if(curView==="si"){head=["Наименование","Тип","Заводской №","Метод","Поверка до","№ свидетельства"];
-    rowsF=live(S).map(s=>[s.наименование,s.тип,s.зав,s.метод,ru(s.поверка_до),s.свидетельство]);name="СИ ЛНК";}
-  else if(curView==="people"){head=["ФИО","Должность","Функции","Стаж с"];
-    rowsF=live(P).map(p=>[p.фио,p.должность,p.функции,p.стаж]);name="Специалисты ЛНК";}
-  else{toast("Здесь нечего выгружать");return;}
-  const q=s=>'"'+String(s==null?"":s).replace(/"/g,'""')+'"';
-  const csv="﻿"+[head.map(q).join(";")].concat(rowsF.map(r=>r.map(q).join(";"))).join("\r\n");
-  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob);
-  const a=document.createElement("a");a.href=url;a.download=name+".csv";document.body.appendChild(a);a.click();
-  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},400);
-  toast("Выгружено для Excel: "+rowsF.length+" строк");
+// ── Выгрузка в Excel (.xlsx) ──────────────────────────────
+// Раньше выгружался CSV. В Office 2016 это лотерея: разделитель столбцов
+// CSV берёт из региональных настроек Windows, и на другой машине файл
+// открывается одной колонкой. Плюс даты и числа приезжают текстом.
+// Настоящий .xlsx — это тот же ZIP, что и .docx, писать его умеем.
+//
+// Строки кладём прямо в ячейки (inlineStr), без общей таблицы строк:
+// файл чуть больше, зато собирается в один проход и не может разъехаться.
+const XL_ЭПОХА = Date.UTC(1899,11,30);          // Excel считает дни от 30.12.1899
+function xlДата(iso){
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||"")); if(!m) return null;
+  return Math.round((Date.UTC(+m[1],+m[2]-1,+m[3])-XL_ЭПОХА)/86400000);
 }
+function xlБуква(n){                             // 1 → A, 27 → AA
+  let s=""; while(n>0){ const о=(n-1)%26; s=String.fromCharCode(65+о)+s; n=(n-о-1)/26; }
+  return s;
+}
+function xlЯчейка(адрес, знач, тип){
+  if(знач==null || знач==="") return "";
+  if(тип==="дата"){
+    const д=xlДата(знач);
+    if(д!=null) return '<c r="'+адрес+'" s="2"><v>'+д+'</v></c>';
+  }
+  if(тип==="число"){
+    const ч=Number(String(знач).replace(",","."));
+    if(isFinite(ч) && String(знач).trim()!=="") return '<c r="'+адрес+'"><v>'+ч+'</v></c>';
+  }
+  return '<c r="'+адрес+'" t="inlineStr"><is><t xml:space="preserve">'+X(знач)+'</t></is></c>';
+}
+function xlЛист(лист){
+  const кол=лист.колонки, N=кол.length, M=лист.строки.length;
+  let xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<dimension ref="A1:'+xlБуква(N)+Math.max(1,M+1)+'"/>'+
+    // шапка закреплена — иначе на 315 строках непонятно, что за столбец
+    '<sheetViews><sheetView workbookViewId="0">'+
+    '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'+
+    '</sheetView></sheetViews>'+
+    '<sheetFormatPr defaultRowHeight="15"/><cols>';
+  кол.forEach((к,i)=>{ xml+='<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+(к.ш||16)+'" customWidth="1"/>'; });
+  xml+='</cols><sheetData><row r="1">';
+  кол.forEach((к,i)=>{ xml+='<c r="'+xlБуква(i+1)+'1" t="inlineStr" s="1"><is><t>'+X(к.з)+'</t></is></c>'; });
+  xml+='</row>';
+  лист.строки.forEach((стр,ri)=>{
+    const r=ri+2; xml+='<row r="'+r+'">';
+    стр.forEach((v,ci)=>{ xml+=xlЯчейка(xlБуква(ci+1)+r, v, кол[ci].тип); });
+    xml+='</row>';
+  });
+  xml+='</sheetData>';
+  // По схеме autoFilter идёт ПОСЛЕ sheetData, а не до — иначе Excel
+  // объявит книгу повреждённой (та же строгость, что и в Word).
+  if(M) xml+='<autoFilter ref="A1:'+xlБуква(N)+(M+1)+'"/>';
+  return xml+'</worksheet>';
+}
+function xlsxФайл(имяФайла, листы){
+  const R="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const стили='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<numFmts count="1"><numFmt numFmtId="164" formatCode="DD.MM.YYYY"/></numFmts>'+
+    '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'+
+    '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'+
+    '<fills count="3"><fill><patternFill patternType="none"/></fill>'+
+    '<fill><patternFill patternType="gray125"/></fill>'+
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF7"/><bgColor indexed="64"/></patternFill></fill></fills>'+
+    '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'+
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+    '<cellXfs count="3">'+
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'+
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'+
+    '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
+    '</cellXfs>'+
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'+
+    '</styleSheet>';
+  let книга='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '+
+    'xmlns:r="'+R+'"><sheets>';
+  let связи='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+  let типы='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+    '<Default Extension="xml" ContentType="application/xml"/>'+
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
+    '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
+  const файлы=[{имя:"xl/styles.xml", данные:стили}];
+  листы.forEach((л,i)=>{
+    const n=i+1;
+    книга+='<sheet name="'+X(л.имя)+'" sheetId="'+n+'" r:id="rId'+n+'"/>';
+    связи+='<Relationship Id="rId'+n+'" Type="'+R+'/worksheet" Target="worksheets/sheet'+n+'.xml"/>';
+    типы+='<Override PartName="/xl/worksheets/sheet'+n+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+    файлы.push({имя:"xl/worksheets/sheet"+n+".xml", данные:xlЛист(л)});
+  });
+  книга+='</sheets></workbook>';
+  связи+='<Relationship Id="rId'+(листы.length+1)+'" Type="'+R+'/styles" Target="styles.xml"/></Relationships>';
+  типы+='</Types>';
+  файлы.unshift(
+    {имя:"[Content_Types].xml", данные:типы},
+    {имя:"_rels/.rels", данные:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="'+R+'/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {имя:"xl/workbook.xml", данные:книга},
+    {имя:"xl/_rels/workbook.xml.rels", данные:связи});
+  dlBlob(имяФайла, zipStore(файлы));
+}
+
+// Что именно выгружаем. Журнал уходит полностью: в CSV терялось самое
+// нужное — номера протоколов по методам, оставались одни названия методов.
+function листЖурнала(строки){
+  const колонки=[{з:"№ п/п",ш:7,тип:"число"},{з:"№ акта",ш:14},{з:"Дата",ш:12,тип:"дата"},
+    {з:"Статус",ш:16},{з:"Подразделение",ш:20},{з:"Объект контроля",ш:38},
+    {з:"Наименование в документе",ш:30},{з:"Заводской №",ш:14},{з:"Рег. №",ш:14}];
+  METHODS.forEach(м=>{ колонки.push({з:м+" №",ш:13}); колонки.push({з:м+" исполнитель",ш:17}); });
+  колонки.push({з:"Заключение",ш:40},{з:"Примечание",ш:24});
+  const из=строки.map((z,i)=>{
+    const р=[i+1, z.акт, z.дата, z.статус, z.подразделение, z.объект,
+             z.наименование, завЗаписи(z), регЗаписи(z)];
+    METHODS.forEach(м=>{ const v=(z.методы||{})[м]||{};
+      р.push(обозначениеПротокола(z,м)||v.н||""); р.push(v.исп||""); });
+    р.push(z.заключение, z.примечание);
+    return р;
+  });
+  return {имя:"Журнал", колонки:колонки, строки:из};
+}
+function листОбъектов(){
+  return {имя:"Объекты", строки:live(O).map((o,i)=>[i+1,o.наименование,o.зав,o.рег,o.учет,o.инв,
+      o.тип,o.место,o.изготовитель,o.материал,o.объем,o.давление,o.среда,o.примечание]),
+    колонки:[{з:"№",ш:6,тип:"число"},{з:"Наименование",ш:38},{з:"Заводской №",ш:14},{з:"Рег. №",ш:14},
+      {з:"Учётный №",ш:14},{з:"Инвентарный №",ш:14},{з:"Тип / группа",ш:16},{з:"Расположение",ш:22},
+      {з:"Изготовитель",ш:18},{з:"Материал",ш:14},{з:"Объём",ш:10},{з:"Давление",ш:12},
+      {з:"Среда",ш:14},{з:"Примечание",ш:24}]};
+}
+function листПриборов(){
+  return {имя:"Приборы (СИ)", строки:live(S).map((s,i)=>[i+1,s.наименование,s.тип,s.зав,s.инв,
+      s.метод,s.назначение,s.поверка_до,s.свидетельство,s.периодичность,s.хранение,s.состояние]),
+    колонки:[{з:"№",ш:6,тип:"число"},{з:"Наименование",ш:32},{з:"Тип / обозначение",ш:20},
+      {з:"Заводской №",ш:14},{з:"Инвентарный №",ш:14},{з:"Метод",ш:10},{з:"Назначение",ш:28},
+      {з:"Поверка до",ш:13,тип:"дата"},{з:"№ свидетельства",ш:18},
+      {з:"Периодичность, мес.",ш:12,тип:"число"},{з:"Хранение",ш:20},{з:"Состояние",ш:14}]};
+}
+function листСпециалистов(){
+  return {имя:"Специалисты", строки:live(P).map((p,i)=>[i+1,p.фио,p.вдок,p.должность,p.функции,p.стаж]),
+    колонки:[{з:"№",ш:6,тип:"число"},{з:"ФИО полностью",ш:30},{з:"ФИО в документах",ш:20},
+      {з:"Должность",ш:30},{з:"Функции в ЛНК",ш:26},{з:"Стаж по НК с",ш:14}]};
+}
+function сегодня(){ return new Date().toISOString().slice(0,10); }
+function exportXlsx(){
+  let лист;
+  if(curView==="journal")      лист=листЖурнала(journalRows());
+  else if(curView==="objects") лист=листОбъектов();
+  else if(curView==="si")      лист=листПриборов();
+  else if(curView==="people")  лист=листСпециалистов();
+  else if(curView==="docs")    лист=листЖурнала(docsRows());
+  else { toast("Здесь нечего выгружать"); return; }
+  xlsxФайл(лист.имя+" ЛНК "+сегодня()+".xlsx",[лист]);
+  toast("Выгружено в Excel: "+лист.строки.length+" строк");
+}
+function exportXlsxВсё(){
+  xlsxФайл("ЛНК вся база "+сегодня()+".xlsx",
+    [листЖурнала(liveJ().slice().sort((a,b)=>(+a.нп||0)-(+b.нп||0))),
+     листОбъектов(), листПриборов(), листСпециалистов()]);
+  toast("Вся база выгружена в Excel: 4 листа");
+}
+
 let toastT;function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");
   clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),2200);}
 

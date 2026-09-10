@@ -906,6 +906,179 @@ function сбросФразы(ключ){
   saveАкт(ключ,"объекты",""); renderAkt(ключ);
 }
 
+// ── Выгрузка акта в Word (.docx) ──────────────────────────
+// Печать в PDF документ закрывает, а перед подписанием формулировку
+// обычно правят. Поэтому акт выгружается настоящим .docx: Word откроет
+// его как свой, без предупреждений о формате.
+//
+// Библиотек нет и быть не может (программа — один файл, без сети),
+// поэтому .docx собирается здесь: это ZIP, и он пишется без сжатия
+// (метод «store») — так архив укладывается в полсотни строк, а Word
+// такие файлы принимает наравне со сжатыми.
+function crc32(buf){
+  let tbl=crc32.t;
+  if(!tbl){ tbl=crc32.t=new Int32Array(256);
+    for(let n=0;n<256;n++){ let c=n;
+      for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);
+      tbl[n]=c; } }
+  let crc=-1;
+  for(let i=0;i<buf.length;i++) crc=(crc>>>8)^tbl[(crc^buf[i])&0xFF];
+  return (crc^-1)>>>0;
+}
+function zipStore(файлы){
+  const enc=new TextEncoder(), куски=[], центр=[];
+  let смещение=0;
+  файлы.forEach(f=>{
+    const имя=enc.encode(f.имя);
+    const d=(typeof f.данные==="string")?enc.encode(f.данные):f.данные;
+    const c=crc32(d);
+    const lf=new Uint8Array(30+имя.length), lv=new DataView(lf.buffer);
+    lv.setUint32(0,0x04034b50,true); lv.setUint16(4,20,true);
+    lv.setUint16(6,0x0800,true);            // имена в UTF-8
+    lv.setUint16(8,0,true);                 // без сжатия
+    lv.setUint32(14,c,true); lv.setUint32(18,d.length,true); lv.setUint32(22,d.length,true);
+    lv.setUint16(26,имя.length,true);
+    lf.set(имя,30);
+    куски.push(lf,d);
+
+    const cd=new Uint8Array(46+имя.length), cv=new DataView(cd.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0x0800,true); cv.setUint16(10,0,true);
+    cv.setUint32(16,c,true); cv.setUint32(20,d.length,true); cv.setUint32(24,d.length,true);
+    cv.setUint16(28,имя.length,true); cv.setUint32(42,смещение,true);
+    cd.set(имя,46);
+    центр.push(cd);
+    смещение+=lf.length+d.length;
+  });
+  const размерЦентра=центр.reduce((a,x)=>a+x.length,0);
+  const eocd=new Uint8Array(22), ev=new DataView(eocd.buffer);
+  ev.setUint32(0,0x06054b50,true);
+  ev.setUint16(8,файлы.length,true); ev.setUint16(10,файлы.length,true);
+  ev.setUint32(12,размерЦентра,true); ev.setUint32(16,смещение,true);
+  return new Blob(куски.concat(центр,[eocd]),
+    {type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+}
+function dlBlob(имя, blob){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=имя;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 400);
+}
+
+// Разметка взята из вашего акта: Times New Roman 14 пт (sz 28 полупунктов),
+// межстрочный ровно 18 пт (line 360 exact), абзацный отступ 1,25 см (709),
+// выключка по ширине, А4 с вашими полями, отдельная шапка первой страницы.
+const X = s => String(s==null?"":s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+  .replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+const ФОНТ='<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>';
+const КЕГЛЬ='<w:sz w:val="28"/><w:szCs w:val="28"/>';
+function rPr(жирный){ return '<w:rPr>'+ФОНТ+(жирный?'<w:b/>':'')+КЕГЛЬ+'</w:rPr>'; }
+const ШР=ФОНТ+КЕГЛЬ;
+function wRun(t,жирный){
+  return '<w:r>'+rPr(жирный)+'<w:t xml:space="preserve">'+X(t)+'</w:t></w:r>';
+}
+function wP(t,вид){
+  вид=вид||{};
+  const jc=вид.jc||"both";
+  const ind=вид.отступ===false?'':'<w:ind w:firstLine="709"/>';
+  return '<w:p><w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
+    ind+'<w:jc w:val="'+jc+'"/>'+rPr(вид.жирный)+'</w:pPr>'+
+    (t?wRun(t,вид.жирный):'')+'</w:p>';
+}
+function актВWord(ключ){
+  const zs=записиАкта(ключ);
+  if(!zs.length){ toast("По акту "+ключ+" записей нет"); return; }
+  const a=актЗапись(ключ,false);
+  const пусто=()=>wP("",{отступ:false});
+  const фраза=a.объекты||черновикОбъектов(zs);
+  const подр=a.подразделение||[...new Set(zs.map(z=>z.подразделение).filter(Boolean))].join(", ");
+
+  let тело="";
+  тело+=wP("АКТ № "+номерАкта(ключ),{jc:"center",жирный:true,отступ:false});
+  тело+=wP("о проведении работ",{jc:"center",жирный:true,отступ:false});
+  тело+=пусто()+пусто()+пусто();
+  тело+=wP("В соответствии с контрактом от "+(a.контракт_дата||"__.__.____")+
+           " № "+(a.контракт_номер||"______")+" проведены работы в "+(подр||"___")+
+           " по неразрушающему контролю в рамках экспертизы промышленной безопасности на "+
+           фраза+".");
+  тело+=пусто();
+  тело+=wP("Результаты работ отражены в следующих документах.");
+  тело+=пусто();
+  const нетИмени=[];
+  спискиАкта(zs).forEach(g=>{
+    const имя=имяДок(g.м);
+    if(!имя) нетИмени.push(g.м);
+    тело+=wP((имя||("Документы по методу "+g.м))+" №№ "+g.номера.join(", ")+".");
+    тело+=пусто();
+  });
+  тело+=пусто();
+
+  // Таблица подписей — без рамок, прижата вправо, как у вас (3963 + 5098)
+  const яч=(t,ш)=>'<w:tc><w:tcPr><w:tcW w:w="'+ш+'" w:type="dxa"/></w:tcPr>'+
+    '<w:p><w:pPr><w:spacing w:after="0" w:line="280" w:lineRule="exact"/><w:jc w:val="center"/>'+
+    rPr(false)+'</w:pPr>'+(t?wRun(t):'')+'</w:p></w:tc>';
+  const строки=подписиАкта(ключ,zs).map(r=>
+    '<w:tr><w:trPr><w:trHeight w:val="805"/><w:jc w:val="right"/></w:trPr>'+
+    яч(r.д,3963)+яч(r.ф,5098)+'</w:tr>').join("");
+  const нет='<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
+            '<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
+            '<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
+            '<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
+            '<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>'+
+            '<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>';
+  тело+='<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:jc w:val="right"/>'+
+    '<w:tblBorders>'+нет+'</w:tblBorders>'+
+    '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>'+
+    '</w:tblPr><w:tblGrid><w:gridCol w:w="3963"/><w:gridCol w:w="5098"/></w:tblGrid>'+
+    строки+'</w:tbl>'+пусто();
+
+  const НС='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '+
+           'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const шапкаПервой='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<w:hdr '+НС+'>'+wP(a.шапка||getLabCert()||"Лаборатория НК, св. № ____ от __.__.____ г.",
+                        {jc:"left",отступ:false})+'</w:hdr>';
+  const шапкаПрочих='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<w:hdr '+НС+'><w:p><w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
+    '<w:jc w:val="center"/>'+rPr(false)+'</w:pPr>'+
+    '<w:fldSimple w:instr=" PAGE "><w:r>'+rPr(false)+'<w:t>2</w:t></w:r></w:fldSimple>'+
+    '</w:p></w:hdr>';
+
+  const документ='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<w:document '+НС+'><w:body>'+тело+
+    '<w:sectPr><w:headerReference w:type="default" r:id="rId1"/>'+
+    '<w:headerReference w:type="first" r:id="rId2"/>'+
+    '<w:pgSz w:w="11906" w:h="16838" w:code="9"/>'+
+    '<w:pgMar w:top="1134" w:right="1276" w:bottom="567" w:left="1559" '+
+    'w:header="567" w:footer="0" w:gutter="0"/><w:titlePg/></w:sectPr></w:body></w:document>';
+
+  const R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const файлы=[
+    {имя:"[Content_Types].xml", данные:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+      '<Default Extension="xml" ContentType="application/xml"/>'+
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'+
+      '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'+
+      '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'+
+      '</Types>'},
+    {имя:"_rels/.rels", данные:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="'+R+'/officeDocument" Target="word/document.xml"/>'+
+      '</Relationships>'},
+    {имя:"word/_rels/document.xml.rels", данные:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="'+R+'/header" Target="header1.xml"/>'+
+      '<Relationship Id="rId2" Type="'+R+'/header" Target="header2.xml"/>'+
+      '</Relationships>'},
+    {имя:"word/document.xml", данные:документ},
+    {имя:"word/header1.xml", данные:шапкаПрочих},
+    {имя:"word/header2.xml", данные:шапкаПервой}
+  ];
+  dlBlob("Акт "+номерАкта(ключ)+".docx", zipStore(файлы));
+  toast("Акт выгружен в Word"+(нетИмени.length?(" · без названия: "+нетИмени.join(", ")):""));
+}
+
 function renderAkt(ключ){
   const zs=записиАкта(ключ);
   if(!zs.length){ toast("По акту "+ключ+" записей нет"); return; }
@@ -948,6 +1121,7 @@ function renderAkt(ключ){
       <h2 style="font-size:16px">Акт № ${e(номерАкта(ключ))}</h2>
       <span class="sub">объектов ${zs.length}</span>
       <div class="spring"></div>
+      <button class="btn" onclick="актВWord('${e(ключ)}')">⤓ Word (.docx)</button>
       <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button>
     </div>
     <div class="aktbar noprint">

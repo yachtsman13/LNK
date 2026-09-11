@@ -934,7 +934,7 @@ function срокЛаб(дата){
   const d=String(дата||"").trim(); if(!d) return ["", "не указана"];
   const дней=Math.round((new Date(d+"T00:00:00")-new Date())/86400000);
   if(дней<0)  return ["bad",  "просрочено " + ru(d)];
-  if(дней<=30) return ["work", "через " + дней + " дн."];
+  if(дней<=30) return ["warn", "через " + дней + " дн."];
   return ["ok", "до " + ru(d)];
 }
 function saveЛаб(о){
@@ -2219,6 +2219,217 @@ function delReg(kind,id){
   closeDrawer(); switchView(C.view); toast("Удалено");
 }
 
+// ── Импорт из Excel (справочники объектов и приборов) ──────
+// Свой минимальный разбор .xlsx: ZIP-каталог читаю вручную по сигнатурам
+// PK (как zipStore пишет), а распаковку DEFLATE делает браузер
+// (DecompressionStream) — свой инфлейт не пишу, риск ошибиться на
+// реальном файле. Библиотек не подключаю: программа остаётся одним
+// файлом без сети (см. CLAUDE.md). Формат — только СВОЙ шаблон-таблица
+// (кнопка «Шаблон для импорта» рядом), не исходная книга заказчика: там
+// формулы и разметка, которые я не разбираю и разбирать не буду —
+// смешивать со сборкой книги через scripts/export_json.py нельзя.
+
+// N-1-2 склонение счётного слова — единственное место в программе, где
+// это нужно динамически (текст диалога подтверждения импорта).
+function числослово(n, формы){
+  const n10=n%10, n100=n%100;
+  if(n100>=11 && n100<=14) return формы[2];
+  if(n10===1) return формы[0];
+  if(n10>=2 && n10<=4) return формы[1];
+  return формы[2];
+}
+
+function excelСерийДата(serial){
+  // Excel считает 1900 год високосным (унаследованная ошибка Lotus
+  // 1-2-3) — день 0 это 30.12.1899, и это учтено в константе 25569
+  // (число дней от 30.12.1899 до 01.01.1970).
+  const мс = Math.round((serial - 25569) * 86400 * 1000);
+  return new Date(мс).toISOString().slice(0,10);
+}
+function значениеДаты(raw){
+  const s=String(raw||"").trim();
+  if(!s) return "";
+  if(/^\d+(\.\d+)?$/.test(s)) return excelСерийДата(+s);
+  let m=/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(s);
+  if(m) return m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
+  m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if(m) return m[0].slice(0,10);
+  return "";
+}
+
+function zipЧитать(buf){
+  const dv=new DataView(buf.buffer,buf.byteOffset,buf.byteLength);
+  let eocd=-1;
+  const низ=Math.max(0, buf.length-22-65557);
+  for(let i=buf.length-22; i>=низ; i--){
+    if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; }
+  }
+  if(eocd<0) throw new Error("это не .xlsx (нет конца ZIP-архива)");
+  const кол=dv.getUint16(eocd+10,true);
+  const смещЦентр=dv.getUint32(eocd+16,true);
+  const записи={};
+  let p=смещЦентр;
+  for(let i=0; i<кол; i++){
+    if(dv.getUint32(p,true)!==0x02014b50) throw new Error("повреждён архив (каталог)");
+    const метод=dv.getUint16(p+10,true);
+    const сжРазм=dv.getUint32(p+20,true);
+    const имяДл=dv.getUint16(p+28,true);
+    const допДл=dv.getUint16(p+30,true);
+    const коммДл=dv.getUint16(p+32,true);
+    const смещЛок=dv.getUint32(p+42,true);
+    const имя=new TextDecoder("utf-8").decode(buf.subarray(p+46,p+46+имяДл));
+    записи[имя]={метод,сжРазм,смещЛок};
+    p+=46+имяДл+допДл+коммДл;
+  }
+  return {buf,dv,записи};
+}
+async function zipТекст(zip,имя){
+  const e=zip.записи[имя];
+  if(!e) return "";
+  const dv=zip.dv, p=e.смещЛок;
+  if(dv.getUint32(p,true)!==0x04034b50) throw new Error("повреждён архив (файл "+имя+")");
+  const имяДл=dv.getUint16(p+26,true), допДл=dv.getUint16(p+28,true);
+  const начало=p+30+имяДл+допДл;
+  const сжатые=zip.buf.subarray(начало,начало+e.сжРазм);
+  let байты;
+  if(e.метод===0) байты=сжатые;
+  else if(e.метод===8){
+    const поток=new Blob([сжатые]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    байты=new Uint8Array(await new Response(поток).arrayBuffer());
+  } else throw new Error("неизвестный способ сжатия ("+имя+")");
+  return new TextDecoder("utf-8").decode(байты);
+}
+function деэскейпXML(s){
+  // Числовые ссылки на символы (&#1053; / &#x41B;) — так openpyxl (и не
+  // только он) кодирует кириллицу вместо сырого UTF-8. Без этой замены
+  // русский текст в заголовках и ячейках приходит нечитаемым.
+  return s.replace(/&#x([0-9a-fA-F]+);/g,(_,h)=>String.fromCodePoint(parseInt(h,16)))
+    .replace(/&#(\d+);/g,(_,d)=>String.fromCodePoint(parseInt(d,10)))
+    .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"')
+    .replace(/&apos;/g,"'").replace(/&amp;/g,"&");
+}
+function sharedStringsРазобрать(xml){
+  if(!xml) return [];
+  const из=[]; const siRe=/<si>([\s\S]*?)<\/si>/g; let m;
+  while((m=siRe.exec(xml))){
+    let текст=""; const tRe=/<t[^>]*>([\s\S]*?)<\/t>/g; let tm;
+    while((tm=tRe.exec(m[1]))) текст+=деэскейпXML(tm[1]);
+    из.push(текст);
+  }
+  return из;
+}
+function листРазобрать(xml, shared){
+  const строки=[];
+  const rowRe=/<row[^>]*>([\s\S]*?)<\/row>/g; let rm;
+  while((rm=rowRe.exec(xml))){
+    const ряд={};
+    const cellRe=/<c\s+r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g; let cm;
+    while((cm=cellRe.exec(rm[1]))){
+      const столб=cm[1], атр=cm[2]||"", тело=cm[3]||"";
+      const tМ=/\st="([a-zA-Z]+)"/.exec(атр);
+      const тип=tМ?tМ[1]:"n";
+      let значение="";
+      if(тип==="s"){ const vm=/<v>([\s\S]*?)<\/v>/.exec(тело); значение=vm?(shared[+vm[1]]||""):""; }
+      else if(тип==="inlineStr"){ const tm=/<t[^>]*>([\s\S]*?)<\/t>/.exec(тело); значение=tm?деэскейпXML(tm[1]):""; }
+      else { const vm=/<v>([\s\S]*?)<\/v>/.exec(тело); значение=vm?деэскейпXML(vm[1]):""; }
+      ряд[столб]=значение;
+    }
+    строки.push(ряд);
+  }
+  return строки;
+}
+async function xlsxРазобрать(file){
+  const buf=new Uint8Array(await file.arrayBuffer());
+  const zip=zipЧитать(buf);
+  let sheetPath="xl/worksheets/sheet1.xml";
+  const workbookXml=await zipТекст(zip,"xl/workbook.xml");
+  const relsXml=await zipТекст(zip,"xl/_rels/workbook.xml.rels");
+  const sheetM=/<sheet\b[^>]*\br:id="([^"]+)"[^>]*\/?>/.exec(workbookXml||"");
+  if(sheetM && relsXml){
+    const relM=new RegExp('<Relationship\\b[^>]*\\bId="'+sheetM[1]+'"[^>]*\\bTarget="([^"]+)"').exec(relsXml);
+    if(relM){ const t=relM[1]; sheetPath = t.charAt(0)==="/" ? t.slice(1) : "xl/"+t; }
+  }
+  const sheetXml=await zipТекст(zip,sheetPath);
+  if(!sheetXml) throw new Error("в файле не нашёлся лист с данными");
+  const sharedXml=await zipТекст(zip,"xl/sharedStrings.xml");
+  return листРазобрать(sheetXml, sharedStringsРазобрать(sharedXml));
+}
+
+const ИМПОРТ_НАЗВАНИЯ={obj:"Объекты",si:"Приборы (СИ)"};
+
+function шаблонИмпортаXlsx(kind){
+  const C=REGS[kind];
+  const колонки=C.fields.map(f=>({з:f.l, ш:Math.max(14,Math.min(f.wide?44:28,f.l.length+6)),
+    тип:f.type==="date"?"дата":undefined}));
+  xlsxФайл("Шаблон импорта — "+ИМПОРТ_НАЗВАНИЯ[kind]+".xlsx",[{имя:C.view, колонки:колонки, строки:[]}]);
+  toast("Шаблон скачан — заполните и загрузите этот же файл через «Импорт из Excel»");
+}
+
+async function импортФайлВыбран(kind, input){
+  const file=input.files && input.files[0];
+  input.value="";
+  if(!file) return;
+  if(typeof DecompressionStream==="undefined"){
+    alert("Браузер не умеет распаковывать .xlsx (нет DecompressionStream) — обновите браузер "+
+      "(нужен современный Chrome или Edge).");
+    return;
+  }
+  let строки;
+  try{ строки=await xlsxРазобрать(file); }
+  catch(e){ alert("Не удалось прочитать файл: "+e.message); return; }
+  if(строки.length<2){ alert("В файле нет данных — только шапка или файл пуст."); return; }
+  импортПрименить(kind, строки);
+}
+
+function импортПрименить(kind, строки){
+  const C=REGS[kind];
+  // Шапка — первая строка. Колонки сопоставляю по ТЕКСТУ заголовка с
+  // подписями полей карточки, а не по номеру: если в Excel переставили
+  // столбцы, разбор всё равно сработает; лишние или неизвестные колонки
+  // просто игнорируются.
+  const шапка=строки[0];
+  const сопост={};
+  Object.keys(шапка).forEach(буква=>{
+    const текст=String(шапка[буква]||"").trim().toLowerCase();
+    const поле=C.fields.find(f=>f.l.trim().toLowerCase()===текст);
+    if(поле) сопост[буква]=поле.k;
+  });
+  if(!Object.values(сопост).includes(C.name)){
+    alert("Не нашёл колонку «"+C.fields.find(f=>f.k===C.name).l+"» — "+
+      "сверьте шапку файла со скачанным шаблоном (заголовки не переименовывались?).");
+    return;
+  }
+  const новые=[];
+  for(let i=1;i<строки.length;i++){
+    const ряд=строки[i];
+    const rec={};
+    Object.keys(сопост).forEach(буква=>{
+      const ключ=сопост[буква];
+      const поле=C.fields.find(f=>f.k===ключ);
+      let знач=String(ряд[буква]||"").trim();
+      if(поле && поле.type==="date") знач=значениеДаты(знач);
+      rec[ключ]=знач;
+    });
+    if(!rec[C.name]) continue; // пустая строка (в т.ч. хвост шаблона) — не ошибка, просто пропуск
+    rec.id=newId(C.pfx);
+    rec.изменено=new Date().toISOString(); rec.место=getWS().код;
+    новые.push(rec);
+  }
+  if(!новые.length){ alert("Заполненных строк не нашлось."); return; }
+  const слово=числослово(новые.length,["запись","записи","записей"]);
+  if(!confirm("Добавить "+новые.length+" "+слово+" в справочник «"+ИМПОРТ_НАЗВАНИЯ[kind]+"»?\n\n"+
+    "Это ДОБАВЛЕНИЕ: существующие записи не трогаются и не заменяются. Если часть строк "+
+    "уже была в справочнике, повторный ввод сам не распознаётся — "+
+    (kind==="obj"?"после загрузки загляните в «Проверку данных», раздел покажет одинаковые номера.":
+    "после загрузки сверьте список вручную."))) return;
+  const arr=C.arr();
+  новые.forEach(r=>arr.push(r));
+  saveReg(C.key,arr); if(C.reindex) rebuildObjIndex();
+  switchView(C.view);
+  toast("Импортировано: "+новые.length);
+}
+
+
 // ── Пульт (сводка) ────────────────────────────────────────
 // Что по задачам горит сегодня — для пульта. Считаются только свои
 // задачи: производные и так видны на своих местах (план ППР, приборы).
@@ -2302,6 +2513,16 @@ function renderDash(){
         return з.всего||з.просрочено ? tile(з.просрочено||з.всего,
           з.просрочено?"задач просрочено":"задач на сегодня",
           з.просрочено?"bad":"warn","tasks") : ""; })()}
+      ${(()=>{ const л=getЛаб(); if(!л.свид_до) return "";
+        const [к,т]=срокЛаб(л.свид_до);
+        return `<div class="tile ${к} click" onclick="switchView('lab')">
+          <div class="n" style="font-size:19px">${esc(т)}</div>
+          <div class="l">аттестация ЛНК</div></div>`; })()}
+      ${(()=>{ const л=getЛаб(); if(!л.проверка) return "";
+        const [к,т]=срокЛаб(л.проверка);
+        return `<div class="tile ${к} click" onclick="switchView('lab')">
+          <div class="n" style="font-size:19px">${esc(т)}</div>
+          <div class="l">плановая проверка ЛНК</div></div>`; })()}
     </div>
     ${(()=>{ const з=задачиНаСегодня();
       if(!з.всего && !з.просрочено) return "";
@@ -2802,6 +3023,9 @@ function renderObjects(){
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('obj',null)">＋ Добавить</button>
       <button class="btn" onclick="exportXlsx()">▤ Excel</button>
+      <button class="btn" onclick="шаблонИмпортаXlsx('obj')">⤓ Шаблон для импорта</button>
+      <button class="btn" onclick="document.getElementById('imp_obj').click()">⬆ Импорт из Excel</button>
+      <input type="file" id="imp_obj" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('obj',this)">
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Рег. / уч. №</th><th>Тип / группа</th><th>Расположение</th></tr></thead>
@@ -2856,6 +3080,9 @@ function renderSi(){
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('si',null)">＋ Добавить</button>
       <button class="btn" onclick="exportXlsx()">▤ Excel</button>
+      <button class="btn" onclick="шаблонИмпортаXlsx('si')">⤓ Шаблон для импорта</button>
+      <button class="btn" onclick="document.getElementById('imp_si').click()">⬆ Импорт из Excel</button>
+      <input type="file" id="imp_si" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('si',this)">
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Метод</th><th>Поверка до</th><th>Статус</th></tr></thead>
@@ -3192,6 +3419,7 @@ function renderPlan(){
       <h2>План работ</h2><span class="sub">планово-предупредительные осмотры, ${год} г.</span>
       <div class="spring"></div>
       <button class="btn" onclick="exportПланXlsx()">▤ Excel</button>
+      <button class="btn" onclick="exportПланWord()">⤓ Word</button>
       <button class="btn" onclick="window.print()">⎙ PDF</button>
     </div>
     <div class="filters noprint seg">
@@ -3256,6 +3484,83 @@ function exportПланXlsx(){
   });
   xlsxФайл("План ППР "+год+".xlsx",[{имя:"План "+год, колонки:колонки, строки:строки}]);
   toast("План "+год+" выгружен: "+строки.length+" позиций");
+}
+
+// План ППР в Word — та же таблица, что и в Excel, но альбомная страница:
+// 19 колонок (метаданные + 12 месяцев + итог) в книжной не умещаются,
+// а обрезать план ради формата нельзя. Ширины в сумме дают ровно
+// ширину печатного поля альбомного А4 при тех же полях, что у акта.
+const ШИРИНА_АЛЬБОМ = 16838-1559-1276; // 14003
+function exportПланWord(){
+  const год=годПлана(), и=итогиГода(год);
+  const т=типографика;
+  const ширины=[450,2400,800,650,650,550, 646,646,646,646,646,646,646,646,646,646,646,647, 750];
+  const шапка=["№","Средство контроля","Карточка","Вид","Норма","Кол.", ...МЕС3, "Всего"];
+  const строки=[];
+  ППР.позиции.forEach(п=>{
+    const погод=(п.план||{})[String(год)]||{};
+    if(!Object.keys(погод).length) return;
+    const р=[п.нп||"", т(п.наименование||""), п.карточка||"", п.вид||"",
+      п.норма!=null?String(п.норма):"", п.кол!=null?String(п.кол):""];
+    for(let м=1;м<=12;м++){
+      const ч=погод[String(м)];
+      if(!ч){ р.push(""); continue; }
+      const о=отметка(п,год,м);
+      р.push(о ? ("вып. "+ru(о.выполнено)) : String(ч));
+    }
+    р.push(String(+Object.values(погод).reduce((a,b)=>a+b,0).toFixed(2)));
+    строки.push(р);
+  });
+
+  let тело="";
+  тело+=wP("ПЛАН-ГРАФИК ППР",{jc:"center",жирный:true,отступ:false});
+  тело+=wP(год+" г. — работ "+и.работ+", трудозатрат "+и.часы,{jc:"center",отступ:false});
+  if(ППР.замечания && ППР.замечания.length){
+    тело+=wP("",{отступ:false});
+    ППР.замечания.forEach(з=>тело+=wP(т("Замечание к книге ППР (не исправлено): "+з),{отступ:false,курсив:true}));
+  }
+  тело+=wP("",{отступ:false});
+  тело+=wТаблШапкаШир(шапка,ширины,строки);
+
+  const НС='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '+
+           'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const документ='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<w:document '+НС+'><w:body>'+тело+
+    '<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape" w:code="9"/>'+
+    '<w:pgMar w:top="1134" w:right="1276" w:bottom="1134" w:left="1559" '+
+    'w:header="567" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
+
+  const R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const файлы=[
+    {имя:"[Content_Types].xml", данные:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+      '<Default Extension="xml" ContentType="application/xml"/>'+
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'+
+      '</Types>'},
+    {имя:"_rels/.rels", данные:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="'+R+'/officeDocument" Target="word/document.xml"/>'+
+      '</Relationships>'},
+    {имя:"word/document.xml", данные:документ}
+  ];
+  dlBlob("План ППР "+год+".docx", zipStore(файлы));
+  toast("План "+год+" выгружен в Word: "+строки.length+" позиций");
+}
+// wТаблШапка() паспорта считает ширину таблицы по ШИРИНА_ТЕКСТА (книжная
+// страница) — плану нужна альбомная, поэтому берём ту же вёрстку ячеек,
+// но с суммой ширин по ШИРИНА_АЛЬБОМ.
+function wТаблШапкаШир(шапка, ширины, строки){
+  const grid=ширины.map(ш=>'<w:gridCol w:w="'+ш+'"/>').join('');
+  let из='<w:tbl><w:tblPr><w:tblW w:w="'+ШИРИНА_АЛЬБОМ+'" w:type="dxa"/>'+
+    '<w:tblBorders>'+wГраницыТабл()+'</w:tblBorders>'+
+    '<w:tblLayout w:type="fixed"/>'+
+    '<w:tblCellMar><w:left w:w="60" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tblCellMar>'+
+    '</w:tblPr><w:tblGrid>'+grid+'</w:tblGrid>';
+  из+=wСтрокаТабл(шапка,ширины,true);
+  строки.forEach(р=>из+=wСтрокаТабл(р,ширины,false));
+  из+='</w:tbl>';
+  return из;
 }
 
 // ── Задачи: ядро ──────────────────────────────────────────
@@ -4086,6 +4391,34 @@ function проверки(){
   if(прос.length) доб("ошибка","Приборы", прос.length+" приборов с просроченной поверкой",
     прос.slice(0,10).map(x=>x.наименование+(x.зав?(" · зав. "+x.зав):"")+" — до "+ru(x.поверка_до)));
 
+  // Дубли карточек объектов: одинаковое наименование и одинаковый
+  // непустой заводской ИЛИ регистрационный номер — двух карточек с одним
+  // и тем же номером быть не может, это ошибка. Одинаковое наименование
+  // совсем без номеров — не ошибка (может быть просто россыпь одинаковых
+  // мелких объектов), только наблюдение: порядок заказчика неизвестен.
+  const поНаим={};
+  live(O).forEach(o=>{ const н=(o.наименование||"").trim(); if(!н) return;
+    (поНаим[н]=поНаим[н]||[]).push(o); });
+  const дублиНомер=[], дублиБезНомера=[];
+  Object.keys(поНаим).forEach(н=>{
+    const г=поНаим[н]; if(г.length<2) return;
+    const поНомеру={};
+    г.forEach(o=>{ [o.зав,o.рег].forEach(ном=>{ ном=String(ном||"").trim(); if(!ном) return;
+      (поНомеру[ном]=поНомеру[ном]||[]).push(o); }); });
+    Object.keys(поНомеру).forEach(ном=>{
+      if(поНомеру[ном].length>1) дублиНомер.push("«"+н+"», номер «"+ном+"» — "+
+        поНомеру[ном].length+" карточек");
+    });
+    const безНомера=г.filter(o=>!String(o.зав||"").trim() && !String(o.рег||"").trim());
+    if(безНомера.length>1) дублиБезНомера.push("«"+н+"» без номеров — "+безНомера.length+" карточек");
+  });
+  if(дублиНомер.length) доб("ошибка","Объекты",
+    "Один заводской/регистрационный номер у разных карточек: "+дублиНомер.length, дублиНомер.slice(0,10));
+  if(дублиБезНомера.length) доб("наблюдение","Объекты",
+    "Одинаковое наименование без заводского и регистрационного номера у нескольких карточек: "+
+    дублиБезНомера.length+" случаев — разные объекты без номеров или лишние карточки, не знаю",
+    дублиБезНомера.slice(0,10));
+
   // ── Аттестация персонала ────────────────────────────────
   // Главный вопрос проверки: имел ли человек право выполнять тот метод,
   // который стоит в журнале. Сверяем удостоверения с журналом, ничего не
@@ -4201,17 +4534,6 @@ function проверки(){
       безИсп.push(ru(z.дата)+" · "+(z.объект||"")+" · "+м); }));
   if(безИсп.length) доб("внимание","Журнал",
     безИсп.length+" методов без исполнителя", безИсп.slice(0,10));
-
-  // Дубли объектов: одно имя и один заводской номер у нескольких карточек
-  const поКлючу={};
-  live(O).forEach(o=>{ const к=(o.наименование||"").trim()+"|"+(o.зав||"").trim();
-    (поКлючу[к]=поКлючу[к]||[]).push(o); });
-  const дубО=Object.keys(поКлючу).filter(к=>поКлючу[к].length>1);
-  if(дубО.length) доб("внимание","Объекты",
-    "Одинаковых карточек объектов: "+дубО.length+" групп",
-    дубО.slice(0,10).map(к=>{ const г=поКлючу[к], o=г[0];
-      return (o.наименование||"без имени")+(o.зав?(" · зав. "+o.зав):" · без заводского №")+
-             " — "+г.length+" шт."; }));
 
   const спр=new Set(); live(P).forEach(x=>{ if(x.вдок) спр.add(x.вдок.trim()); if(x.фио) спр.add(x.фио.trim()); });
   const чужие=new Set();

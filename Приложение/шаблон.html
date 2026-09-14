@@ -5855,6 +5855,16 @@ A = loadReg(REG_AKT, []);
 ПАДЕЖИ = loadReg(REG_ПАДЕЖ, []);
 НД = loadReg(REG_НД, НД_ПО_УМОЛЧАНИЮ);
 ПОМ = loadReg(REG_ПОМ, ПОМЕЩЕНИЯ_ПО_УМОЛЧАНИЮ);
+// Баг: НД_ПО_УМОЛЧАНИЮ/ПОМЕЩЕНИЯ_ПО_УМОЛЧАНИЮ — литералы без поля id (в
+// отличие от данные.json, где id ставит export_json.py). Клик по строке
+// вызывал editReg('nd', esc(x.id)) с пустым id — arr.find ничего не находил,
+// и открывалась форма «Новый», а не правка существующей карточки. Достраиваем
+// id тем же newId(), что и у обычных новых записей, и сразу сохраняем — иначе
+// на следующей перезагрузке (до первого редактирования) баг вернётся снова.
+let _idFix=false;
+НД.forEach(x=>{ if(!x.id){ x.id=newId("НД"); _idFix=true; } });
+ПОМ.forEach(x=>{ if(!x.id){ x.id=newId("ПМ"); _idFix=true; } });
+if(_idFix){ saveReg(REG_НД, НД); saveReg(REG_ПОМ, ПОМ); }
 ЗАД = loadReg(REG_ЗАД, []);
 папкаКопий().then(h=>{ if(h && curView==="exchange") renderExchange(); });
 rebuildObjIndex();

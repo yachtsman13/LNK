@@ -235,7 +235,7 @@
   .sheet h1{text-align:center;font-size:20px;letter-spacing:1px;margin:16px 0 2px}
   .sheet .docsub{text-align:center;font-size:14px;margin-bottom:4px}
   .sheet .docmeta{text-align:center;color:#333;margin-bottom:18px}
-  .sheet .doch{font-weight:700;margin:12pt 0}
+  .sheet .doch{font-weight:700;margin:12pt 0;text-align:center}
   .doctbl{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed}
   .doctbl td,.doctbl th{border:1px solid #8a8a8a;padding:6px 10px;font-size:13.5px;text-align:center;vertical-align:middle}
   .doctbl th{background:#f0f0f0}
@@ -1562,6 +1562,20 @@ function праздникМинус(i){
   saveЛаб(л); renderLab();
 }
 
+// Номер по классификатору СДАНК для готового значения из л.область_объекты/
+// л.область_методы (формат значения — см. деревоСДАНК ниже). Нужен, чтобы
+// в паспорте (разделы III, IV) показать те же номера «N»/«N.M», что и в
+// самой карточке лаборатории у области аттестации — не выдумывать заново
+// нумерацию, а искать её в том же СДАНК_ОБЪЕКТЫ/СДАНК_МЕТОДЫ. Значение,
+// вписанное когда-то вручную и не совпадающее ни с одним пунктом
+// справочника (например, старые данные до этого поля) — просто без номера.
+function номерСДАНК(список, значение){
+  for(const к of список){
+    if(!к.под.length){ if(к.имя===значение) return к.н; continue; }
+    for(const п of к.под){ if(к.имя+" — "+п.т===значение) return п.н; }
+  }
+  return null;
+}
 // Дерево флажков для классификатора СДАНК: верхняя категория + подпункты.
 // Значение подпункта хранится как «Категория — Подпункт», чтобы в паспорте
 // однозначно читалось, к какой категории он относится. У категории без
@@ -2039,10 +2053,11 @@ function wP(t,вид){
 // заказчика, не из образца), отступ 12 пт = 240 твипов и до, и после
 // заголовка — отдельный абзац, не полагается на «пустые строки»-разделители
 // между разделами (те убраны рядом с каждым вызовом, иначе отступ бы удвоился).
+// По центру — тоже прямое указание заказчика (было «both», по ширине).
 const ПАС_РИМ=["I","II","III","IV","V","VI","VII","VIII","IX","X","XI"];
 function wПасРаздел(текст){
   return '<w:p><w:pPr><w:spacing w:before="240" w:after="240" w:line="360" w:lineRule="exact"/>'+
-    '<w:jc w:val="both"/>'+rPrПолный({жирный:true})+'</w:pPr>'+wRunВид(текст,{жирный:true})+'</w:p>';
+    '<w:jc w:val="center"/>'+rPrПолный({жирный:true})+'</w:pPr>'+wRunВид(текст,{жирный:true})+'</w:p>';
 }
 function rPrПолный(вид){
   return '<w:rPr>'+ФОНТ+(вид.жирный?'<w:b/>':'')+(вид.курсив?'<w:i/>':'')+КЕГЛЬ+'</w:rPr>';
@@ -5206,11 +5221,15 @@ function renderПаспорт(){
         <td>${esc(с.образование)}</td><td>${esc(с.аттестация)||"<i>не внесена</i>"}</td></tr>`).join("")+
       `</tbody></table>`
     : `<div class="note">Справочник специалистов пуст.</div>`;
-  const списком=(сп)=>sп_html(сп);
-  function sп_html(сп){
+  // Нумерация та же, что в области аттестации карточки лаборатории (см.
+  // номерСДАНК) — не просто список, а пункты «N.M Текст», как в СДАНК-01-2020.
+  const списком=(сп,справочник)=>{
     if(!сп.length) return `<div class="note">Не отмечено ни одного пункта — заполните в карточке лаборатории.</div>`;
-    return `<ul class="паспул">${сп.map(x=>`<li>${esc(т(x))}</li>`).join("")}</ul>`;
-  }
+    return `<ul class="паспул">${сп.map(x=>{
+      const н=номерСДАНК(справочник,x);
+      return `<li>${н?esc(н)+" — ":""}${esc(т(x))}</li>`;
+    }).join("")}</ul>`;
+  };
   // Форма 2 СДАНК-01-2020 — одна и та же таблица для разделов 5–8, различаются
   // только категорией прибора. Полный набор колонок формы, не сокращённый.
   // Настоящий паспорт («Редакция № 6») делит каждый раздел на подгруппы по
@@ -5329,10 +5348,10 @@ function renderПаспорт(){
       ${спТабл}
 
       <div class="doch">III. Объекты неразрушающего контроля</div>
-      ${списком(объекты)}
+      ${списком(объекты,СДАНК_ОБЪЕКТЫ)}
 
       <div class="doch">IV. Виды (методы) неразрушающего контроля</div>
-      ${списком(методы)}
+      ${списком(методы,СДАНК_МЕТОДЫ)}
 
       <div class="doch">V. Сведения об оснащённости средствами неразрушающего контроля</div>
       ${прТабл(приборыГруппы["Средство НК"])}
@@ -5419,13 +5438,21 @@ function wТаблКВ(строки){
 // pPr с одним sectPr не может столкнуться по порядку элементов с другими
 // свойствами абзаца, поэтому безопасен для схемы, что бы её валидатор ни
 // проверял (тот же trap, что уже три раза ловил на порядке OOXML).
-function wРазрывРаздела(альбомная){
+// Нумерация страниц (заказчик попросил: все страницы, кроме первой,
+// по центру сверху) — та же схема, что уже была у акта: `w:titlePg` на
+// секции, заканчивающейся первой страницей документа, «first»-шапка для
+// неё пустая (без номера), «default»-шапка — у всех остальных, с полем
+// PAGE по центру. rId шапок общие для всех трёх секций паспорта (одни и
+// те же два файла-шапки, ссылки просто переиспользуются).
+function wРазрывРаздела(альбомная, титул){
   const pgSz = альбомная
     ? '<w:pgSz w:w="16838" w:h="11906" w:orient="landscape" w:code="9"/>'
     : '<w:pgSz w:w="11906" w:h="16838" w:code="9"/>';
-  return '<w:p><w:pPr><w:sectPr>'+pgSz+
+  const шапки='<w:headerReference w:type="default" r:id="rId1"/>'+
+    (титул?'<w:headerReference w:type="first" r:id="rId2"/>':'');
+  return '<w:p><w:pPr><w:sectPr>'+шапки+pgSz+
     '<w:pgMar w:top="1134" w:right="1276" w:bottom="1134" w:left="1559" '+
-    'w:header="567" w:footer="0" w:gutter="0"/></w:sectPr></w:pPr></w:p>';
+    'w:header="567" w:footer="0" w:gutter="0"/>'+(титул?'<w:titlePg/>':'')+'</w:sectPr></w:pPr></w:p>';
 }
 function паспортВWord(){
   const {л,специалисты,объекты,методы,приборыГруппы,нд,помещения}=паспортДанные();
@@ -5495,21 +5522,23 @@ function паспортВWord(){
         специалисты.map(с=>[с.фио,с.должность,с.образование,с.аттестация||"не внесена"]), true)
     : wP("Справочник специалистов пуст.",{отступ:false,курсив:true});
 
-  тело+=wПасРаздел(ПАС_РИМ[2]+". Объекты неразрушающего контроля");
-  тело+= объекты.length
-    ? объекты.map(x=>wP("— "+т(x),{отступ:false})).join("")
+  // Нумерация та же, что в области аттестации карточки лаборатории (см.
+  // номерСДАНК) — «N.M Текст», не просто перечисление.
+  const wСписокСДАНК=(сп,справочник)=> сп.length
+    ? сп.map(x=>{ const н=номерСДАНК(справочник,x); return wP((н?н+" — ":"— ")+т(x),{отступ:false}); }).join("")
     : wP("Не отмечено ни одного пункта — заполните в карточке лаборатории.",{отступ:false,курсив:true});
 
+  тело+=wПасРаздел(ПАС_РИМ[2]+". Объекты неразрушающего контроля");
+  тело+=wСписокСДАНК(объекты,СДАНК_ОБЪЕКТЫ);
+
   тело+=wПасРаздел(ПАС_РИМ[3]+". Виды (методы) неразрушающего контроля");
-  тело+= методы.length
-    ? методы.map(x=>wP("— "+т(x),{отступ:false})).join("")
-    : wP("Не отмечено ни одного пункта — заполните в карточке лаборатории.",{отступ:false,курсив:true});
+  тело+=wСписокСДАНК(методы,СДАНК_МЕТОДЫ);
 
   // Разрыв раздела здесь задаёт СВОЙСТВА ПРЕДЫДУЩЕЙ секции (1-4, книжная) —
   // ориентация следующей секции (5-11) определяется СЛЕДУЮЩИМ разрывом,
   // после раздела 11, перед листом ознакомления. Порядок в OOXML именно
   // такой, не перепутать (уже проверено на реальной вёрстке).
-  тело+=wРазрывРаздела(false);
+  тело+=wРазрывРаздела(false, true);
   тело+=wПасРаздел(ПАС_РИМ[4]+". Сведения об оснащённости средствами неразрушающего контроля");
   тело+=прТаблWord(приборыГруппы["Средство НК"]);
 
@@ -5564,9 +5593,19 @@ function паспортВWord(){
 
   const НС='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '+
            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  // Шапка с номером страницы (поле PAGE, по центру) — на всех страницах,
+  // кроме самой первой; пустая шапка — только на первой (см. wРазрывРаздела).
+  const пасШапкаНомер='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<w:hdr '+НС+'><w:p><w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
+    '<w:jc w:val="center"/>'+rPr(false)+'</w:pPr>'+
+    '<w:fldSimple w:instr=" PAGE "><w:r>'+rPr(false)+'<w:t>2</w:t></w:r></w:fldSimple>'+
+    '</w:p></w:hdr>';
+  const пасШапкаПустая='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<w:hdr '+НС+'><w:p/></w:hdr>';
   const документ='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<w:document '+НС+'><w:body>'+тело+
-    '<w:sectPr><w:pgSz w:w="11906" w:h="16838" w:code="9"/>'+
+    '<w:sectPr><w:headerReference w:type="default" r:id="rId1"/>'+
+    '<w:pgSz w:w="11906" w:h="16838" w:code="9"/>'+
     '<w:pgMar w:top="1134" w:right="1276" w:bottom="1134" w:left="1559" '+
     'w:header="567" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
 
@@ -5577,11 +5616,20 @@ function паспортВWord(){
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
       '<Default Extension="xml" ContentType="application/xml"/>'+
       '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'+
+      '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'+
+      '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'+
       '</Types>'},
     {имя:"_rels/.rels", данные:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
       '<Relationship Id="rId1" Type="'+R+'/officeDocument" Target="word/document.xml"/>'+
       '</Relationships>'},
+    {имя:"word/_rels/document.xml.rels", данные:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="'+R+'/header" Target="header1.xml"/>'+
+      '<Relationship Id="rId2" Type="'+R+'/header" Target="header2.xml"/>'+
+      '</Relationships>'},
+    {имя:"word/header1.xml", данные:пасШапкаНомер},
+    {имя:"word/header2.xml", данные:пасШапкаПустая},
     {имя:"word/document.xml", данные:документ}
   ];
   dlBlob("Паспорт ЛНК.docx", zipStore(файлы));

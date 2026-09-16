@@ -3081,8 +3081,8 @@ function editReg(kind,id){
       <div class="grid">${C.fields.filter(f=>!f.допуск).map(inp).join("")}</div>
       ${kind==="ppl"?блокДопусков(z):""}
       ${C.контракты?блокКонтрактов(z):""}
-      ${C.аттестации?блокАттестаций(z):""}
       ${C.пб?блокПБ(z):""}
+      ${C.аттестации?блокАттестаций(z):""}
       ${C.классность?блокКлассности(z):""}
       <div class="formbtns">
         <button class="btn primary" onclick="saveRegRec('${kind}','${z?esc(z.id):""}')">✓ Сохранить</button>

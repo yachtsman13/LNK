@@ -217,7 +217,8 @@
     border-radius:var(--radius);font:inherit;color:var(--ink);background:var(--input-bg)}
   .form textarea{resize:vertical;min-height:52px}
   .form .hint{font-size:11.5px;color:var(--faint);min-height:15px}
-  .mrow{display:grid;grid-template-columns:70px 1fr 1.5fr;gap:8px;align-items:center;margin:5px 0}
+  .mrow{display:grid;grid-template-columns:70px 1fr 1.5fr auto;gap:8px;align-items:center;margin:5px 0}
+  .mrow .btn.small{white-space:nowrap}
   .mrow .mname{font-weight:600;color:var(--muted);font-size:13px}
   .formbtns{display:flex;gap:10px;margin-top:20px;align-items:center}
   .btn.danger{color:#fff;background:var(--danger);border-color:var(--danger)}
@@ -356,6 +357,10 @@
      флажок и текст в строку. У «.form label» специфичность (0,1,1),
      побеждаем явным (0,2,1), не трогая остальные правила выше. */
   .сд-список label.сд-верх,.сд-список label.сд-под{display:flex;flex-direction:row;align-items:flex-start;gap:0}
+  /* Методики контроля (набор приборов/НД на метод) — тот же список, что
+     и у СДАНК, только строки плоские, без вложенности категорий. */
+  .сд-список label.мет-стр{display:flex;flex-direction:row;align-items:flex-start;gap:6px;font-size:12.5px;margin:2px 0}
+  .мет-набор{border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px;margin:6px 0}
   .метки{display:flex;gap:14px;flex-wrap:wrap;margin:4px 0 2px}
   .метка{display:flex;gap:6px;align-items:center;font-size:13.5px;color:var(--ink)}
   .метка input{width:auto}
@@ -447,6 +452,7 @@
     <button class="nav" data-view="lab"><span class="ic">⌂</span>Лаборатория</button>
     <button class="nav" data-view="passport"><span class="ic">▤</span>Паспорт ЛНК</button>
     <div class="grp">Документы</div>
+    <button class="nav" data-view="metod"><span class="ic">⚙</span>Методики контроля</button>
     <button class="nav" data-view="docs"><span class="ic">▦</span>Акты и протоколы<span class="cnt" id="cDocs">0</span></button>
     <button class="nav" data-view="plan"><span class="ic">◷</span>План работ</button>
     <button class="nav" data-view="tasks"><span class="ic">✓</span>Задачи<span class="cnt" id="cTasks">0</span></button>
@@ -3821,6 +3827,42 @@ function актВыбран(){
   const р=document.querySelector('input[name="актреж"][value="есть"]');
   if(р){ р.checked=true; актРежим(); }
 }
+// Приборы и НД метода на КОНКРЕТНОЙ записи журнала — панель заполняется
+// лениво (при первом клике «⚙ Приборы и НД»), чтобы не строить чекбоксы
+// на все 8 методов сразу в каждой форме записи. Текущий выбор на момент
+// открытия панели живёт здесь, saveJournalRec читает уже сам DOM.
+let _методНаборЗаписи={};
+function панельМетодНабор(m){
+  const н=_методНаборЗаписи[m]||{приборы:[],нд:[]};
+  const si=методСортировка(live(S), m), nd=методСортировка(live(НД), m);
+  return `
+    <div class="grp" style="padding-left:0">Приборы (СИ) — ${esc(m)}</div>
+    <input placeholder="Фильтр…" oninput="фильтрСписка(this,'mset_${m}_си')" style="margin-bottom:4px">
+    <div id="mset_${m}_си" class="сд-список" style="max-height:180px">
+      ${списокМетодЧекбоксы(si, н.приборы, "мчб_си_"+m, x=>esc(x.наименование)+(x.зав?(" · зав. № "+esc(x.зав)):"")+
+        (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
+    </div>
+    <div class="grp" style="padding-left:0;margin-top:8px">Нормативные документы — ${esc(m)}</div>
+    <input placeholder="Фильтр…" oninput="фильтрСписка(this,'mset_${m}_нд')" style="margin-bottom:4px">
+    <div id="mset_${m}_нд" class="сд-список" style="max-height:180px">
+      ${списокМетодЧекбоксы(nd, н.нд, "мчб_нд_"+m, x=>esc(x.наименование)+(x.обозначение?(" · "+esc(x.обозначение)):"")+
+        (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
+    </div>
+    <button class="btn small" type="button" onclick="сохранитьСтандартМетода('${m}')" style="margin-top:6px">
+      ✓ Сохранить как стандартный набор метода ${esc(m)}</button>`;
+}
+function переключитьМетодСписки(m){
+  const d=document.getElementById("mset_"+m); if(!d) return;
+  if(d.dataset.filled!=="1"){ d.innerHTML=панельМетодНабор(m); d.dataset.filled="1"; }
+  d.style.display = d.style.display==="none" ? "" : "none";
+}
+function сохранитьСтандартМетода(m){
+  const приборы=[...document.querySelectorAll(".мчб_си_"+m+":checked")].map(c=>c.value);
+  const нд=[...document.querySelectorAll(".мчб_нд_"+m+":checked")].map(c=>c.value);
+  const мт=getМетодики(); мт[m]={приборы:приборы, нд:нд};
+  saveМетодики(мт);
+  toast("Стандартный набор метода «"+m+"» обновлён — на другие записи не влияет");
+}
 function editJournal(id){
   curView="edit";
   document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
@@ -3840,11 +3882,23 @@ function editJournal(id){
     .slice().sort((a,b)=>String(a.наименование||"").localeCompare(String(b.наименование||""),"ru"))
     .map(o=>`<option value="${esc(строкаОбъекта(o))}">`).join("");
   const splist = live(P).map(p=>`<option value="${esc(p.вдок||p.фио)}">`).join("");
+  // Приборы и НД по методу для ЭТОЙ записи — при первом открытии панели
+  // подставляется стандартный набор метода (getМетодики), пока запись
+  // не сохранена с открытой панелью, ничего не переопределяет: см.
+  // saveJournalRec — методы[m].приборы/нд пишутся, только если панель
+  // была открыта (dataset.filled==="1"), иначе запись молча следует за
+  // текущим стандартом метода.
+  _методНаборЗаписи = {}; const _мт=getМетодики();
   const mrows = METHODS.map(m=>{
     const mm=(z&&z.методы&&z.методы[m])||{};
+    const ст=_мт[m]||{приборы:[],нд:[]};
+    _методНаборЗаписи[m]={ приборы: mm.приборы!=null?mm.приборы:ст.приборы.slice(),
+                            нд: mm.нд!=null?mm.нд:ст.нд.slice() };
     return `<div class="mrow"><div class="mname">${m}</div>
       <input id="m_${m}_н" placeholder="№" value="${val(mm.н)}">
-      <input id="m_${m}_исп" list="splist" placeholder="исполнитель" value="${val(mm.исп)}"></div>`;
+      <input id="m_${m}_исп" list="splist" placeholder="исполнитель" value="${val(mm.исп)}">
+      <button class="btn small" type="button" onclick="переключитьМетодСписки('${m}')">⚙ Приборы и НД</button></div>
+      <div id="mset_${m}" class="мет-набор" style="display:none"></div>`;
   }).join("");
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>${z?"Правка записи":"Новая запись"}</h2>
@@ -3927,7 +3981,19 @@ function saveJournalRec(id){
   const методы={};
   METHODS.forEach(m=>{
     const н=v("m_"+m+"_н"), исп=v("m_"+m+"_исп");
-    if(н||исп) методы[m]={н:н,исп:исп};
+    // Панель «Приборы и НД» открывалась — записываем её выбор в саму
+    // запись (переопределение стандарта метода только здесь); не
+    // открывалась — запись ничего не хранит и всегда следует за
+    // текущим стандартным набором метода (getМетодики).
+    const панель=document.getElementById("mset_"+m);
+    const трогали=панель && панель.dataset.filled==="1";
+    const запись={};
+    if(н) запись.н=н; if(исп) запись.исп=исп;
+    if(трогали){
+      запись.приборы=[...document.querySelectorAll(".мчб_си_"+m+":checked")].map(c=>c.value);
+      запись.нд=[...document.querySelectorAll(".мчб_нд_"+m+":checked")].map(c=>c.value);
+    }
+    if(н||исп||трогали) методы[m]=запись;
   });
   // Строка объекта приходит из списка вместе с номерами: разбираем её,
   // а карточку ищем по имени вместе с заводским номером — по одному имени
@@ -4123,7 +4189,7 @@ function backupSave(){
   dl(name, JSON.stringify({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString(),
     записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ, задачи:ЗАД,
-    лаборатория:getЛаб() }, null, 1));
+    лаборатория:getЛаб(), методики:getМетодики() }, null, 1));
   try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
   toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
         ", СИ "+live(S).length+", спец. "+live(P).length);
@@ -4156,6 +4222,7 @@ function backupOpen(){
           if(Array.isArray(d.падежи)){ ПАДЕЖИ=d.падежи; saveReg(REG_ПАДЕЖ,ПАДЕЖИ); }
           if(Array.isArray(d.задачи)){ ЗАД=d.задачи; saveReg(REG_ЗАД,ЗАД); }
           if(d.лаборатория && typeof d.лаборатория==="object") saveЛаб(d.лаборатория);
+          if(d.методики && typeof d.методики==="object") saveМетодики(d.методики);
           rebuildObjIndex();
         }
         setChrome(); switchView("dash"); toast("Восстановлено из копии");
@@ -4284,6 +4351,109 @@ function renderPremises(){
         <th style="width:90px">Площадь</th><th style="width:220px">Инженерные сети</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
   wireSearch(renderPremises);
+}
+// ── Методики контроля: стандартный набор приборов и норм. документов
+// по методу ──────────────────────────────────────────────────────
+// Не справочник записей (CRUD не нужен — методов ровно 8, весь список
+// в METHODS), а фиксированный набор ссылок на уже существующие карточки
+// приборов и норм. документов. Хранится тем же приёмом, что и карточка
+// лаборатории (getЛаб/saveЛаб): один плоский объект плюс «изменено» —
+// не отдельный REGS-справочник.
+function getМетодики(){
+  const пусто={}; METHODS.forEach(м=>{ пусто[м]={приборы:[],нд:[]}; });
+  let рез=Object.assign({},пусто);
+  try{ const r=localStorage.getItem("lnk_metodiki"); if(r) рез=Object.assign({},пусто,JSON.parse(r)); }catch(e){}
+  METHODS.forEach(м=>{ if(!рез[м]||typeof рез[м]!=="object") рез[м]={приборы:[],нд:[]};
+    рез[м].приборы=рез[м].приборы||[]; рез[м].нд=рез[м].нд||[]; });
+  return рез;
+}
+function saveМетодики(мт){
+  мт=Object.assign({},мт,{изменено:new Date().toISOString(), место:getWS().код});
+  try{ localStorage.setItem("lnk_metodiki", JSON.stringify(мт)); }catch(e){}
+  копияПоСлучаю();
+}
+// Сортировка списка для чекбоксов: карточки с совпадающим полем «метод»
+// (оно уже есть у приборов и у норм. документов) — сверху, остальные —
+// ниже по алфавиту. Не фильтрует, а только облегчает поиск в длинном
+// списке — прибор без размеченного метода вполне может входить в набор.
+function методСортировка(список, м){
+  return список.slice().sort((a,b)=>{
+    const ам=a.метод===м?0:1, бм=b.метод===м?0:1;
+    if(ам!==бм) return ам-бм;
+    return String(a.наименование||"").localeCompare(String(b.наименование||""),"ru");
+  });
+}
+function списокМетодЧекбоксы(список, выбранные, класс, показать){
+  if(!список.length) return `<div class="note">Список пуст.</div>`;
+  return список.map(x=>`<label class="мет-стр"><input type="checkbox" class="${класс}" value="${esc(x.id)}"
+    ${выбранные.indexOf(x.id)>=0?"checked":""}> ${показать(x)}</label>`).join("");
+}
+// Текстовый фильтр над списком чекбоксов — общий и для «Методик
+// контроля», и для панели прибор/НД в записи журнала.
+function фильтрСписка(el, contId){
+  const q=(el.value||"").toLowerCase();
+  document.querySelectorAll("#"+contId+" .мет-стр").forEach(l=>{
+    l.style.display = !q || l.textContent.toLowerCase().includes(q) ? "" : "none";
+  });
+}
+function renderMetod(){
+  curView="metod";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="metod"));
+  const мт=getМетодики();
+  const body=METHODS.map(м=>{
+    const н=мт[м]||{приборы:[],нд:[]};
+    return `<tr onclick="editMetodika('${esc(м)}')">
+      <td class="obj"><b>${esc(м)}</b></td>
+      <td class="num">${н.приборы.length}</td>
+      <td class="num">${н.нд.length}</td>
+    </tr>`;
+  }).join("");
+  document.getElementById("main").innerHTML=`
+    ${printHead("Методики контроля по методам","методов "+METHODS.length)}
+    <div class="head"><h2>Методики контроля</h2>
+      <span class="sub">стандартный набор приборов и норм. документов на каждый метод</span></div>
+    <div class="note noprint">На каждый из ${METHODS.length} методов — свой набор приборов и
+      норм. документов. Он подставляется при заполнении записи журнала (кнопка «⚙ Приборы и
+      НД» у метода) — там его можно скорректировать только для этой записи, а можно сохранить
+      как новый стандарт для метода.</div>
+    <div class="card"><div class="tblwrap"><table>
+      <thead><tr><th>Метод</th><th style="width:140px">Приборов</th><th style="width:170px">Норм. документов</th></tr></thead>
+      <tbody>${body}</tbody></table></div></div>`;
+}
+function editMetodika(м){
+  curView="metod";
+  const мт=getМетодики(); const н=мт[м]||{приборы:[],нд:[]};
+  const si=методСортировка(live(S), м), nd=методСортировка(live(НД), м);
+  document.getElementById("main").innerHTML=`
+    <div class="head"><h2>Методика: ${esc(м)}</h2>
+      <span class="sub">стандартный набор приборов и норм. документов</span></div>
+    <div class="card" style="padding:20px"><div class="form">
+      <div class="grp" style="padding-left:0">Приборы (СИ)</div>
+      <input placeholder="Фильтр по наименованию…" oninput="фильтрСписка(this,'метСпис_си')" style="margin-bottom:6px">
+      <div id="метСпис_си" class="сд-список">
+        ${списокМетодЧекбоксы(si, н.приборы, "мчб_си", x=>esc(x.наименование)+(x.зав?(" · зав. № "+esc(x.зав)):"")+
+          (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
+      </div>
+
+      <div class="grp" style="padding-left:0;margin-top:14px">Нормативные документы</div>
+      <input placeholder="Фильтр по наименованию или обозначению…" oninput="фильтрСписка(this,'метСпис_нд')" style="margin-bottom:6px">
+      <div id="метСпис_нд" class="сд-список">
+        ${списокМетодЧекбоксы(nd, н.нд, "мчб_нд", x=>esc(x.наименование)+(x.обозначение?(" · "+esc(x.обозначение)):"")+
+          (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
+      </div>
+
+      <div class="formbtns">
+        <button class="btn primary" onclick="saveMetodika('${esc(м)}')">✓ Сохранить</button>
+        <button class="btn" onclick="switchView('metod')">Отмена</button>
+      </div>
+    </div></div>`;
+}
+function saveMetodika(м){
+  const приборы=[...document.querySelectorAll(".мчб_си:checked")].map(c=>c.value);
+  const нд=[...document.querySelectorAll(".мчб_нд:checked")].map(c=>c.value);
+  const мт=getМетодики(); мт[м]={приборы:приборы, нд:нд};
+  saveМетодики(мт);
+  toast("Методика «"+м+"» сохранена"); renderMetod();
 }
 function renderObjects(){
   const q=query.toLowerCase();
@@ -4610,7 +4780,7 @@ function exchangeExport(){
   const payload={ тип:"обмен ЛНК", формат:2, место:ws.код, мастер:ws.мастер,
     версия:DB.версия, выгружено:new Date().toISOString(),
     записи:J, объекты:O, приборы:S, специалисты:P, акты:A, ппр:ОТМ, подразделения:ПОДР, падежи:ПАДЕЖИ, задачи:ЗАД,
-    право:getGrant(), названия:имена(), лаборатория:getЛаб() };
+    право:getGrant(), названия:имена(), лаборатория:getЛаб(), методики:getМетодики() };
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
   try{ localStorage.setItem("lnk_last_export", new Date().toISOString()); }catch(e){}
@@ -4649,6 +4819,11 @@ function exchangeImport(){
             if(d.лаборатория && d.лаборатория.изменено &&
                d.лаборатория.изменено > (getЛаб().изменено||""))
               saveЛаб(d.лаборатория);
+            // Методики контроля — свежее побеждает, тем же приёмом, что и
+            // карточка лаборатории.
+            if(d.методики && d.методики.изменено &&
+               d.методики.изменено > (getМетодики().изменено||""))
+              saveМетодики(d.методики);
             // Названия документов по методам — свежее побеждает.
             if(d.названия && d.названия.изменено && d.названия.изменено > имена().изменено)
               saveИмена({имена:Object.assign({}, имена().имена, d.названия.имена||{}),
@@ -7055,7 +7230,7 @@ let toastT;function toast(m){const t=document.getElementById("toast");t.textCont
 
 function switchView(v){curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт}[v]
+  ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b)switchView(b.dataset.view);});

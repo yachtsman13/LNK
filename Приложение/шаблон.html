@@ -1642,12 +1642,17 @@ function saveЛабИзФормы(){
            ответственные:ответственные, область_объекты:область_объекты,
            область_методы:область_методы, область_деятельность:область_деятельность,
            праздники:праздники});
-  toast("Карточка лаборатории сохранена"); renderLab();
+  формаСохранена(); toast("Карточка лаборатории сохранена"); renderLab();
 }
+// Эти четыре кнопки перерисовывают ВСЮ карточку лаборатории, а не свой
+// блок: правки в остальных полях, ещё не отправленные кнопкой
+// «Сохранить», при этом пропадали. Теперь сначала спрашиваем.
 function допПлюс(){
+  if(!уходСФормы()) return;
   const л=getЛаб(); л.доп=(л.доп||[]).concat([{к:"",з:""}]); saveЛаб(л); renderLab();
 }
 function допМинус(i){
+  if(!уходСФормы()) return;
   const л=getЛаб(); (л.доп||[]).splice(i,1); saveЛаб(л); renderLab();
 }
 function строкиПраздников(праздники){
@@ -1663,10 +1668,12 @@ function строкиПраздников(праздники){
     </div>`).join("")+`</div>`;
 }
 function праздникПлюс(){
+  if(!уходСФормы()) return;
   const л=getЛаб(); л.праздники=(л.праздники||[]).concat([{дата:"",вид:"нерабочий"}]);
   saveЛаб(л); renderLab();
 }
 function праздникМинус(i){
+  if(!уходСФормы()) return;
   const л=getЛаб(); л.праздники=(л.праздники||[]).slice(); л.праздники.splice(i,1);
   saveЛаб(л); renderLab();
 }
@@ -1711,6 +1718,7 @@ function деревоСДАНК(список, выбрано, класс){
   }).join("");
 }
 function renderLab(){
+  формаСохранена();
   curView="lab";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="lab"));
   const л=getЛаб();
@@ -3162,6 +3170,7 @@ function контрактГода(подр,год){
 }
 function editReg(kind,id){
   const C=REGS[kind], arr=C.arr(), z=id?arr.find(x=>String(x.id)===String(id)):null;
+  формаСохранена();
   curView="regedit"; document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
   const val=v=>esc(v==null?"":v);
   const inp=f=>{ const v=z?z[f.k]:"";
@@ -3483,14 +3492,14 @@ function saveRegRec(kind,id){
   if(id){ const i=arr.findIndex(x=>String(x.id)===String(id)); if(i>=0) arr[i]=Object.assign({},arr[i],rec); }
   else { rec.id=newId(C.pfx); arr.push(rec); }
   saveReg(C.key,arr); if(C.reindex) rebuildObjIndex();
-  switchView(C.view); toast(id?"Сохранено":"Добавлено");
+  формаСохранена(); switchView(C.view); toast(id?"Сохранено":"Добавлено");
 }
 function delReg(kind,id){
   const C=REGS[kind], arr=C.arr(), z=arr.find(x=>String(x.id)===String(id)); if(!z) return;
   if(!confirm("Удалить «"+(z[C.name]||"")+"»?\n\nУдаление перенесётся на другие места при обмене.")) return;
   z.удалено=new Date().toISOString(); z.место=getWS().код;
   saveReg(C.key,arr); if(C.reindex) rebuildObjIndex();
-  closeDrawer(); switchView(C.view); toast("Удалено");
+  формаСохранена(); closeDrawer(); switchView(C.view); toast("Удалено");
 }
 
 // ── Импорт из Excel (справочники объектов и приборов) ──────
@@ -3969,6 +3978,7 @@ function сохранитьСтандартМетода(m){
   toast("Стандартный набор метода «"+m+"» обновлён — на другие записи не влияет");
 }
 function editJournal(id){
+  формаСохранена();
   curView="edit";
   document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
   const z = id ? J.find(x=>String(x.id)===String(id)) : null;
@@ -4123,6 +4133,7 @@ function saveJournalRec(id){
   };
   if(id){ const i=J.findIndex(x=>String(x.id)===String(id)); if(i>=0) J[i]=Object.assign({},J[i],rec); }
   else { rec.id=newId(); rec.нп=J.length+1; J.unshift(rec); }
+  формаСохранена();
   saveJournal(); switchView("journal");
   toast(id?"Запись изменена":"Запись добавлена");
 }
@@ -4133,7 +4144,7 @@ function delJournal(id){
   // Мягкое удаление: запись остаётся надгробием (скрыта), чтобы удаление
   // можно было перенести файлом обмена. Метка времени решает споры.
   z.удалено=new Date().toISOString(); z.место=getWS().код;
-  saveJournal(); closeDrawer(); switchView("journal"); toast("Запись удалена");
+  формаСохранена(); saveJournal(); closeDrawer(); switchView("journal"); toast("Запись удалена");
 }
 
 // ── Резервная копия ВСЕЙ базы в файл ──────────────────────
@@ -4729,6 +4740,7 @@ function фильтрСписка(el, contId){
   });
 }
 function renderMetod(){
+  формаСохранена();
   curView="metod";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="metod"));
   const мт=getМетодики();
@@ -4753,6 +4765,7 @@ function renderMetod(){
       <tbody>${body}</tbody></table></div></div>`;
 }
 function editMetodika(м){
+  формаСохранена();
   curView="metod";
   const мт=getМетодики(); const н=мт[м]||{приборы:[],нд:[]};
   const si=методСортировка(live(S), м), nd=методСортировка(live(НД), м);
@@ -4785,7 +4798,7 @@ function saveMetodika(м){
   const нд=[...document.querySelectorAll(".мчб_нд:checked")].map(c=>c.value);
   const мт=getМетодики(); мт[м]={приборы:приборы, нд:нд};
   saveМетодики(мт);
-  toast("Методика «"+м+"» сохранена"); renderMetod();
+  формаСохранена(); toast("Методика «"+м+"» сохранена"); renderMetod();
 }
 function renderObjects(){
   const q=query.toLowerCase();
@@ -5910,6 +5923,7 @@ function renderTasks(){
 function editTask(id){
   const з=id?ЗАД.find(x=>x.id===id):null;
   if(!з && !яНачальник()){ toast("Ставить задачи может место с признаком «Начальник»"); return; }
+  формаСохранена();
   curView="taskedit";
   document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
   const v=x=>esc(x==null?"":x);
@@ -6059,7 +6073,7 @@ function saveTask(id){
       изменено:new Date().toISOString(), место_правки:getWS().код}, поля));
     saveReg(REG_ЗАД,ЗАД);
   }
-  switchView("tasks"); toast(id?"Задача изменена":"Задача поставлена");
+  формаСохранена(); switchView("tasks"); toast(id?"Задача изменена":"Задача поставлена");
 }
 function delTask(id){
   const з=ЗАД.find(x=>x.id===id); if(!з) return;
@@ -7058,6 +7072,30 @@ function проверки(){
     "Ссылка «неотъемлемая часть прибора» ведёт в никуда или сама на себя: "+плохаяСсылка.length,
     плохаяСсылка.slice(0,10).map(x=>x.наименование+(x.зав?(" · зав. "+x.зав):"")));
 
+  // Подразделение у объекта — из него акт подставляет своё
+  // подразделение сам (автоподразделениеАкта), а журнальная запись —
+  // поле «заказывающее подразделение». Пока оно не проставлено, это
+  // приходится вписывать в каждый документ руками, и узнаётся такое
+  // только при открытии акта.
+  const объИмя=o=>o.наименование+(o.зав?(" · зав. № "+o.зав):"")+(o.рег?(" · рег. № "+o.рег):"");
+  const ПОДР_ids=new Set(live(ПОДР).map(x=>x.id));
+  const подрВНикуда=live(O).filter(o=>o.подразделение && !ПОДР_ids.has(o.подразделение));
+  if(подрВНикуда.length) доб("ошибка","Объекты",
+    "Подразделение объекта ведёт на удалённую карточку: "+подрВНикуда.length,
+    подрВНикуда.slice(0,10).map(объИмя));
+  // Если подразделений не заведено вовсе — это ОДНА недоделка справочника,
+  // а не 305 одинаковых замечаний по каждому объекту.
+  const безПодр=live(O).filter(o=>!o.подразделение);
+  if(!live(ПОДР).length){
+    if(live(O).length) доб("внимание","Подразделения",
+      "Справочник подразделений пуст, а объектов "+live(O).length+
+      " — акт не сможет подставить подразделение сам, его придётся вписывать в каждый документ",
+      ["Карточки заводятся в разделе «Подразделения», там же тип и реквизиты контракта по годам."]);
+  } else if(безПодр.length) доб("внимание","Объекты",
+    безПодр.length+" из "+live(O).length+" объектов без заказывающего подразделения",
+    безПодр.slice(0,10).map(объИмя)
+      .concat(["Подразделение ставится в карточке объекта — из него акт подставляет своё."]));
+
   // Метод контроля у нормативного документа — тоже select, тоже не
   // проверяется при импорте (та же история, что у категории приборов).
   // Здесь риска потерять запись нет (метод — только подпись и фильтр в
@@ -7631,7 +7669,38 @@ function exportXlsxВсё(){
 let toastT;function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");
   clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),2200);}
 
-function switchView(v){curView=v;query="";
+// ── Защита от потери незаполненной формы ──────────────────
+// Журнальная запись, карточка справочника, задача, карточка лаборатории
+// и методика сохраняются только по кнопке. Уйти из них можно тремя
+// способами — закрыть вкладку, нажать F5 и просто выбрать другой раздел
+// в меню, — и во всех трёх введённое пропадало молча.
+// Признак «в форме есть несохранённое» ставится по первому же вводу в
+// поле. Клики по кнопкам не считаются: они либо сохраняют сами, либо
+// перерисовывают свой блок, не теряя полей. Выбор файла в «Обмене» —
+// тоже change, но импорт там происходит сразу, поэтому раздел в список
+// не входит: иначе после каждого импорта выскакивал бы ложный вопрос.
+const ВИДЫ_С_ФОРМОЙ=["edit","regedit","taskedit","lab","metod"];
+let _несохранено=false;
+function формаСохранена(){ _несохранено=false; }
+function уходСФормы(){
+  if(!_несохранено) return true;
+  if(!confirm("В форме есть несохранённые изменения.\n\n"+
+              "Уйти и потерять их? Чтобы сохранить — останьтесь и нажмите «Сохранить».")) return false;
+  _несохранено=false; return true;
+}
+["input","change"].forEach(тип=>
+  document.getElementById("main").addEventListener(тип, ()=>{
+    if(ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) _несохранено=true;
+  }));
+// Закрытие вкладки и перезагрузка: текст предупреждения задаёт сам
+// браузер, своё показать нельзя — достаточно того, что он спросит.
+window.addEventListener("beforeunload", e=>{
+  if(!_несохранено) return;
+  e.preventDefault(); e.returnValue="";
+});
+function switchView(v){
+  if(v!==curView && !уходСФормы()) return;
+  curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
   ({dash:renderDash,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",

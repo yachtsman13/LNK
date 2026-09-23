@@ -1269,7 +1269,7 @@ function заменитьСсылкиНД(замены){
 // Общее слияние по id со свежестью (журнал и справочники одинаково).
 function mergeInto(arr, key, incoming){
   let added=0, updated=0, skipped=0; const idx={}; arr.forEach((z,i)=>idx[z.id]=i);
-  (incoming||[]).forEach(r=>{ if(!r||!r.id) return;
+  (incoming||[]).forEach(r=>{ if(!r || r.id==null || r.id==="") return;
     if(idx[r.id]==null){ arr.push(r); idx[r.id]=arr.length-1; if(!r.удалено) added++; }
     else { if(lastTs(r) > lastTs(arr[idx[r.id]])){ arr[idx[r.id]]=r; updated++; } else skipped++; } });
   if(key && (added||updated)) saveReg(key, arr);
@@ -1286,7 +1286,7 @@ function mergeСправочник(arr, key, incoming, ключФн){
   const поId={}, поКлючу={};
   arr.forEach((z,i)=>{ поId[z.id]=i; const к=ключФн(z); if(к && к!=="|") поКлючу[к]=i; });
   (incoming||[]).forEach(r=>{
-    if(!r || !r.id) return;
+    if(!r || r.id==null || r.id==="") return;
     let i=поId[r.id];
     if(i==null){ const к=ключФн(r); if(к && к!=="|" && поКлючу[к]!=null) i=поКлючу[к]; }
     if(i==null){
@@ -4863,6 +4863,12 @@ function применитьДанные(d, заменить){
   }
   const r={ o:mergeInto(O,REG_OBJ,d.объекты), s:mergeInto(S,REG_SI,d.приборы),
             p:mergeInto(P,REG_PPL,d.специалисты) };
+  // Даты поверки неотъемлемых частей — всегда от основного прибора. При
+  // ЗАМЕНЕ (ветка выше) это делалось, а при слиянии нет: приняли с другого
+  // места основной прибор с новыми датами — часть оставалась со старыми до
+  // следующей перезагрузки, и «Проверка данных» показывала расхождение.
+  // Поймано прогоном обмена между двумя местами, а не чтением кода.
+  if(синхронизироватьЧасти()) saveReg(REG_SI,S);
   mergeInto(A,REG_AKT,d.акты);
   mergeInto(ОТМ,REG_ППР,d.ппр);
   mergeInto(ПОДР,REG_ПОДР,d.подразделения);

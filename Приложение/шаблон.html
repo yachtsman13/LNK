@@ -4154,7 +4154,8 @@ async function xlsxРазобрать(file){
   return листРазобрать(sheetXml, sharedStringsРазобрать(sharedXml));
 }
 
-const ИМПОРТ_НАЗВАНИЯ={obj:"Объекты",si:"Приборы (СИ)",ppl:"Специалисты",nd:"Нормативные документы"};
+const ИМПОРТ_НАЗВАНИЯ={obj:"Объекты",si:"Приборы (СИ)",ppl:"Специалисты",nd:"Нормативные документы",
+  podr:"Подразделения",pom:"Помещения"};
 // Что в файл правки НЕ попадает и потому импортом не трогается. У
 // специалиста аттестации по методам, удостоверение ПБ и классность —
 // это СПИСКИ внутри карточки (у каждого своя строка с номером, датами,
@@ -4162,7 +4163,8 @@ const ИМПОРТ_НАЗВАНИЯ={obj:"Объекты",si:"Приборы (С
 // формы записи. Импорт пишет только те поля, что есть колонками в
 // файле, поэтому списки при круговой правке остаются как были; правятся
 // они в самой карточке.
-const ИМПОРТ_НЕ_В_ФАЙЛЕ={ppl:"аттестации по методам, удостоверение ПБ и классность"};
+const ИМПОРТ_НЕ_В_ФАЙЛЕ={ppl:"аттестации по методам, удостоверение ПБ и классность",
+  podr:"контракты по годам"};
 
 // Круговая правка через Excel: выгрузили — поправили в Excel — загрузили
 // обратно, и правки легли В ТЕ ЖЕ карточки, а не добавились копиями.
@@ -5365,6 +5367,10 @@ function renderPodr(){
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('podr','')">+ Добавить</button>
       <button class="btn" onclick="exportXlsx()">▤ Excel</button>
+      <button class="btn" onclick="выгрузкаДляПравки('podr')" title="Выгрузить текущие карточки в Excel, поправить и загрузить обратно тем же импортом">⤓ Выгрузить для правки</button>
+      <button class="btn" onclick="шаблонИмпортаXlsx('podr')">⤓ Шаблон для импорта</button>
+      <button class="btn" onclick="document.getElementById('imp_podr').click()">⬆ Импорт из Excel</button>
+      <input type="file" id="imp_podr" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('podr',this)">
       <button class="btn" onclick="window.print()">⎙ PDF</button></div>
     <div class="note noprint">Карточка нужна акту: из неё берутся тип контракта, реквизиты
       контракта на нужный год и подписант со стороны экспертной организации.
@@ -5458,6 +5464,10 @@ function renderPremises(){
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('pom','')">+ Добавить</button>
       <button class="btn" onclick="exportXlsx()">▤ Excel</button>
+      <button class="btn" onclick="выгрузкаДляПравки('pom')" title="Выгрузить текущие карточки в Excel, поправить и загрузить обратно тем же импортом">⤓ Выгрузить для правки</button>
+      <button class="btn" onclick="шаблонИмпортаXlsx('pom')">⤓ Шаблон для импорта</button>
+      <button class="btn" onclick="document.getElementById('imp_pom').click()">⬆ Импорт из Excel</button>
+      <input type="file" id="imp_pom" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('pom',this)">
       <button class="btn" onclick="window.print()">⎙ PDF</button></div>
     <div class="note noprint">Идёт в раздел 10 паспорта ЛНК.</div>
     <div class="card"><div class="tblwrap"><table>

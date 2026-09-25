@@ -147,6 +147,12 @@
   .st{font-size:11px;padding:2px 9px;border-radius:20px;font-weight:600;white-space:nowrap}
   .st.ok{background:var(--okbg);color:var(--ok)} .st.work{background:var(--warnbg);color:var(--warn)}
   .st.new{background:var(--brand-soft);color:var(--brand-d)} .st.bad{background:var(--dangerbg);color:var(--danger)}
+  /* «warn» отдаёт срокЛаб() — срок истекает в ближайшие 30 дней (инструктаж,
+     ОЗП, ПБ, аттестация у специалистов); стиля у плашки не было, и она
+     рисовалась бесцветной. «check» — задача выполнена и ждёт проверки:
+     зелёная рамка, не заливка — заливка у «Принята начальником». */
+  .st.warn{background:var(--warnbg);color:var(--warn)}
+  .st.check{background:transparent;color:var(--ok);box-shadow:inset 0 0 0 1px var(--ok)}
   .empty{padding:44px;text-align:center;color:var(--muted)}
   .muted{color:var(--muted)}
 
@@ -9224,7 +9230,7 @@ const ГОРИЗОНТЫ=[["день","День"],["неделя","Неделя"
 const СОСТОЯНИЯ={
   назначена:{т:"Назначена",   к:"new"},
   принята:  {т:"Принята в работу", к:"work"},
-  выполнена:{т:"Выполнена, на проверке", к:"warn"},
+  выполнена:{т:"Выполнена, на проверке", к:"check"},
   закрыта:  {т:"Принята начальником", к:"ok"},
   доработка:{т:"Возвращена на доработку", к:"bad"},
   отменена: {т:"Отменена",    к:""}

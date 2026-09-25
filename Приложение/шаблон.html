@@ -84,6 +84,14 @@
   .top .tag{font-size:11px;background:var(--top-tag);padding:2px 8px;border-radius:20px}
   .top .spring{flex:1}
   .top .who{font-size:12px;opacity:.92}
+  .top .справкакн{width:26px;height:26px;border-radius:50%;border:1px solid currentColor;background:transparent;
+    color:var(--top-ink);font:inherit;font-weight:700;font-size:13px;cursor:pointer;opacity:.85;padding:0;flex:none}
+  .top .справкакн:hover{opacity:1;background:var(--top-tag)}
+  table.клавиши{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px}
+  table.клавиши td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.клавиши td:first-child{white-space:nowrap;width:160px}
+  kbd{display:inline-block;font:12px/1.4 ui-monospace,Consolas,monospace;padding:1px 6px;border:1px solid var(--line);
+    border-bottom-width:2px;border-radius:4px;background:var(--panel);margin:1px 0}
   .top .styleSel{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.95}
   .top .styleSel select{font:inherit;font-size:12px;color:var(--top-ink);
     background:var(--top-tag);border:0;border-radius:7px;padding:5px 8px;cursor:pointer}
@@ -536,6 +544,7 @@
       </select>
     </label>
     <div class="who">Место: <b id="wsName">М1</b></div>
+    <button class="справкакн" id="справкаКн" onclick="справкаКлавиш()" title="Клавиши и приёмы ввода (F1)">?</button>
   </div>
 
   <nav class="side" id="side">
@@ -3949,8 +3958,41 @@ function контрактыКарточки(z){ return Array.isArray(z && z.ко
 function контрактГода(подр,год){
   return контрактыКарточки(подр).find(к=>String(к.год)===String(год))||null;
 }
+// Листание карточек справочника прямо в форме — как у записи журнала
+// (листаниеЗаписи): по списку раздела, КАК ОН ПОКАЗАН — с тем же поиском,
+// фильтром метода у норм. документов и сортировкой у специалистов. Отбор
+// строк у каждого раздела вынесен в свою функцию (рядыОбъектов и др.),
+// и список, и листание берут её же — разойтись им нечем.
+const РЯДЫ_СПРАВОЧНИКА={obj:()=>рядыОбъектов(), si:()=>рядыПриборов(), ppl:()=>peopleRows(),
+  podr:()=>рядыПодр(), nd:()=>рядыНд(), pom:()=>рядыПом()};
+let _листРег=null;             // {kind, id} открытой карточки — для Alt+стрелок
+function соседиКарточки(kind,id){
+  const ф=РЯДЫ_СПРАВОЧНИКА[kind]; if(!ф) return null;
+  const ряды=ф(), i=ряды.findIndex(x=>String(x.id)===String(id));
+  if(i<0) return null;
+  return {i:i, всего:ряды.length, пред:i>0?ряды[i-1].id:null, след:i<ряды.length-1?ряды[i+1].id:null};
+}
+function листаниеКарточки(kind,id){
+  const с=соседиКарточки(kind,id); if(!с || с.всего<2) return "";
+  const кн=(ид,т,подсказка,стр)=>ид==null
+    ? `<button class="btn small" disabled>${т}</button>`
+    : `<button class="btn small" title="${подсказка} (Alt+${стр})" onclick="листатьКарточку('${kind}','${esc(ид)}')">${т}</button>`;
+  return `<div class="spring"></div><span class="листание noprint" title="По списку раздела с текущим поиском и сортировкой">
+    ${кн(с.пред,"◀","Предыдущая карточка списка","←")}
+    <span class="muted" style="font-size:12px;margin:0 6px">${с.i+1} из ${с.всего}</span>
+    ${кн(с.след,"▶","Следующая карточка списка","→")}</span>`;
+}
+function листатьКарточку(kind,ид){
+  if(ид==null || ид==="") return;
+  if(!уходСФормы()) return;
+  const возврат=_возвратВПроверку;
+  editReg(kind,ид);
+  _возвратВПроверку=возврат;
+  window.scrollTo(0,0);
+}
 function editReg(kind,id){
   const C=REGS[kind], arr=C.arr(), z=id?arr.find(x=>String(x.id)===String(id)):null;
+  _листРег=z?{kind:kind, id:z.id}:null;
   формаСохранена();
   curView="regedit"; document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
   const val=v=>esc(v==null?"":v);
@@ -3996,7 +4038,7 @@ function editReg(kind,id){
       f.символы?рядСимволов("rf_"+f.k):""}${
       f.подсказка?`<span class="полеподсказ">${f.подсказка}</span>`:""}</label>`; };
   document.getElementById("main").innerHTML=`
-    <div class="head"><h2>${z?("Правка: "+C.title):("Новый "+C.title)}</h2></div>
+    <div class="head"><h2>${z?("Правка: "+C.title):("Новый "+C.title)}</h2>${z?листаниеКарточки(kind,z.id):""}</div>
     <div class="card" style="padding:20px"><div class="form">
       <div class="grid">${C.fields.filter(f=>!f.допуск).map(inp).join("")}</div>
       ${kind==="ppl"?блокДопусков(z):""}
@@ -5256,6 +5298,9 @@ function renderDash(){
           з.просрочено?"bad":"warn","tasks") : ""; })()}
       ${(()=>{ const с=задачиСкоро();
         return с.всего ? tile(с.всего,"горит на этой неделе","warn","tasks") : ""; })()}
+      ${(()=>{ const м=задачиМоегоМеста(); if(!м.всего) return "";
+        return `<div class="tile ${м.просрочено||м.вернули?"bad":"warn"} click" onclick="document.getElementById('мои_задачи').scrollIntoView({behavior:'smooth'})">
+          <div class="n">${м.всего}</div><div class="l">мои задачи</div></div>`; })()}
       ${(()=>{ const л=getЛаб(); if(!л.свид_до) return "";
         const [к,т]=срокЛаб(л.свид_до);
         return `<div class="tile ${к} click" onclick="switchView('lab')">
@@ -5267,6 +5312,7 @@ function renderDash(){
           <div class="n" style="font-size:19px">${esc(т)}</div>
           <div class="l">плановая проверка ЛНК</div></div>`; })()}
     </div>
+    <div id="мои_задачи">${блокМоихЗадач()}</div>
     ${блокРаботПоМесяцам()}
     ${блокПоследнихПравок()}
     ${(()=>{ const з=задачиНаСегодня();
@@ -5446,6 +5492,12 @@ function листатьЗапись(ид){
   window.scrollTo(0,0);
 }
 function листатьНаШаг(шаг){
+  if(curView==="regedit"){
+    if(!_листРег) return false;
+    const с=соседиКарточки(_листРег.kind,_листРег.id); if(!с) return false;
+    const ид=шаг<0?с.пред:с.след; if(ид==null) return false;
+    листатьКарточку(_листРег.kind,ид); return true;
+  }
   const card=document.querySelector("#main .card[data-id]"); if(!card||!card.dataset.id) return false;
   const с=соседиЗаписи(card.dataset.id); if(!с) return false;
   const ид=шаг<0?с.пред:с.след; if(ид==null) return false;
@@ -6260,10 +6312,13 @@ function backupOpen(){
 }
 
 // ── Объекты ───────────────────────────────────────────────
-function renderPodr(){
+function рядыПодр(){
   const q=(query||"").toLowerCase();
-  const rows=live(ПОДР).filter(x=>!q||((x.наименование||"")+(x.эксп_организация||"")).toLowerCase().includes(q))
+  return live(ПОДР).filter(x=>!q||((x.наименование||"")+(x.эксп_организация||"")).toLowerCase().includes(q))
     .sort((a,b)=>String(a.наименование||"").localeCompare(String(b.наименование||""),"ru"));
+}
+function renderPodr(){
+  const rows=рядыПодр();
   const body=rows.length?rows.map(x=>{
     const к=контрактыКарточки(x).slice().sort((a,b)=>String(b.год).localeCompare(String(a.год)));
     return `<tr onclick="editReg('podr','${esc(x.id)}')">
@@ -6401,11 +6456,14 @@ function ндСтатус(x){
   if(до<сегодня()) return ["bad","проверен "+ru(x.проверено)];
   return ["ok","проверен "+ru(x.проверено)];
 }
-function renderNd(){
+function рядыНд(){
   const q=(query||"").toLowerCase();
-  const rows=live(НД).filter(x=>!q||((x.наименование||"")+(x.обозначение||"")).toLowerCase().includes(q))
+  return live(НД).filter(x=>!q||((x.наименование||"")+(x.обозначение||"")).toLowerCase().includes(q))
     .filter(x=>!ндФильтрМетод || x.метод===ндФильтрМетод)
     .sort((a,b)=>String(a.наименование||"").localeCompare(String(b.наименование||""),"ru"));
+}
+function renderNd(){
+  const rows=рядыНд();
   const body=rows.length?rows.map(x=>{const[c,l]=ндСтатус(x);return`
     <tr onclick="editReg('nd','${esc(x.id)}')">
       <td class="obj">${esc(x.наименование)}
@@ -6444,10 +6502,13 @@ function renderNd(){
   wireSearch(renderNd);
 }
 // Раздел 10 паспорта ЛНК: помещения, используемые для проведения НК.
-function renderPremises(){
+function рядыПом(){
   const q=(query||"").toLowerCase();
-  const rows=live(ПОМ).filter(x=>!q||(x.идентификация||"").toLowerCase().includes(q))
+  return live(ПОМ).filter(x=>!q||(x.идентификация||"").toLowerCase().includes(q))
     .sort((a,b)=>String(a.идентификация||"").localeCompare(String(b.идентификация||""),"ru"));
+}
+function renderPremises(){
+  const rows=рядыПом();
   const body=rows.length?rows.map(x=>`
     <tr onclick="editReg('pom','${esc(x.id)}')">
       <td class="obj">${esc(x.идентификация)}</td>
@@ -6584,9 +6645,12 @@ function saveMetodika(м){
   saveМетодики(мт);
   формаСохранена(); toast("Методика «"+м+"» сохранена"); renderMetod();
 }
+function рядыОбъектов(){
+  const q=(query||"").toLowerCase();
+  return live(O).filter(o=>!q||(o.наименование+o.зав+o.рег+o.тип+расположениеОб(o)).toLowerCase().includes(q));
+}
 function renderObjects(){
-  const q=query.toLowerCase();
-  const rows=live(O).filter(o=>!q||(o.наименование+o.зав+o.рег+o.тип+расположениеОб(o)).toLowerCase().includes(q));
+  const rows=рядыОбъектов();
   const body=rows.length?rows.map(o=>`
     <tr onclick="showObject('${esc(o.id)}')">
       <td class="obj">${esc(o.наименование)}</td>
@@ -6742,9 +6806,12 @@ function siStatus(s){
   if(days<30) return ["work","истекает"];
   return ["ok","поверен"];
 }
+function рядыПриборов(){
+  const q=(query||"").toLowerCase();
+  return live(S).filter(s=>!q||(s.наименование+s.тип+s.зав+s.метод).toLowerCase().includes(q));
+}
 function renderSi(){
-  const q=query.toLowerCase();
-  const rows=live(S).filter(s=>!q||(s.наименование+s.тип+s.зав+s.метод).toLowerCase().includes(q));
+  const rows=рядыПриборов();
   const body=rows.length?rows.map(s=>{const[c,l]=siStatus(s);return`
     <tr onclick="showSi('${esc(s.id)}')">
       <td class="obj">${esc(s.наименование)}<div class="muted" style="font-size:11.5px">${
@@ -9230,9 +9297,41 @@ function просроченаЗадача(з){
 // места и так разделены физически.
 function яНачальник(){ return !!getWS().начальник; }
 function ставитель(з){ return з.постановщик||""; }
-function мояЗадача(з){
-  const ws=getWS();
-  return з.место===ws.код || (з.исполнитель && з.исполнитель===getЛаб().начальник);
+// «Мои задачи» — задачи ЭТОГО рабочего места. Привязка к месту одна, и
+// она уже есть: поле «Рабочее место исполнителя» (з.место). По ФИО не
+// сопоставляю — за одним местом работают разные люди, а какой человек
+// сейчас за этим компьютером, программа не знает. Две стороны:
+// - исполнителю (место совпало) — принять, сделать, доделать после возврата;
+// - постановщику (задачу ставило это место) — проверить выполненное.
+// Закрытые и отменённые не показываются: делать по ним нечего.
+const МОИ_ИСПОЛНИТЬ=["назначена","принята","доработка"];
+function кодМеста(x){ return String(x||"").trim().toUpperCase(); }
+function мояЗадача(з){ return !!кодМеста(з.место) && кодМеста(з.место)===кодМеста(getWS().код); }
+function задачиМоегоМеста(){
+  const я=кодМеста(getWS().код), поСроку=(a,b)=>String(a.срок||"9").localeCompare(String(b.срок||"9"));
+  const живые=(ЗАД||[]).filter(живаяЗадача);
+  const исполнить=живые.filter(з=>мояЗадача(з) && МОИ_ИСПОЛНИТЬ.indexOf(з.статус)>=0).sort(поСроку);
+  const проверить=живые.filter(з=>з.статус==="выполнена" && кодМеста(ставитель(з))===я).sort(поСроку);
+  return {исполнить, проверить, всего:исполнить.length+проверить.length,
+    просрочено:исполнить.filter(просроченаЗадача).length,
+    вернули:исполнить.filter(з=>з.статус==="доработка").length,
+    новых:исполнить.filter(з=>з.статус==="назначена").length};
+}
+function блокМоихЗадач(){
+  const м=задачиМоегоМеста(); if(!м.всего) return "";
+  const что=з=>з.статус==="назначена"?"принять":з.статус==="доработка"?"доделать":з.статус==="выполнена"?"проверить":"сделать";
+  const стр=з=>`<div class="pr" title="Открыть задачу" onclick="editTask('${esc(з.id)}')">
+      <span class="st ${{принять:"new",сделать:"work",доделать:"bad",проверить:"ok"}[что(з)]}" style="min-width:74px;text-align:center">${что(з)}</span>
+      <span class="g">${esc(з.что)}${з.исполнитель?` <span class="muted" style="font-size:12px">· ${esc(з.исполнитель)}</span>`:""}</span>
+      <span class="num" style="${просроченаЗадача(з)?"color:var(--danger);font-weight:600":""}">${з.срок?ru(з.срок):"—"}</span></div>`;
+  return `<div class="panel" style="margin-bottom:14px">
+    <h3>☰ Мои задачи <span class="pc">место ${esc(getWS().код||"")}</span></h3>
+    ${м.исполнить.length?`<div class="note" style="margin:0 0 4px">Поручено этому месту${м.новых?` · новых ${м.новых}`:""}${м.вернули?` · возвращено ${м.вернули}`:""}${м.просрочено?` · <b style="color:var(--danger)">просрочено ${м.просрочено}</b>`:""}</div>
+      <div class="plist">${м.исполнить.map(стр).join("")}</div>`:""}
+    ${м.проверить.length?`<div class="note" style="margin:8px 0 4px">Выполнены, ждут вашей проверки (задачи ставило это место)</div>
+      <div class="plist">${м.проверить.map(стр).join("")}</div>`:""}
+    <div class="note">Свои — по полю «Рабочее место исполнителя» в задаче. Задача без места сюда не попадает.</div>
+  </div>`;
 }
 
 // ── Задачи, которые система знает сама ────────────────────
@@ -11914,6 +12013,41 @@ function openDrawer(title,html){document.getElementById("dTitle").textContent=ti
 function closeDrawer(){document.getElementById("drawer").classList.remove("show");
   document.getElementById("veil").classList.remove("show");}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
+// Справка по клавишам — кнопка «?» в шапке и F1 (в Chrome/Edge F1 иначе
+// открывает справку браузера в новой вкладке — страница это перехватывает).
+// Перечислено только то, что в программе действительно есть: каждая строка
+// ведёт на свой обработчик (Ctrl+K, Ctrl+S, Alt+стрелки, Esc, двойной
+// щелчок в плане) или на разбор текста (типографика, степени, градус).
+// Добавили сочетание — строка сюда же, иначе о нём никто не узнает.
+const СПРАВКА_КЛАВИШ=[
+  {г:"Везде", с:[
+    ["<kbd>Ctrl</kbd>+<kbd>K</kbd>","Поиск по всей базе (из формы — с вопросом, если есть несохранённое)"],
+    ["<kbd>F1</kbd>","Эта справка"],
+    ["<kbd>Esc</kbd>","Закрыть боковую панель (карточка объекта, прибора, эта справка)"]]},
+  {г:"В формах", с:[
+    ["<kbd>Ctrl</kbd>+<kbd>S</kbd>","Сохранить — то же, что кнопка «✓ Сохранить». Работает и в русской раскладке (Ctrl+Ы)"],
+    ["<kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd>","Предыдущая / следующая запись журнала или карточка справочника — по списку, как он показан (с поиском, отбором и сортировкой). Несохранённое — с вопросом"]]},
+  {г:"Ввод текста", с:[
+    ["<kbd>^</kbd>","Степень: «10^3» → 10³, «м/с^2» → м/с², длинная — в скобках: «10^{-12}». Знак «^» в документ не печатается"],
+    ["<kbd>^</kbd><kbd>o</kbd>","Знак градуса: «20^oC» → «20 °C», «90^o» → «90°» (буква o латинская или русская; «^0» — это нулевая степень)"],
+    ["<kbd>Alt</kbd>+<kbd>0176</kbd>","Знак градуса «°» с цифровой клавиатуры Windows"],
+    ["ряд символов","Под полями «Характеристики» и «Назначение» прибора — кнопки ° ± × ÷ ≤ ≥ ≈ Ø № µ, знак встаёт в место курсора"],
+    ["мм2, см3, м3","Пишутся как есть — в документах сами становятся мм², см³, м³"]]},
+  {г:"Списки и таблицы", с:[
+    ["щелчок по заголовку","Сортировка — в журнале, специалистах, прогнозе аттестации, задачах; повторный щелчок — обратный порядок"],
+    ["двойной щелчок","В форме позиции плана ППР — по пустой клетке месяца: подставить часы «норма × количество»"],
+    ["поле объекта","В записи журнала список объектов ищет и по заводскому, и по регистрационному номеру — достаточно начать вводить номер"]]}
+];
+function справкаКлавиш(){
+  openDrawer("Клавиши и приёмы ввода", СПРАВКА_КЛАВИШ.map(р=>`<div class="sect" style="margin:6px 0 4px">${esc(р.г)}</div>
+    <table class="клавиши">${р.с.map(([к,т])=>`<tr><td>${к}</td><td>${esc(т)}</td></tr>`).join("")}</table>`).join("")+
+    `<div class="note">Сочетания, помеченные «в формах», работают только в открытой форме записи или карточки;
+      в остальных местах эти клавиши остаются браузеру.</div>`);
+}
+document.addEventListener("keydown",e=>{
+  if(e.key!=="F1" || e.ctrlKey || e.altKey || e.metaKey) return;
+  e.preventDefault(); справкаКлавиш();
+});
 
 // ── Выгрузка в Excel (.xlsx) ──────────────────────────────
 // Раньше выгружался CSV. В Office 2016 это лотерея: разделитель столбцов
@@ -12406,11 +12540,11 @@ document.addEventListener("keydown",e=>{
   if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // дописанное поле — в его значение
   кн.click();
 });
-// Alt+← / Alt+→ в форме записи журнала — предыдущая/следующая запись
-// списка (те же кнопки «◀ ▶» в шапке формы). В других видах сочетание
+// Alt+← / Alt+→ в форме записи журнала и карточки справочника — соседняя
+// запись списка (те же кнопки «◀ ▶» в шапке формы). В других видах сочетание
 // остаётся браузеру.
 document.addEventListener("keydown",e=>{
-  if(!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || curView!=="edit") return;
+  if(!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (curView!=="edit" && curView!=="regedit")) return;
   if(e.key!=="ArrowLeft" && e.key!=="ArrowRight") return;
   e.preventDefault();
   if(document.activeElement && document.activeElement.blur) document.activeElement.blur();

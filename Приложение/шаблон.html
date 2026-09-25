@@ -346,6 +346,17 @@
   .плантбл td.мес.пусто{background:transparent}
   th.жчб,td.жчб{width:26px;padding-left:8px;padding-right:0;text-align:center}
   tr.отм td{background:var(--chip)}
+  .кал{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  .кал .дн{min-height:86px;border:1px solid var(--line);border-radius:6px;padding:4px 5px;cursor:pointer;
+    overflow:hidden;background:var(--panel)}
+  .кал .дн:hover{background:var(--brand-soft)}
+  .кал .дн.чуж{opacity:.4} .кал .дн.сег{border-color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand)}
+  .кал .дн.выб{background:var(--brand-soft)}
+  .кал .чис{font-size:12px;font-weight:600;display:flex;justify-content:space-between}
+  .кал .шап{font-size:11px;color:var(--muted);text-align:center;text-transform:uppercase}
+  .кал .сб{font-size:11px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    border-left:3px solid var(--brand);padding-left:3px;margin-top:2px}
+  .кал .сб.прос{border-color:var(--danger);color:var(--danger)} .кал .сб.сдел{border-color:var(--ok);opacity:.6}
   .form.жмасс label{min-width:150px}
   .form.жмасс .жмочист{border-color:var(--danger);background:var(--dangerbg)}
   .пп li.пссылка{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
@@ -489,6 +500,7 @@
     <button class="nav on" data-view="dash"><span class="ic">◈</span>Пульт</button>
     <button class="nav" data-view="check"><span class="ic">✓</span>Проверка данных<span class="cnt" id="cCheck">0</span></button>
     <button class="nav" data-view="find"><span class="ic">⌕</span>Поиск по базе</button>
+    <button class="nav" data-view="calendar"><span class="ic">▦</span>Календарь сроков</button>
     <div class="grp">Работа</div>
     <button class="nav" data-view="journal"><span class="ic">▤</span>Журнал<span class="cnt" id="cJournal">0</span></button>
     <button class="nav" data-view="objects"><span class="ic">▢</span>Объекты<span class="cnt" id="cObjects">0</span></button>
@@ -513,6 +525,7 @@
   <div class="foot">
     <span>Собрано: <b id="fBuilt">—</b></span>
     <span>Записей журнала: <b id="fRows">0</b></span>
+    <span id="fОтмена"></span>
     <span style="margin-left:auto">данные только для примера</span>
   </div>
 </div>
@@ -629,6 +642,7 @@ function починитьАкты(){
 }
 function saveJournal(){
   проставитьБазу(STORE_KEY, J);
+  записатьИсторию(STORE_KEY, J);
   try{ localStorage.setItem(STORE_KEY, JSON.stringify({baseVersion:DB.версия, сохранено:new Date().toISOString(), rows:J})); }
   catch(e){ переполнение(e); }
   снятьСнимок(STORE_KEY, J);
@@ -1222,6 +1236,7 @@ function loadReg(key, seed){
 }
 function saveReg(key, arr){
   проставитьБазу(key, arr);
+  записатьИсторию(key, arr);
   try{ localStorage.setItem(key, JSON.stringify({версия:DB.версия, сохранено:new Date().toISOString(), rows:arr})); }
   catch(e){ переполнение(e); }
   снятьСнимок(key, arr);
@@ -1397,6 +1412,7 @@ function setChrome(){
   document.getElementById("fRows").textContent=liveJ().length;
   document.getElementById("fBuilt").textContent=ru(DB.собрано)||DB.собрано||"—";
   document.getElementById("verTag").textContent="v"+(DB.версия||"?")+" • реальные данные";
+  обновитьКнопкуОтмены();
 }
 
 // ── Журнал: фильтры и сортировка ──────────────────────────
@@ -1609,9 +1625,11 @@ function жПрименить(){
     (перезапишут.length?("\nСтарое значение будет заменено: "+перезапишут.join("; ")+"."):"")+
     (стёрто.size?("\n\n⚠ БУДЕТ СТЁРТО значений: "+[...стёрто.values()].reduce((a,b)=>a+b,0)+" — "+
       [...стёрто].map(([л,n])=>"«"+л+"»: "+n).join(", ")+"."):""))) return;
+  отменаНачать("массовая правка журнала", [STORE_KEY]);
   const ts=new Date().toISOString(), место=getWS().код;
   меняются.forEach(z=>{ поля.forEach(k=>{ z[k]=знач[k]; }); z.изменено=ts; z.место=место; });
   saveJournal();
+  отменаЗавершить();
   жОтм.clear(); Object.keys(жмЗнач).forEach(k=>delete жмЗнач[k]);
   renderJournal();
   toast("Изменено записей: "+меняются.length);
@@ -3754,7 +3772,7 @@ function editReg(kind,id){
         <button class="btn primary" onclick="saveRegRec('${kind}','${z?esc(z.id):""}')">✓ Сохранить</button>
         <button class="btn" onclick="switchView('${C.view}')">Отмена</button>
         ${z?`<button class="btn danger" style="margin-left:auto" onclick="delReg('${kind}','${esc(z.id)}')">✕ Удалить</button>`:""}
-      </div></div></div>`;
+      </div>${z?блокИстории(C.key,z.id):""}</div></div>`;
   // Карточка прибора, уже помеченная как неотъемлемая часть: даты поверки
   // сразу показываются нередактируемыми (см. частьВыбрана).
   if(kind==="si" && z && z.основной_ид) частьВыбрана(z.основной_ид);
@@ -4518,6 +4536,7 @@ function импортПрименить(kind, строки){
     "«2026 — март; 2027 — сентябрь», месяц без года наугад не подставляю): "+
     [...месяцыНеПоняты].slice(0,10).join(" | ")+" — проставьте годы в панели «Документы по поверке»."):"")+
     стёртоТекст(стёрто))) return;
+  отменаНачать("импорт — "+ИМПОРТ_НАЗВАНИЯ[kind], [C.key]);
   const отметка=new Date().toISOString(), место=getWS().код;
   правки.forEach(п=>{
     п.поля.forEach(k=>{ п.rec[k]=п.знач[k]; });
@@ -4526,6 +4545,7 @@ function импортПрименить(kind, строки){
   новые.forEach(r=>arr.push(r));
   if(kind==="si") синхронизироватьЧасти();   // даты частей — у основного
   saveReg(C.key,arr); if(C.reindex) rebuildObjIndex();
+  отменаЗавершить();
   switchView(C.view);
   toast([правки.length?("обновлено "+правки.length):"",
          новые.length?("добавлено "+новые.length):""].filter(Boolean).join(", "));
@@ -4715,6 +4735,7 @@ function импортЖурналПрименить(строки){
     (объектыНеНашлись.size?("\n\nКарточка объекта не нашлась (запись заведу, связь с карточкой "+
       "останется пустой): "+[...объектыНеНашлись].slice(0,10).join(" | ")):"")+
     стёртоТекст(стёрто))) return;
+  отменаНачать("импорт журнала", [STORE_KEY]);
   const отметка=new Date().toISOString(), место=getWS().код;
   правки.forEach(п=>{
     п.поля.forEach(k=>{
@@ -4741,6 +4762,7 @@ function импортЖурналПрименить(строки){
   });
   if(новые.length) J.unshift(...новые);
   saveJournal();
+  отменаЗавершить();
   switchView("journal");
   toast([правки.length?("обновлено "+правки.length):"",
          новые.length?("добавлено "+новые.length):""].filter(Boolean).join(", "));
@@ -5089,6 +5111,7 @@ function editJournal(id){
             title="Создать такие же записи по другим объектам">⧉ Повторить по объектам</button>`:""}
           ${z?`<button class="btn danger" style="margin-left:auto" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>`:""}
         </div>
+        ${z?блокИстории(STORE_KEY,z.id):""}
       </div>
     </div>`;
   objHint();
@@ -5658,7 +5681,9 @@ function всеДанные(){
            лаборатория:getЛаб(), методики:getМетодики(), названия:имена(),
            // отброшенные версии — сведения ЭТОГО места: в копию идут, а при
            // обмене не сливаются (у другого места свои)
-           конфликты:КОНФЛ };
+           конфликты:КОНФЛ,
+           // история правок — тоже сведения этого места: в копию, не в обмен
+           история:ист() };
 }
 // Обратная сторона той же медали: применить принятый файл к базе.
 // «Заменить» — для восстановления из копии (там так и задумано), иначе
@@ -5678,6 +5703,7 @@ function применитьДанные(d, заменить){
     if(спис(d.нормдокументы)){ НД=d.нормдокументы; saveReg(REG_НД,НД); }
     if(спис(d.помещения)){ ПОМ=d.помещения; saveReg(REG_ПОМ,ПОМ); }
     if(спис(d.конфликты)){ КОНФЛ=d.конфликты; saveReg(REG_КОНФЛ,КОНФЛ); }
+    if(d.история && typeof d.история==="object" && !Array.isArray(d.история)){ ИСТ=d.история; сохранитьИсторию(); }
     if(d.лаборатория && typeof d.лаборатория==="object") saveЛаб(d.лаборатория);
     if(d.методики && typeof d.методики==="object") saveМетодики(d.методики);
     if(d.названия && typeof d.названия==="object") saveИмена(d.названия);
@@ -6978,7 +7004,8 @@ const _снимки={};
 function местоПравки(key,r){ return key===REG_ЗАД ? String(r.место_правки||"") : String(r.место||""); }
 function снятьСнимок(key,arr){
   const с={};
-  (arr||[]).forEach(r=>{ if(r && r.id!=null) с[r.id]={изм:lastTs(r), место:местоПравки(key,r)}; });
+  // j — содержимое записи: по нему «История правок» видит, ЧТО поменялось
+  (arr||[]).forEach(r=>{ if(r && r.id!=null) с[r.id]={изм:lastTs(r), место:местоПравки(key,r), j:JSON.stringify(r)}; });
   _снимки[key]=с;
 }
 function проставитьБазу(key,arr){
@@ -7004,8 +7031,215 @@ function реестрПоКлючу(key){
 function снятьВсеСнимки(){
   [STORE_KEY,REG_OBJ,REG_SI,REG_PPL,REG_AKT,REG_ППР,REG_ППР_ПЛАН,REG_ПОДР,REG_ПАДЕЖ,REG_ЗАД,REG_НД,REG_ПОМ]
     .forEach(k=>{ const a=реестрПоКлючу(k); if(a) снятьСнимок(k,a); });
+  _историяВключена=true;
 }
 const БАЗА_ИСХОДНАЯ="исходная";
+
+// ── История правок записи ─────────────────────────────────
+// Кто, когда и с какого значения на какое менял поле. Пишется в ОДНОМ
+// месте — в saveReg/saveJournal, по снимку прошлой записи (тот же
+// _снимки, что у конфликтов), поэтому не надо помнить о ней в каждой из
+// десятков функций сохранения. Запись попадает в историю, только если у
+// неё сменилась отметка времени (правка, удаление, приём из обмена —
+// тогда место правки другое); служебные пересохранения без отметки
+// (починки при загрузке) историей не считаются. Хранится у каждого места
+// своя (в обмен не идёт — у другого места свой глаз), в резервную копию
+// идёт. На запись — последние ИСТ_НА_ЗАПИСЬ правок, значения обрезаны:
+// память браузера не резиновая.
+const REG_ИСТ="lnk_history";
+const ИСТ_НА_ЗАПИСЬ=15, ИСТ_ДЛИНА=300;
+let ИСТ=null;
+function ист(){
+  if(!ИСТ){ try{ ИСТ=JSON.parse(localStorage.getItem(REG_ИСТ)||"{}")||{}; }catch(e){ ИСТ={}; } }
+  return ИСТ;
+}
+function сохранитьИсторию(){
+  try{ localStorage.setItem(REG_ИСТ, JSON.stringify(ист())); }catch(e){ переполнение(e); }
+}
+const ИСТ_СЛУЖЕБНЫЕ=new Set(["изменено","база","место_правки","удалено"]);
+function плоскоИст(key,o,пр,выход,гл){
+  Object.keys(o||{}).forEach(k=>{
+    if(!пр && (ИСТ_СЛУЖЕБНЫЕ.has(k) || (k==="место" && key!==REG_ЗАД))) return;
+    const v=o[k];
+    if(v && typeof v==="object" && !Array.isArray(v) && гл<3) плоскоИст(key,v,пр+k+".",выход,гл+1);
+    else выход[пр+k]=v==null?"":(Array.isArray(v)?(v.length?JSON.stringify(v):""):String(v));
+  });
+  return выход;
+}
+// Пока идёт начальная загрузка, правки делает сама программа (починки,
+// добавление документов из актуализации) — это не правки людей, в
+// историю не пишу. Включается в конце загрузки (снятьВсеСнимки).
+let _историяВключена=false;
+function записатьИсторию(key,arr){
+  if(!_историяВключена) return;
+  const с=_снимки[key];
+  if(!с || key===REG_КОНФЛ) return;          // снимка нет — идёт начальная загрузка
+  const Н=ист(); let было=false;
+  const обрез=v=>{ v=String(v); return v.length>ИСТ_ДЛИНА?v.slice(0,ИСТ_ДЛИНА)+"…":v; };
+  (arr||[]).forEach(r=>{
+    if(!r || r.id==null) return;
+    const s=с[r.id], ts=lastTs(r);
+    if(s && ts===s.изм) return;
+    if(!s && !ts) return;
+    const зап={когда:ts||new Date().toISOString(), место:местоПравки(key,r)};
+    if(!s) зап.новая=1;
+    else{
+      const ст=JSON.parse(s.j);
+      if(r.удалено && !ст.удалено) зап.удалена=1;
+      if(!r.удалено && ст.удалено) зап.возвращена=1;
+      const а=плоскоИст(key,ст,"",{},0), б=плоскоИст(key,r,"",{},0), поля=[];
+      new Set(Object.keys(а).concat(Object.keys(б))).forEach(k=>{
+        const x=а[k]||"", y=б[k]||"";
+        if(x!==y) поля.push([k,обрез(x),обрез(y)]);
+      });
+      if(!поля.length && !зап.удалена && !зап.возвращена) return;
+      зап.поля=поля;
+    }
+    const ключ=key+"|"+r.id;
+    Н[ключ]=[зап].concat(Н[ключ]||[]).slice(0,ИСТ_НА_ЗАПИСЬ);
+    было=true;
+  });
+  if(было) сохранитьИсторию();
+}
+const ИСТ_МЕТОД={н:"№ протокола",исп:"исполнитель",файл:"файл протокола",приборы:"приборы",нд:"норм. документы"};
+function полеИст(key,k){
+  if(key===STORE_KEY) return ЖУРНАЛ_ПОЛЯ.find(f=>f.k===k);
+  if(key===REG_ЗАД) return ЗАДАЧИ_ПОЛЯ.find(f=>f.k===k);
+  if(key===REG_ППР_ПЛАН) return ПЛАН_ПОЛЯ.find(f=>f.k===k);
+  const C=Object.values(REGS).find(C=>C.key===key);
+  return C ? C.fields.find(f=>f.k===k) : null;
+}
+function подписьИст(key,путь){
+  const ч=путь.split(".");
+  if(key===STORE_KEY && ч[0]==="методы" && ч.length>1)
+    return ч[1]+(ч[2]?": "+(ИСТ_МЕТОД[ч[2]]||ч.slice(2).join(".")):"");
+  if(key===REG_ППР_ПЛАН && ч[0]==="план" && ч.length===3)
+    return "план "+ч[1]+", "+String(МЕСЯЦЫ[+ч[2]-1]||ч[2]).toLowerCase()+" (ч)";
+  const особые={объект_ид:"связь с карточкой объекта",статус:"Состояние",выполнено:"Дата выполнения",
+    нп:"№ п/п",год:"Год",месяцы_поверки:"Месяц представления на поверку"};
+  const f=полеИст(key,ч[0]);
+  const л=f?(f.l||f.л):(особые[ч[0]]||ч[0]);
+  return л+(ч.length>1?" ("+ч.slice(1).join(".")+")":"");
+}
+function значениеИст(key,путь,v){
+  if(v==="") return "<span class='muted'>пусто</span>";
+  const f=полеИст(key,путь.split(".")[0]);
+  if(f && f.type==="podr"){ const x=найтиПоИд(ПОДР,v); if(x) return esc(x.наименование); }
+  if(f && f.type==="ref" && f.ref){ const x=найтиПоИд(f.ref()||[],v); if(x) return esc(x[f.refName]||v); }
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v)) return ru(v);
+  return esc(v);
+}
+function блокИстории(key,id){
+  const сп=ист()[key+"|"+id]||[];
+  const строки=сп.map(е=>{
+    const когда=ru(String(е.когда).slice(0,10))+" "+String(е.когда).slice(11,16);
+    const что=е.новая?"<i>запись заведена</i>":
+      [е.удалена?"<i>запись удалена</i>":"", е.возвращена?"<i>запись возвращена</i>":""]
+        .concat((е.поля||[]).map(([k,x,y])=>`<b>${esc(подписьИст(key,k))}</b>: ${значениеИст(key,k,x)} → ${значениеИст(key,k,y)}`))
+        .filter(Boolean).join("<br>");
+    return `<tr><td style="white-space:nowrap">${esc(когда)}</td><td>${esc(е.место||"—")}</td><td>${что}</td></tr>`;
+  }).join("");
+  return `<details class="история noprint" style="margin-top:12px"><summary>История правок (${сп.length})</summary>
+    ${сп.length?`<table class="mtab" style="margin-top:6px"><thead><tr><th>Когда</th><th>Место</th><th>Что изменилось</th></tr></thead>
+      <tbody>${строки}</tbody></table>
+      <div class="note">Показаны последние ${ИСТ_НА_ЗАПИСЬ} правок, которые видело это рабочее место (свои и пришедшие
+        обменом). Правки до версии 3.16 не записывались.</div>`
+    :`<div class="note">Правок пока не было — или они сделаны до версии 3.16, когда история ещё не записывалась.</div>`}
+  </details>`;
+}
+
+// ── Отмена последней загрузки ─────────────────────────────
+// Импорт из Excel и массовая правка меняют сразу много записей, а пустая
+// ячейка теперь стирает значение — ошибиться легко, а вручную собрать
+// обратно нечего. Перед такой правкой программа запоминает, как было
+// (отменаНачать), после — ЧТО именно изменилось (отменаЗавершить): старые
+// версии изменённых записей и id добавленных. Хранится одна, последняя.
+// Отмена возвращает содержимое записей и ставит им свежую отметку
+// «изменено» (иначе на местах, куда правка уже ушла обменом, отмена бы не
+// дошла), добавленные записи — удаляет пометкой (тоже уходит в обмен).
+// Запись, которую после загрузки успели поправить ещё раз, не трогаю —
+// называю: откатывать поверх новой правки значило бы потерять её.
+const REG_ОТМЕНА="lnk_undo";
+let _отменаПодг=null;
+function отменаЗагрузить(){ try{ return JSON.parse(localStorage.getItem(REG_ОТМЕНА)||"null"); }catch(e){ return null; } }
+function отменаСохранить(о){
+  try{ if(о) localStorage.setItem(REG_ОТМЕНА, JSON.stringify(о)); else localStorage.removeItem(REG_ОТМЕНА); }
+  catch(e){ toast("Не хватило памяти запомнить состояние для отмены — эту загрузку отменить будет нельзя"); }
+  обновитьКнопкуОтмены();
+}
+function отменаНачать(описание, ключи){
+  const до={};
+  ключи.forEach(k=>{ const м={}; (реестрПоКлючу(k)||[]).forEach(r=>{ if(r && r.id!=null) м[String(r.id)]=JSON.stringify(r); }); до[k]=м; });
+  _отменаПодг={описание, ключи, до, вид:curView};
+}
+function отменаЗавершить(){
+  const п=_отменаПодг; _отменаПодг=null; if(!п) return;
+  const части=[];
+  п.ключи.forEach(k=>{
+    const до=п.до[k], старые=[], новые=[], после={};
+    (реестрПоКлючу(k)||[]).forEach(r=>{
+      if(!r || r.id==null) return;
+      const ид=String(r.id);
+      if(!(ид in до)){ новые.push(ид); после[ид]=lastTs(r); }
+      else if(до[ид]!==JSON.stringify(r)){ старые.push(JSON.parse(до[ид])); после[ид]=lastTs(r); }
+    });
+    if(старые.length||новые.length) части.push({k, старые, новые, после});
+  });
+  if(!части.length) return;
+  отменаСохранить({описание:п.описание, вид:curView, когда:new Date().toISOString(), место:getWS().код, части});
+}
+function отменаСчёт(о){ return о.части.reduce((n,ч)=>n+ч.старые.length+ч.новые.length,0); }
+function обновитьКнопкуОтмены(){
+  const el=document.getElementById("fОтмена"); if(!el) return;
+  const о=отменаЗагрузить();
+  el.innerHTML=о?`<button class="btn" style="padding:2px 10px" onclick="отменитьПоследнее()"
+    title="Вернуть записи к виду до этой правки">↶ Отменить: ${esc(о.описание)} (${String(о.когда).slice(11,16)})</button>`:"";
+}
+function отменитьПоследнее(){
+  const о=отменаЗагрузить(); if(!о){ toast("Отменять нечего"); return; }
+  const поздние=[];
+  о.части.forEach(ч=>{
+    const arr=реестрПоКлючу(ч.k)||[];
+    ч.старые.map(x=>String(x.id)).concat(ч.новые).forEach(ид=>{
+      const r=найтиПоИд(arr,ид);
+      if(r && lastTs(r)!==ч.после[ид]) поздние.push(r.наименование||r.объект||r.что||ид);
+    });
+  });
+  const всего=отменаСчёт(о);
+  if(!confirm("Отменить «"+о.описание+"» ("+ru(о.когда.slice(0,10))+" "+о.когда.slice(11,16)+")?\n\n"+
+    "Записей затронуто: "+всего+". Изменённые вернутся к прежнему виду, добавленные этой правкой — будут удалены."+
+    (поздние.length?("\n\nПосле загрузки поправлены ещё раз — их НЕ трогаю, чтобы не потерять новую правку ("+
+      поздние.length+"): "+поздние.slice(0,8).join("; ")+(поздние.length>8?" …":"")):"")+
+    "\n\nОтмена уйдёт и на другие места при следующем обмене."+
+    (о.место!==getWS().код?("\n\nВнимание: правка сделана на месте "+о.место+"."):""))) return;
+  const ts=new Date().toISOString(), я=getWS().код;
+  const штамп=(k,r)=>{ r.изменено=ts; if(k===REG_ЗАД) r.место_правки=я; else r.место=я; };
+  let сделано=0;
+  о.части.forEach(ч=>{
+    const arr=реестрПоКлючу(ч.k); if(!arr) return;
+    ч.старые.forEach(ст=>{
+      const r=найтиПоИд(arr,ст.id); if(!r || lastTs(r)!==ч.после[String(ст.id)]) return;
+      Object.keys(r).forEach(k=>delete r[k]); Object.assign(r, ст);
+      if(r.удалено) r.удалено=ts;           // было удалено — остаётся удалённым, но свежее
+      штамп(ч.k,r); сделано++;
+    });
+    ч.новые.forEach(ид=>{
+      const r=найтиПоИд(arr,ид); if(!r || lastTs(r)!==ч.после[ид]) return;
+      r.удалено=ts; штамп(ч.k,r); сделано++;
+    });
+    if(ч.k===STORE_KEY) saveJournal(); else saveReg(ч.k,arr);
+    if(ч.k===REG_SI && синхронизироватьЧасти()) saveReg(REG_SI,S);
+    if(ч.k===REG_OBJ) rebuildObjIndex();
+  });
+  отменаСохранить(null);
+  setChrome();
+  switchView(ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0?(о.вид||"dash"):curView);
+  toast("Отменено: "+сделано+(поздние.length?(", не тронуто (правлены позже): "+поздние.length):""));
+  if(о.части.some(ч=>ч.k===STORE_KEY)){
+    const столк=проверитьСтолкновения();
+    if(столк.length) alert("ВНИМАНИЕ: одинаковые номера у разных записей.\n\n"+столк.slice(0,15).join("\n"));
+  }
+}
 const базаКакВремя=б=>б===БАЗА_ИСХОДНАЯ?"":б;
 function конфликтПравок(key,L,I){
   if(!key || key===REG_КОНФЛ || !L || !I) return false;
@@ -7531,6 +7765,7 @@ function editППР(id){
           title="Вернуть позицию к тому виду, в каком она пришла из книги ППР">Вернуть как в книге</button>`:""}
         ${п?`<button class="btn danger" style="margin-left:auto" onclick="delППР('${esc(п.id)}')">✕ Удалить</button>`:""}
       </div>
+      ${п?блокИстории(REG_ППР_ПЛАН,п.id):""}
     </div></div>`;
 }
 function числоППР(s){
@@ -7775,6 +8010,7 @@ function импортПланПрименить(строки){
       (п.нп!=null?("№ "+п.нп+" "):"")+(п.наименование||п.id)+", "+МЕСЯЦЫ[м-1].toLowerCase()+" "+год).join("; ")+
       (снять.length>10?" …":"")+". Если клетки очищены случайно — нажмите «Отмена»."):"")+
     хвост())) return;
+  отменаНачать("импорт отметок ППР", [REG_ППР]);
   const ts=new Date().toISOString(), место=getWS().код;
   снять.forEach(({было})=>{ было.удалено=ts; было.изменено=ts; было.место=место; });
   ставить.forEach(({п,год,м,д})=>{
@@ -7784,6 +8020,7 @@ function импортПланПрименить(строки){
     else ОТМ.push({id:к, поз:п.id, год:год, мес:м, выполнено:д, кто:"", место:место, изменено:ts});
   });
   saveReg(REG_ППР,ОТМ);
+  отменаЗавершить();
   renderPlan();
   toast("План ППР: "+[новых?("отмечено "+новых):"", смена?("дата изменена у "+смена):"",
     снять.length?("снято "+снять.length):""].filter(Boolean).join(", "));
@@ -7933,6 +8170,7 @@ function импортПланаПозицийПрименить(строки){
     (убраноМесяцевСОтметкой?("\n\nУбирается месяцев, где уже стоит отметка о выполнении: "+убраноМесяцевСОтметкой+
       ". Отметки не удаляю — вернёте месяц, вернутся и они; пока висят, их видно в «Проверке данных»."):"")+
     хвост()+стёртоТекст(стёрто))) return;
+  отменаНачать("импорт плана ППР", [REG_ППР_ПЛАН]);
   const ts=new Date().toISOString(), место=getWS().код;
   правки.forEach(({п,знач,поля,план,годыИзм})=>{
     поля.forEach(k=>{ п[k]=знач[k]; });
@@ -7947,6 +8185,7 @@ function импортПланаПозицийПрименить(строки){
       знач, {план:пл, изменено:ts, место:место}));
   });
   saveReg(REG_ППР_ПЛАН,ППР_ПОЗ);
+  отменаЗавершить();
   renderPlan();
   toast("План ППР: "+[правки.length?("изменено позиций "+правки.length):"", новые.length?("добавлено "+новые.length):""].filter(Boolean).join(", "));
 }
@@ -8628,6 +8867,7 @@ function editTask(id){
       </div>
       ${з?`<div class="note">Поставил: ${esc(пост)} · создана ${ru(String(з.создано||"").slice(0,10))}
         ${з.выполнено?" · выполнена "+ru(з.выполнено)+(вСрок(з)===false?" (с переносом)":" (в срок)"):""}</div>`:""}
+      ${з?блокИстории(REG_ЗАД,з.id):""}
     </div></div>`;
 }
 // Кнопки зависят от роли: исполнитель ведёт работу, постановщик принимает.
@@ -9034,6 +9274,7 @@ function импортЗадачПрименить(строки){
     (чужиеИсп.size?("\n\nИсполнителя нет среди специалистов, поле оставлю как было: "+
       [...чужиеИсп].slice(0,10).join(", ")):"")+
     стёртоТекст(стёрто))) return;
+  отменаНачать("импорт задач", [REG_ЗАД]);
   const отметка=new Date().toISOString(), место=getWS().код, день=отметка.slice(0,10);
   правки.forEach(п=>{
     const з=п.rec;
@@ -9049,6 +9290,7 @@ function импортЗадачПрименить(строки){
       постановщик:место, создано:отметка, изменено:отметка, место_правки:место}, знач));
   });
   saveReg(REG_ЗАД,ЗАД);
+  отменаЗавершить();
   switchView("tasks");
   toast([правки.length?("обновлено "+правки.length):"", новые.length?("поставлено "+новые.length):""]
     .filter(Boolean).join(", "));
@@ -9630,11 +9872,13 @@ function паспортВWord(){
 // случилось с норм. документами и помещениями — они не попадали ни в
 // копию, ни в обмен, и ошибку было видно только в коде.
 const КЛЮЧИ_ДАННЫХ={ "lnk_obj":"объекты", "lnk_si":"приборы", "lnk_ppl":"специалисты",
-  "lnk_akts":"акты", "lnk_ppr":"ппр", "lnk_ppr_plan":"планппр", "lnk_conflicts":"конфликты", "lnk_podr":"подразделения", "lnk_padezh":"падежи",
+  "lnk_akts":"акты", "lnk_ppr":"ппр", "lnk_ppr_plan":"планппр", "lnk_conflicts":"конфликты", "lnk_history":"история", "lnk_podr":"подразделения", "lnk_padezh":"падежи",
   "lnk_tasks":"задачи", "lnk_nd":"нормдокументы", "lnk_pom":"помещения",
   "lnk_lab":"лаборатория", "lnk_metodiki":"методики", "lnk_docnames":"названия" };
 const КЛЮЧИ_НАСТРОЕК=["lnk_ws","lnk_theme","lnk_jsort","lnk_psort","lnk_tsort","lnk_progsort",
-  "lnk_last_backup","lnk_last_export","lnk_last_import","lnk_grant","lnk_fs"];
+  "lnk_last_backup","lnk_last_export","lnk_last_import","lnk_grant","lnk_fs",
+  // последняя отмена — одноразовое состояние этого места, не данные
+  "lnk_undo"];
 function реестрыМимоКопии(){
   let вКопии={};
   try{ вКопии=всеДанные(); }catch(e){ return []; }
@@ -9713,6 +9957,36 @@ function проверки(){
   const прос=приборыВДокументы().filter(x=>{ const[c]=siStatus(x); return c==="bad"; });
   if(прос.length) доб("ошибка","Приборы", прос.length+" приборов с просроченной поверкой",
     прос.slice(0,10).map(x=>сс(x.наименование+(x.зав?(" · зав. "+x.зав):"")+" — до "+ru(x.поверка_до),"si",x.id)));
+
+  // Работа выполнена прибором, у которого на дату контроля поверка уже
+  // истекла. Судить можно только так: «действительно до» — последний
+  // известный срок; если дата работы позже — прибор был не поверен
+  // наверняка (более нового свидетельства программа не знает, значит его
+  // и не вносили). Если дата работы раньше даты текущей поверки — её
+  // покрывало прежнее свидетельство, о котором программа не знает, и
+  // такие случаи не показываю. Прибор, отмеченный в самой записи
+  // (панель «Приборы и НД»), — ошибка; прибор из стандартного набора
+  // методики — «внимание»: набор — предположение, что им и работали.
+  { const мт=getМетодики(), явно=[], поНабору=[];
+    L.forEach(z=>{ if(!z.дата) return; methodsOf(z).forEach(м=>{
+      const запись=(z.методы||{})[м]||{};
+      const свой=запись.приборы!=null;
+      const список=свой?запись.приборы:((мт[м]||{}).приборы||[]);
+      (список||[]).forEach(ид=>{
+        const п=найтиПоИд(S,ид); if(!п || !п.поверка_до || z.дата<=п.поверка_до) return;
+        (свой?явно:поНабору).push(сс(ru(z.дата)+" · "+String(z.объект||z.наименование||"").slice(0,32)+" · "+м+
+          " — "+имяПрибораДок(п)+(п.зав?(", зав. № "+п.зав):"")+", поверка до "+ru(п.поверка_до),"journal",z.id));
+      });
+    }); });
+    if(явно.length) доб("ошибка","Приборы",
+      "Работа выполнена прибором с истёкшей на дату контроля поверкой: "+явно.length,
+      явно.slice(0,10).concat(["Прибор отмечен в самой записи. Если поверку продлевали, но в карточку прибора "+
+        "не внесли — поправьте «действительно до»; если нет — результаты этой работы под вопросом."]));
+    if(поНабору.length) доб("внимание","Приборы",
+      "По стандартному набору методики на дату контроля попадает прибор с истёкшей поверкой: "+поНабору.length,
+      поНабору.slice(0,10).concat(["Прибор взят из набора в «Методиках контроля» — в записи приборы не отмечались. "+
+        "Если работали другим прибором — отметьте его в записи (панель «⚙ Приборы и НД»)."]));
+  }
 
   // Дубли карточек объектов: одинаковое наименование и одинаковый
   // непустой заводской ИЛИ регистрационный номер — двух карточек с одним
@@ -10949,6 +11223,100 @@ function поискВвод(v){ _поиск=v; renderНайти(true); }
 function открытьИзПоиска(вид, kind, ид){
   if(kind) editReg(kind, ид); else if(вид==="journal") editJournal(ид); else switchView(вид);
 }
+
+// ── Календарь сроков ──────────────────────────────────────
+// Все сроки на одном экране по месяцам: свои задачи, работы ППР,
+// окончание поверки, аттестации по методам и сроки специалистов,
+// сроки лаборатории. Своего списка нет — это тот же расчёт, что у
+// производных задач (производныеЗадачи), плюс свои задачи и окончание
+// аттестаций по методам (их в задачах нет: там это «Прогноз аттестации»).
+// Щелчок по дню — список дел этого дня, по делу — его карточка.
+let кал={база:"", день:"", источник:""};
+function календарьДела(база){
+  const [с,по]=границыПериода("месяц", база);
+  const из=производныеЗадачи("месяц", база).map(x=>Object.assign({}, x));
+  ЗАД.filter(з=>живаяЗадача(з) && з.срок && з.срок>=с && з.срок<=по).forEach(з=>из.push({
+    ид:"ЗД|"+з.id, источник:"Задачи", что:з.что+(з.исполнитель?(" — "+з.исполнитель):""),
+    срок:з.срок, сделано:з.статус==="выполнена"||з.статус==="закрыта", куда:"tasks"}));
+  live(P).forEach(c=>аттестации(c).forEach(а=>{
+    if(!а.до || а.до<с || а.до>по) return;
+    из.push({ид:"АТТ|"+c.id+"|"+а.метод+"|"+а.до, источник:"Аттестация",
+      что:"Истекает аттестация "+[а.метод,а.уровень].filter(Boolean).join(" ")+": "+(c.вдок||c.фио),
+      срок:а.до, сделано:false, куда:"people"});
+  }));
+  return из.sort((a,b)=>String(a.срок).localeCompare(String(b.срок))||String(a.что).localeCompare(String(b.что),"ru"));
+}
+function открытьДелоКалендаря(ид){
+  const ч=String(ид).split("|");
+  if(!уходСФормы()) return;
+  if(ч[0]==="ЗД"){ editTask(ч.slice(1).join("|")); return; }
+  if(ч[0]==="СИ" && найтиПоИд(live(S),ч[1])){ editReg("si",ч[1]); return; }
+  if(["ИНСТР","ОГРПР","ЭЛБЕЗ","ПОЖБЕЗ","ПБ","КЛАСС","АТТ"].includes(ч[0]) && найтиПоИд(live(P),ч[1])){ editReg("ppl",ч[1]); return; }
+  if(ч[0]==="ППР"){ const п=найтиПоИд(live(ППР_ПОЗ),ч[1]); if(п) план.год=+ч[2]; switchView("plan"); return; }
+  if(ч[0]==="ЛАБ"){ switchView("lab"); return; }
+  toast("Карточка не найдена");
+}
+function калСдвиг(шаг){
+  const d=new Date((кал.база||new Date().toISOString().slice(0,8)+"01")+"T00:00:00");
+  d.setDate(1); d.setMonth(d.getMonth()+шаг);
+  кал.база=new Date(Date.UTC(d.getFullYear(),d.getMonth(),1)).toISOString().slice(0,10); кал.день="";
+  renderКалендарь();
+}
+function калСегодня(){ кал.база=""; кал.день=""; renderКалендарь(); }
+function калДень(д){ кал.день=кал.день===д?"":д; renderКалендарь(); }
+function калИсточник(v){ кал.источник=v; renderКалендарь(); }
+function renderКалендарь(){
+  const сегодня=new Date().toISOString().slice(0,10);
+  const база=кал.база||сегодня.slice(0,8)+"01";
+  const [с,по]=границыПериода("месяц", база);
+  const всеДела=календарьДела(база);
+  const источники=[...new Set(всеДела.map(x=>x.источник))].sort((a,b)=>a.localeCompare(b,"ru"));
+  const дела=кал.источник?всеДела.filter(x=>x.источник===кал.источник):всеДела;
+  const поДню={}; дела.forEach(x=>(поДню[x.срок]=поДню[x.срок]||[]).push(x));
+  const кл=x=>x.сделано?"сдел":(x.срок<сегодня?"прос":"");
+  const d0=new Date(с+"T00:00:00"); const сдвиг=(d0.getDay()+6)%7;
+  const клетки=[];
+  for(let i=0;i<42;i++){
+    const d=new Date(d0); d.setDate(1-сдвиг+i);
+    const iso=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())).toISOString().slice(0,10);
+    if(i>=35 && iso>по) break;
+    const сп=поДню[iso]||[];
+    клетки.push(`<div class="дн${iso<с||iso>по?" чуж":""}${iso===сегодня?" сег":""}${iso===кал.день?" выб":""}"
+      onclick="калДень('${iso}')" title="${esc(сп.map(x=>x.что).join("\n"))}">
+      <div class="чис"><span>${d.getDate()}</span>${сп.length?`<span class="muted">${сп.length}</span>`:""}</div>
+      ${сп.slice(0,3).map(x=>`<div class="сб ${кл(x)}">${esc(x.что)}</div>`).join("")}
+      ${сп.length>3?`<div class="muted" style="font-size:11px">ещё ${сп.length-3}</div>`:""}
+    </div>`);
+  }
+  const список=кал.день?(поДню[кал.день]||[]):дела;
+  const просрочено=дела.filter(x=>!x.сделано && x.срок<сегодня).length;
+  const месяц=МЕСЯЦЫ[+с.slice(5,7)-1]+" "+с.slice(0,4);
+  document.getElementById("main").innerHTML=`
+    <div class="head"><h2>Календарь сроков</h2>
+      <span class="sub">${esc(месяц)} · дел: <b>${дела.length}</b>${просрочено?` · просрочено: <b style="color:var(--danger)">${просрочено}</b>`:""}</span>
+      <div class="seg" style="margin-left:auto">
+        <button class="btn" onclick="калСдвиг(-1)">‹</button>
+        <button class="btn" onclick="калСегодня()">Сегодня</button>
+        <button class="btn" onclick="калСдвиг(1)">›</button>
+      </div>
+      <select onchange="калИсточник(this.value)"><option value="">Все источники</option>
+        ${источники.map(и=>`<option${и===кал.источник?" selected":""}>${esc(и)}</option>`).join("")}</select>
+    </div>
+    <div class="card" style="padding:14px">
+      <div class="кал">${["пн","вт","ср","чт","пт","сб","вс"].map(x=>`<div class="шап">${x}</div>`).join("")}${клетки.join("")}</div>
+      <div class="note" style="margin:8px 0 0">Красное — срок прошёл, а дело не сделано; бледное — сделано.
+        У работ ППР срок — последний день месяца (точной даты в плане нет). Отмечаются дела там, где им место:
+        работа ППР — в плане, поверка — в карточке прибора, задача — в самой задаче.</div>
+    </div>
+    <div class="card" style="padding:14px 18px">
+      <div class="grp" style="padding-left:0">${кал.день?("Дела на "+ru(кал.день)):("Все дела за "+esc(месяц.toLowerCase()))} — ${список.length}</div>
+      <div class="plist">${список.length?список.map(x=>`<div class="pr" onclick="открытьДелоКалендаря('${esc(x.ид)}')">
+          <span style="min-width:84px">${ru(x.срок)}</span>
+          <span class="st ${x.сделано?"ok":(x.срок<сегодня?"bad":"new")}">${x.сделано?"сделано":(x.срок<сегодня?"просрочено":esc(x.источник))}</span>
+          <span style="flex:1">${esc(x.что)}</span><span class="muted">${esc(x.источник)}</span></div>`).join("")
+        :`<div class="note">Дел нет.</div>`}</div>
+    </div>`;
+}
 function renderНайти(толькоРезультат){
   curView="find";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="find"));
@@ -10998,7 +11366,7 @@ function switchView(v){
   if(_возвратВПроверку && ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) v="check";
   curView=v;query="";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod}[v]
+  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b){ _возвратВПроверку=false; switchView(b.dataset.view); }});

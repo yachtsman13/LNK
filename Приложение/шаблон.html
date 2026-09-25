@@ -358,6 +358,30 @@
     border-left:3px solid var(--brand);padding-left:3px;margin-top:2px}
   .кал .сб.прос{border-color:var(--danger);color:var(--danger)} .кал .сб.сдел{border-color:var(--ok);opacity:.6}
   .form.жмасс label{min-width:150px}
+  /* Тепловая карта «метод × месяц» на пульте: один синий тон, светлее —
+     меньше (правило для величины: одна краска, от светлого к тёмному). В
+     тёмном стиле шкала своя: малое уходит в фон, большое светлеет. */
+  :root{--т1:#cde2fb;--т2:#9ec5f4;--т3:#6da7ec;--т4:#3987e5;--т5:#256abf;--т6:#184f95;--т7:#0d366b;
+        --ти1:#1a1a1a;--ти2:#1a1a1a;--ти3:#1a1a1a;--ти4:#fff;--ти5:#fff;--ти6:#fff;--ти7:#fff}
+  :root[data-theme="ph"]{--т1:#0d366b;--т2:#104281;--т3:#1c5cab;--т4:#2a78d6;--т5:#5598e7;--т6:#86b6ef;--т7:#b7d3f6;
+        --ти1:#f3f3f3;--ти2:#f3f3f3;--ти3:#f3f3f3;--ти4:#fff;--ти5:#1a1a1a;--ти6:#1a1a1a;--ти7:#1a1a1a}
+  .тепло{border-collapse:separate;border-spacing:2px;width:100%;font-size:12px}
+  .тепло th{position:static;background:none;font-weight:600;color:var(--muted);text-transform:none;
+    letter-spacing:0;padding:2px 4px;white-space:nowrap}
+  .тепло td{text-align:center;padding:5px 2px;border-radius:4px;border:0;min-width:30px;cursor:pointer;
+    font-variant-numeric:tabular-nums}
+  .тепло tr,.тепло tbody tr:hover,.тепло tbody tr:nth-child(even){background:none!important}
+  .тепло td.пусто{color:var(--faint);cursor:default;background:none}
+  .тепло td.итог{background:none;color:var(--ink);font-weight:600;cursor:default}
+  .тепло td.м{text-align:left;font-weight:600;color:var(--ink);cursor:default;white-space:nowrap}
+  .тепло td:not(.пусто):not(.итог):not(.м):hover{outline:2px solid var(--ink)}
+  .тепло .т1{background:var(--т1);color:var(--ти1)}.тепло .т2{background:var(--т2);color:var(--ти2)}
+  .тепло .т3{background:var(--т3);color:var(--ти3)}.тепло .т4{background:var(--т4);color:var(--ти4)}
+  .тепло .т5{background:var(--т5);color:var(--ти5)}.тепло .т6{background:var(--т6);color:var(--ти6)}
+  .тепло .т7{background:var(--т7);color:var(--ти7)}
+  .тепло-подск{position:fixed;pointer-events:none;background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;padding:6px 9px;font-size:12px;box-shadow:var(--shadow);z-index:50;display:none}
+  .готовн li{margin:3px 0}
   .form.жмасс .жмочист{border-color:var(--danger);background:var(--dangerbg)}
   .пп li.пссылка{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
   .пп li.пссылка:hover{color:var(--accent)}
@@ -2552,6 +2576,12 @@ function wПеречень(н, имя, номера, держать){
 function актВWord(ключ, вернуть){
   const zs=записиАкта(ключ);
   if(!zs.length){ toast("По акту "+ключ+" записей нет"); return; }
+  if(!вернуть){
+    const ош=готовностьАкта(ключ).filter(x=>x.ур==="ошибка");
+    if(ош.length && !confirm("Акт не готов к выдаче — ошибок: "+ош.length+"\n\n"+
+      ош.slice(0,8).map(x=>"· "+x.т).join("\n")+(ош.length>8?"\n… и ещё "+(ош.length-8):"")+
+      "\n\nВсё равно выгрузить в Word (например, как черновик)?")) return;
+  }
   const a=актЗапись(ключ,false);
   const пусто=()=>wP("",{отступ:false});
   const фраза=a.объекты||черновикОбъектов(zs);
@@ -2939,6 +2969,72 @@ function открытьДокумент(id){
   if(confirm("У записи нет номера акта, а документ оформляется по акту.\n\n"+
              "Присвоить номер акта сейчас?")) выдатьАкт(id);
 }
+
+// ── Готовность акта к выдаче ──────────────────────────────
+// Всё, что может помешать выдать акт, — по ОДНОМУ акту и в одном месте:
+// «Проверка данных» ищет то же по всей базе и вперемешку, по ней не видно,
+// готов ли именно этот акт. Проверки только те, что программа знает
+// наверняка из своих же данных; «ошибка» — акт в таком виде выдавать
+// нельзя, «внимание» — скорее недоделка.
+function готовностьАкта(ключ){
+  const zs=записиАкта(ключ), из=[];
+  const доб=(ур,т)=>из.push({ур,т});
+  const об=z=>String(z.объект||z.наименование||"").slice(0,48);
+  zs.filter(z=>!z.дата).forEach(z=>доб("ошибка","Нет даты контроля: "+об(z)));
+  zs.filter(z=>!methodsOf(z).length).forEach(z=>доб("ошибка","Не указан ни один метод: "+об(z)));
+  zs.forEach(z=>{ const бн=методыБезНомера(z); if(бн.length) доб("ошибка","Нет номера протокола или он не число ("+бн.join(", ")+"): "+об(z)); });
+  // исполнители: указан, есть в справочнике, аттестован на дату работы, ПБ на дату
+  const мт=getМетодики();
+  zs.forEach(z=>methodsOf(z).forEach(м=>{
+    const и=String((z.методы[м]||{}).исп||"").trim();
+    if(!и){ доб("внимание","Не указан исполнитель ("+м+"): "+об(z)); return; }
+    const сп=специалистПоИмени(и);
+    if(!сп){ доб("внимание","Исполнителя «"+и+"» нет в справочнике специалистов — аттестацию проверить не по чему"); return; }
+    // Аттестаций у специалиста не внесено вовсе — это недостающие данные, а
+    // не нарушение: одно «внимание» на человека (как в «Проверке данных»),
+    // а не ошибка на каждую запись. Ошибка — когда аттестации внесены, а на
+    // метод и дату работы ни одна не действует.
+    if(!аттестации(сп).length) доб("внимание",и+": аттестации по методам не внесены — проверить нечем");
+    else if(z.дата && !аттестацияНа(сп,м,z.дата))
+      доб("ошибка",и+": нет действующей аттестации по "+м+" на "+ru(z.дата)+" ("+об(z)+")");
+    if(z.дата){ const до=пбДо(сп);
+      if(!пбПоследняяДата(сп)) доб("внимание",и+": удостоверение о проверке знаний ПБ не внесено");
+      else if(до && до<z.дата) доб("ошибка",и+": проверка знаний ПБ истекла "+ru(до)+", работа "+ru(z.дата)); }
+    // приборы: отмеченные в записи или стандартный набор метода
+    const запись=z.методы[м]||{}, свой=запись.приборы!=null;
+    (свой?запись.приборы:((мт[м]||{}).приборы||[])).forEach(ид=>{
+      const п=найтиПоИд(S,ид); if(!п || !п.поверка_до || !z.дата || z.дата<=п.поверка_до) return;
+      доб(свой?"ошибка":"внимание",имяПрибораДок(п)+(п.зав?", зав. № "+п.зав:"")+": поверка до "+ru(п.поверка_до)+
+        ", работа "+ru(z.дата)+(свой?"":" (прибор из стандартного набора методики)"));
+    });
+  }));
+  const a=актЗапись(ключ,false), п=подрАкта(ключ), к=контрактАкта(ключ);
+  if(!п && !String(a.подр||"").trim()) доб("внимание","Не выбрано заказывающее подразделение");
+  if(!к.номер) доб("внимание","Нет реквизитов контракта на год акта");
+  if(!a.объекты){
+    const нет=[...new Set(zs.map(именоватьОбъект).filter(Boolean))].filter(н=>!падежЗадан(н));
+    if(нет.length) доб("внимание","Не задан предложный падеж: "+нет.slice(0,5).join("; ")+(нет.length>5?" …":""));
+  }
+  спискиАкта(zs).forEach(g=>{ if(!имяДок(g.м,g.номера.length===1)) доб("внимание","Не вписано название документов по методу "+g.м); });
+  подписиАкта(ключ,zs).forEach(r=>{ if(!String(r.ф||"").trim()) доб("внимание","В подписях пустая фамилия"+(r.д?" («"+r.д+"»)":"")); });
+  // одинаковые строки сворачиваю
+  const вид=new Set(); return из.filter(x=>{ const k=x.ур+x.т; if(вид.has(k)) return false; вид.add(k); return true; })
+    .sort((a,b)=>(a.ур==="ошибка"?0:1)-(b.ур==="ошибка"?0:1));
+}
+function блокГотовностиАкта(ключ){
+  const г=готовностьАкта(ключ), ош=г.filter(x=>x.ур==="ошибка"), вн=г.filter(x=>x.ур!=="ошибка");
+  if(!г.length) return `<div class="card noprint" style="padding:10px 16px;margin-bottom:14px;border-color:var(--ok)">
+    <span class="st ok">готов к выдаче</span> <span class="muted">Номера, исполнители, аттестации, ПБ, поверка приборов,
+    подразделение, контракт, падежи и подписи — в порядке.</span></div>`;
+  const спис=(xs)=>`<ul class="готовн" style="margin:4px 0 0 18px;padding:0">${xs.slice(0,12).map(x=>`<li>${esc(x.т)}</li>`).join("")}${
+    xs.length>12?`<li class="muted">… и ещё ${xs.length-12}</li>`:""}</ul>`;
+  return `<details class="card noprint" style="padding:10px 16px;margin-bottom:14px;border-color:${ош.length?"var(--danger)":"var(--warn)"}"${ош.length?" open":""}>
+    <summary style="cursor:pointer"><b>Готовность к выдаче:</b>
+      ${ош.length?`<span class="st bad">ошибок ${ош.length}</span>`:""} ${вн.length?`<span class="st work">внимание ${вн.length}</span>`:""}</summary>
+    ${ош.length?`<div style="margin-top:6px"><b style="color:var(--danger)">Выдавать в таком виде нельзя:</b>${спис(ош)}</div>`:""}
+    ${вн.length?`<div style="margin-top:6px"><b>Стоит проверить:</b>${спис(вн)}</div>`:""}
+  </details>`;
+}
 function renderAkt(ключ){
   const zs=записиАкта(ключ);
   if(!zs.length){ toast("По акту "+ключ+" записей нет"); return; }
@@ -2998,6 +3094,7 @@ function renderAkt(ключ){
       <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button>
     </div>
 
+    ${блокГотовностиАкта(ключ)}
     <div class="card noprint" style="padding:14px 16px;margin-bottom:14px">
       <div class="grid">
         <label>Заказывающее подразделение
@@ -3180,7 +3277,9 @@ function renderDocs(){
       <td class="num">${zs.length}</td>
       <td class="obj">${esc([...new Set(zs.map(именоватьОбъект))].join("; ").slice(0,64))}</td>
       <td class="mets">${мет.map(g2=>`${g2.м}&nbsp;${g2.номера.length}`).join(" · ")||"<span class='muted'>—</span>"}
-        ${ждут?`<span class="st work" style="margin-left:6px">${ждут} без номера</span>`:""}</td>
+        ${ждут?`<span class="st work" style="margin-left:6px">${ждут} без номера</span>`:""}
+        ${(()=>{ const ош=готовностьАкта(g.ключ).filter(x=>x.ур==="ошибка").length;
+          return ош?`<span class="st bad" style="margin-left:6px" title="откройте акт — список в блоке «Готовность к выдаче»">ошибок ${ош}</span>`:""; })()}</td>
     </tr>`;}).join(""):`<tr><td colspan="5" class="empty">Актов не найдено.</td></tr>`;
   const body=rows.length?rows.map(z=>`
     <tr onclick="открытьДокумент('${esc(z.id)}')">
@@ -4835,6 +4934,65 @@ function задачиСкоро(){
     .sort((a,b)=>String(a.срок).localeCompare(String(b.срок)));
   return { всего:мои.length, список:мои };
 }
+
+// ── Работы по месяцам (пульт) ─────────────────────────────
+// Сетка «метод × месяц» за год: в клетке — число работ (метод в записи,
+// та же единица, что у «Нагрузки»), цвет — одна синяя шкала от светлого к
+// тёмному. Столбики с восемью методами потребовали бы восьми разных красок и
+// всё равно не дали бы прочитать число, а в сетке число стоит прямо в
+// клетке. Щелчок по клетке — журнал с отбором по году и методу.
+let годРабот=new Date().getFullYear();
+function setГодРабот(г){ годРабот=+г; renderDash(); }
+function работыПоМесяцам(год){
+  const поМ={}, итогМ=Array(12).fill(0);
+  liveJ().forEach(z=>{
+    if(!z.дата || String(z.дата).slice(0,4)!==String(год)) return;
+    const мес=+String(z.дата).slice(5,7)-1; if(!(мес>=0&&мес<12)) return;
+    methodsOf(z).forEach(м=>{ (поМ[м]=поМ[м]||Array(12).fill(0))[мес]++; итогМ[мес]++; });
+  });
+  const методы=METHODS.filter(м=>поМ[м]);
+  const макс=Math.max(0,...методы.flatMap(м=>поМ[м]));
+  return {поМ, итогМ, методы, макс, всего:итогМ.reduce((a,b)=>a+b,0)};
+}
+function блокРаботПоМесяцам(){
+  const годы=годыНагрузки(); if(!годы.includes(годРабот)) годРабот=годы[годы.length-1];
+  const р=работыПоМесяцам(годРабот);
+  const корзина=v=>v?Math.max(1,Math.min(7,Math.ceil(v/р.макс*7))):0;
+  const м3=["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+  const строки=р.методы.map(м=>`<tr><td class="м">${esc(м)}</td>${р.поМ[м].map((v,i)=>v
+      ? `<td class="т${корзина(v)}" data-п="${esc(м)} · ${МЕСЯЦЫ[i].toLowerCase()} ${годРабот}: ${v} ${числослово(v,["работа","работы","работ"])}"
+          onclick="работыВЖурнал('${esc(м)}')">${v}</td>`
+      : `<td class="пусто">·</td>`).join("")}
+      <td class="итог">${р.поМ[м].reduce((a,b)=>a+b,0)}</td></tr>`).join("");
+  return `<div class="panel" style="margin-bottom:14px">
+    <h3 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">▦ Работы по месяцам
+      <span class="muted" style="font-weight:normal;font-size:12px">${годРабот} · всего ${р.всего}</span>
+      <span style="margin-left:auto;display:flex;gap:4px">${годы.map(г=>
+        `<button class="btn small ${г===годРабот?"primary":""}" onclick="setГодРабот(${г})">${г}</button>`).join("")}</span></h3>
+    ${р.методы.length?`<div class="tblwrap" style="border:0"><table class="тепло" onmousemove="теплоПодсказка(event)" onmouseleave="теплоПодсказка(null)">
+      <thead><tr><th></th>${м3.map(x=>`<th>${x}</th>`).join("")}<th>Итого</th></tr></thead>
+      <tbody>${строки}</tbody>
+      <tfoot><tr><td class="м">Все</td>${р.итогМ.map(v=>`<td class="итог">${v||"<span class='muted'>·</span>"}</td>`).join("")}
+        <td class="итог">${р.всего}</td></tr></tfoot></table></div>
+      <div class="note" style="margin:6px 0 0">Работа — метод в записи журнала, месяц — по дате контроля.
+        Чем сильнее цвет клетки отличается от фона, тем больше работ; число — в самой клетке. Щелчок по клетке открывает журнал с отбором по году и методу.</div>`
+    :`<div class="note">За ${годРабот} год в журнале работ нет.</div>`}
+    <div class="тепло-подск" id="теплоПодск"></div>
+  </div>`;
+}
+function теплоПодсказка(e){
+  const п=document.getElementById("теплоПодск"); if(!п) return;
+  const td=e&&e.target.closest&&e.target.closest("td[data-п]");
+  if(!td){ п.style.display="none"; return; }
+  п.textContent=td.dataset.п; п.style.display="block";
+  п.style.left=Math.min(e.clientX+12, window.innerWidth-п.offsetWidth-8)+"px";
+  п.style.top=(e.clientY+14)+"px";
+}
+function работыВЖурнал(м){
+  switchView("journal");
+  if(typeof resetJF==="function") resetJF();
+  setJF("год",String(годРабот)); setJF("метод",м);
+}
 function renderDash(){
   const L=liveJ();
   const year=new Date().getFullYear();
@@ -4925,6 +5083,7 @@ function renderDash(){
           <div class="n" style="font-size:19px">${esc(т)}</div>
           <div class="l">плановая проверка ЛНК</div></div>`; })()}
     </div>
+    ${блокРаботПоМесяцам()}
     ${(()=>{ const з=задачиНаСегодня();
       if(!з.всего && !з.просрочено) return "";
       return `<div class="panel" style="margin-bottom:14px">
@@ -11609,6 +11768,19 @@ function renderНайти(толькоРезультат){
 // Ctrl+K — открыть поиск с клавиатуры (в Chrome страница это сочетание
 // получает, поэтому preventDefault работает; F3 и Ctrl+F не трогаю —
 // они ищут по видимой странице, это другая задача).
+// Ctrl+S в форме — то же, что кнопка «✓ Сохранить» этой формы (ищется
+// по самой кнопке, а не по виду: так не надо помнить десяток функций
+// сохранения). Вне форм сочетание остаётся браузеру. «ы» — та же клавиша в
+// русской раскладке: e.key там кириллический, поэтому смотрю и e.code.
+document.addEventListener("keydown",e=>{
+  if(!(e.ctrlKey||e.metaKey) || e.altKey || !(e.code==="KeyS" || /^[sSыЫ]$/.test(e.key))) return;
+  if(ВИДЫ_С_ФОРМОЙ.indexOf(curView)<0) return;
+  const кн=[...document.querySelectorAll("#main button.btn.primary")].find(b=>/Сохранить/.test(b.textContent) && b.offsetParent!==null);
+  if(!кн) return;
+  e.preventDefault();
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // дописанное поле — в его значение
+  кн.click();
+});
 document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey) && (e.key==="k"||e.key==="K")){
     e.preventDefault(); if(уходСФормы()){ _возвратВПроверку=false; renderНайти(); }

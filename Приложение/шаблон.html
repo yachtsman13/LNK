@@ -392,6 +392,9 @@
   .form.жмасс .жмочист{border-color:var(--danger);background:var(--dangerbg)}
   .пп li.пссылка{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
   .пп li.пссылка:hover{color:var(--accent)}
+  .поручено{margin-left:8px;font-size:12px;color:var(--ok);cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+  .поручено:hover{color:var(--accent)}
+  .листание{display:inline-flex;align-items:center}
   .ппрформа th,.ппрформа td{padding:3px 2px;text-align:center;vertical-align:middle}
   .ппрформа .btn{white-space:nowrap}
   .form .ппрформа input.ппрч{width:44px;padding:4px 3px;text-align:right}
@@ -5265,6 +5268,7 @@ function renderDash(){
           <div class="l">плановая проверка ЛНК</div></div>`; })()}
     </div>
     ${блокРаботПоМесяцам()}
+    ${блокПоследнихПравок()}
     ${(()=>{ const з=задачиНаСегодня();
       if(!з.всего && !з.просрочено) return "";
       return `<div class="panel" style="margin-bottom:14px">
@@ -5411,6 +5415,42 @@ function сохранитьСтандартМетода(m){
   saveМетодики(мт);
   toast("Стандартный набор метода «"+m+"» обновлён — на другие записи не влияет");
 }
+// Листание записей прямо в форме — по списку журнала, КАК ОН ПОКАЗАН
+// (отбор и сортировка те же, что на экране: journalRows). Разбирают обычно
+// подряд — проставить исходящий, проверить исполнителей, — и каждый раз
+// выходить в список и искать следующую строку было долго. Несохранённое
+// спрашивается тем же уходСФормы(), что и при уходе в другой раздел.
+// Запись не из показанного списка (открыта из поиска или проверки, а
+// отбор её скрывает) — листать не по чему, кнопок нет.
+function соседиЗаписи(id){
+  const ряды=journalRows(), i=ряды.findIndex(z=>String(z.id)===String(id));
+  if(i<0) return null;
+  return {i:i, всего:ряды.length, пред:i>0?ряды[i-1].id:null, след:i<ряды.length-1?ряды[i+1].id:null};
+}
+function листаниеЗаписи(id){
+  const с=соседиЗаписи(id); if(!с || с.всего<2) return "";
+  const кн=(ид,т,подсказка)=>ид==null
+    ? `<button class="btn small" disabled>${т}</button>`
+    : `<button class="btn small" title="${подсказка} (Alt+${т==="◀"?"←":"→"})" onclick="листатьЗапись('${esc(ид)}')">${т}</button>`;
+  return `<div class="spring"></div><span class="листание noprint" title="По списку журнала с текущим отбором и сортировкой">
+    ${кн(с.пред,"◀","Предыдущая запись списка")}
+    <span class="muted" style="font-size:12px;margin:0 6px">${с.i+1} из ${с.всего}</span>
+    ${кн(с.след,"▶","Следующая запись списка")}</span>`;
+}
+function листатьЗапись(ид){
+  if(ид==null || ид==="") return;
+  if(!уходСФормы()) return;
+  const возврат=_возвратВПроверку;
+  editJournal(ид);
+  _возвратВПроверку=возврат;
+  window.scrollTo(0,0);
+}
+function листатьНаШаг(шаг){
+  const card=document.querySelector("#main .card[data-id]"); if(!card||!card.dataset.id) return false;
+  const с=соседиЗаписи(card.dataset.id); if(!с) return false;
+  const ид=шаг<0?с.пред:с.след; if(ид==null) return false;
+  листатьЗапись(ид); return true;
+}
 function editJournal(id){
   формаСохранена();
   curView="edit";
@@ -5453,7 +5493,8 @@ function editJournal(id){
   }).join("");
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>${z?"Правка записи":"Новая запись"}</h2>
-      <span class="sub">${z?("акт № "+(z.акт||"—")):"журнал"}</span></div>
+      <span class="sub">${z?("акт № "+(z.акт||"—")):"журнал"}</span>
+      ${z?листаниеЗаписи(z.id):""}</div>
     <datalist id="objlist">${objlist}</datalist>
     <datalist id="splist">${splist}</datalist>
     <div class="card" style="padding:20px" data-id="${z?esc(z.id):""}">
@@ -9514,8 +9555,10 @@ function renderTasks(){
   wireSearch(renderTasks);
 }
 
-function editTask(id){
+let _заготовкаЗадачи=null;   // {что, подробно, отп} — «Поручить» из «Проверки данных»
+function editTask(id, заготовка){
   const з=id?ЗАД.find(x=>x.id===id):null;
+  _заготовкаЗадачи=(!з&&заготовка)?заготовка:null;
   if(!з && !яНачальник()){ toast("Ставить задачи может место с признаком «Начальник»"); return; }
   формаСохранена();
   curView="taskedit";
@@ -9540,8 +9583,8 @@ function editTask(id){
     <datalist id="objlist">${objlist}</datalist>
     <div class="card" style="padding:20px"><div class="form">
       <div class="grid">
-        <label class="wide">Что сделать<input id="t_что" value="${v(з&&з.что)}" ${я||!з?"":"disabled"}></label>
-        <label class="wide">Подробно<textarea id="t_подробно" ${я||!з?"":"disabled"}>${v(з&&з.подробно)}</textarea></label>
+        <label class="wide">Что сделать<input id="t_что" value="${v(з?з.что:(_заготовкаЗадачи&&_заготовкаЗадачи.что))}" ${я||!з?"":"disabled"}></label>
+        <label class="wide">Подробно<textarea id="t_подробно" ${я||!з?"":"disabled"}>${v(з?з.подробно:(_заготовкаЗадачи&&_заготовкаЗадачи.подробно))}</textarea></label>
         <label class="wide">Объект (необязательно, из справочника или вручную)
           <input id="t_объект" list="objlist" value="${v(з&&з.объект)}" placeholder="Начните вводить наименование…" ${я||!з?"":"disabled"}></label>
         <label>Срок<input id="t_срок" type="date" value="${v(з?з.срок:сегодня)}" ${я||!з?"":"disabled"}></label>
@@ -9665,7 +9708,9 @@ function saveTask(id){
   } else {
     ЗАД.push(Object.assign({id:newId("ЗД"), статус:"назначена",
       постановщик:getWS().код, создано:new Date().toISOString(),
-      изменено:new Date().toISOString(), место_правки:getWS().код}, поля));
+      изменено:new Date().toISOString(), место_правки:getWS().код}, поля,
+      _заготовкаЗадачи&&_заготовкаЗадачи.отп?{из_проверки:_заготовкаЗадачи.отп}:{}));
+    _заготовкаЗадачи=null;
     saveReg(REG_ЗАД,ЗАД);
   }
   формаСохранена(); switchView("tasks"); toast(id?"Задача изменена":"Задача поставлена");
@@ -11311,6 +11356,42 @@ function вернутьПроверку(отп){
   const пр=принятыеПроверки(); delete пр[отп]; сохранитьПринятые(пр); renderCheck(); setChrome();
 }
 
+// «Поручить» — задача прямо из пункта проверки. Раньше найденное
+// приходилось переписывать в «Задачи» руками. Ставить задачи может только
+// место начальника (как и кнопка «+ Задача»), поэтому и кнопка только там.
+// Задача помнит отпечаток пункта (из_проверки): пока она не закрыта,
+// у пункта видно «поручено …» вместо кнопки — второй раз то же самое не
+// поручат. Отпечаток меняется вместе с составом замечания (добавилась
+// запись, поменялось число) — тогда пункт считается новым и кнопка
+// возвращается: поручали ведь другое.
+const ПОРУЧИТЬ_СТРОК=10;
+function задачаПоПроверке(отп){
+  return (ЗАД||[]).filter(з=>!з.удалено && з.из_проверки===отп && з.статус!=="закрыта")
+    .sort((a,b)=>String(b.создано||"").localeCompare(String(a.создано||"")))[0]||null;
+}
+function поручениеПроверки(x){
+  const з=задачаПоПроверке(x.отп);
+  if(з) return `<span class="поручено noprint" title="Открыть задачу" onclick="editTask('${esc(з.id)}')">
+    ✓ поручено${з.исполнитель?": "+esc(з.исполнитель):""}, срок ${ru(з.срок)} — ${esc(состТекст(з))}</span>`;
+  if(!яНачальник()) return "";
+  return `<button class="btn small noprint" style="margin-left:8px" onclick="поручитьИзПроверки('${esc(x.отп)}')"
+    title="Поставить задачу по этому пункту — текст подставится сам">✎ поручить</button>`;
+}
+function поручитьИзПроверки(отп){
+  if(!яНачальник()){ toast("Ставить задачи может место с признаком «Начальник»"); return; }
+  const x=проверки().find(y=>отпечатокПроверки(y)===отп);
+  if(!x){ toast("Этого пункта в проверке уже нет"); return; }
+  const стр=(x.подробно||[]).map(t=>typeof t==="string"?t:t.т);
+  const подробно=["Из «Проверки данных» ("+x.ур+", "+x.тема+"): "+x.текст]
+    .concat(стр.slice(0,ПОРУЧИТЬ_СТРОК).map(t=>"— "+t))
+    .concat(стр.length>ПОРУЧИТЬ_СТРОК?["…и ещё "+(стр.length-ПОРУЧИТЬ_СТРОК)+" — полный список в «Проверке данных»"]:[])
+    .join("\n");
+  const что=(x.тема+": "+x.текст).replace(/\s+/g," ").trim();
+  editTask(null,{что:что.length>160?что.slice(0,157)+"…":что, подробно:подробно, отп:отп});
+  _несохранено=true;              // текст подставлен, но задача ещё не поставлена
+  _возвратВПроверку=true;
+}
+
 // Переход из «Проверки данных» к самой записи. Форма, открытая отсюда,
 // после сохранения, отмены или удаления возвращает в проверку, а не в
 // список своего раздела: разбирают обычно подряд несколько пунктов.
@@ -11345,6 +11426,7 @@ function renderCheck(){
         <div class="пг"><span class="пз">${знак[у]}</span>
           <b>${esc(x.тема)}</b><span class="пт">${esc(x.текст)}</span>
           ${x.куда?`<button class="btn small noprint" style="margin-left:8px" onclick="открытьИзПроверки('${esc(x.куда.вид)}','')">→ открыть раздел</button>`:""}
+          ${!x.принято?поручениеПроверки(x):""}
           ${x.принято?`<span class="muted noprint" style="margin-left:8px;font-size:12px">принято ${ru(String(x.принято.когда).slice(0,10))}${x.принято.место?" ("+esc(x.принято.место)+")":""}</span>
             <button class="btn small noprint" style="margin-left:6px" onclick="вернутьПроверку('${esc(x.отп)}')">↶ вернуть</button>`
           : (у!=="ошибка"?`<button class="btn small noprint" style="margin-left:8px" onclick="принятьПроверку('${esc(x.отп)}')"
@@ -11448,6 +11530,65 @@ function измененияСписок(){
     if(записи.length) из.push({раздел:р.н, вид:р.вид, записи:записи});
   });
   return из;
+}
+// «Недавно правили здесь» — на пульте. Вернуться к тому, что делал вчера
+// (дописать карточку, доразобрать записи), значило искать это заново по
+// разделам. Здесь — последние правки ЭТОГО места по всем разделам сразу,
+// по истории правок (см. последниеПравки); правки,
+// пришедшие обменом с других мест, сюда не попадают (их место — в «Обмене»),
+// удалённые — тоже. Щелчок открывает саму запись.
+const ПРАВОК_НА_ПУЛЬТЕ=8;
+function последниеПравки(n){
+  // Источник — история правок (lnk_history), а не голые отметки «изменено»:
+  // отметку ставят и сама программа при загрузке (достраивает справочники,
+  // переводит id), а в историю пишутся только настоящие правки после старта.
+  // Иначе на свежем месте здесь стояли бы девять документов, которых никто
+  // не трогал, — поймано проверкой.
+  const я=getWS().код, Н=ист(), из=[];
+  Object.keys(Н).forEach(к=>{
+    const i=к.indexOf("|"); if(i<0) return;
+    const ключ=к.slice(0,i), ид=к.slice(i+1);
+    const з=(Н[к]||[]).find(x=>x.место===я); if(!з) return;
+    const р=РАЗДЕЛЫ_ИЗМЕНЕНИЙ.find(x=>x.ключ()===ключ); if(!р) return;
+    const x=(р.arr()||[]).find(y=>String(y.id)===ид); if(!x || x.удалено) return;
+    из.push({раздел:р.н, ключ:ключ, ид:ид, когда:String(з.когда||""), подпись:р.п(x)||"(без названия)",
+             что:з.новая?"новая":з.возвращена?"возвращена":((з.поля||[]).length?"полей: "+з.поля.length:"")});
+  });
+  return из.sort((a,b)=>b.когда.localeCompare(a.когда)).slice(0,n||ПРАВОК_НА_ПУЛЬТЕ);
+}
+function когдаКоротко(iso){
+  const д=new Date(iso); if(isNaN(д)) return "";
+  const чм=String(д.getHours()).padStart(2,"0")+":"+String(д.getMinutes()).padStart(2,"0");
+  const день=x=>x.getFullYear()+"-"+x.getMonth()+"-"+x.getDate(), с=new Date(), в=new Date(); в.setDate(в.getDate()-1);
+  if(день(д)===день(с)) return "сегодня "+чм;
+  if(день(д)===день(в)) return "вчера "+чм;
+  return ru(д.getFullYear()+"-"+String(д.getMonth()+1).padStart(2,"0")+"-"+String(д.getDate()).padStart(2,"0"));
+}
+const КАРТОЧКА_ПО_КЛЮЧУ=()=>({[REG_OBJ]:"obj",[REG_SI]:"si",[REG_PPL]:"ppl",[REG_ПОДР]:"podr",[REG_НД]:"nd",[REG_ПОМ]:"pom"});
+function открытьПравку(ключ,ид){
+  const р=РАЗДЕЛЫ_ИЗМЕНЕНИЙ.find(x=>x.ключ()===ключ); if(!р) return;
+  const x=(р.arr()||[]).find(y=>String(y.id)===String(ид));
+  if(!x || x.удалено){ toast("Запись уже удалена"); return; }
+  const карт=КАРТОЧКА_ПО_КЛЮЧУ()[ключ];
+  if(карт) editReg(карт,ид);
+  else if(ключ===STORE_KEY) editJournal(ид);
+  else if(ключ===REG_ЗАД) editTask(x.id);
+  else if(ключ===REG_ППР_ПЛАН) editППР(x.id);
+  else switchView(р.вид);
+}
+function блокПоследнихПравок(){
+  const сп=последниеПравки();
+  if(!сп.length) return "";
+  return `<div class="panel" style="margin-bottom:14px">
+    <h3>✎ Недавно правили на этом месте <span class="pc">${esc(getWS().код||"")}</span></h3>
+    <div class="plist">${сп.map(x=>`<div class="pr" title="Открыть" onclick="открытьПравку('${esc(x.ключ)}','${esc(x.ид)}')">
+      <span class="num" style="min-width:92px">${esc(когдаКоротко(x.когда))}</span>
+      <span class="pill">${esc(x.раздел)}</span>
+      <span class="g">${esc(x.подпись)}</span>
+      ${x.что?`<span class="muted" style="font-size:12px;white-space:nowrap">${esc(x.что)}</span>`:""}</div>`).join("")}</div>
+    <div class="note">Только правки этого рабочего места, по истории правок (она ведётся с версии 3.16);
+      пришедшее с других мест — в «Обмене», блок «Что изменилось».</div>
+  </div>`;
 }
 function setИзмПериод(дней){ _изм={дней:дней, с:"", удалённые:false}; renderExchange(); }
 function setИзмУдалённые(){ _изм={дней:0, с:"", удалённые:true}; renderExchange(); }
@@ -12264,6 +12405,16 @@ document.addEventListener("keydown",e=>{
   e.preventDefault();
   if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // дописанное поле — в его значение
   кн.click();
+});
+// Alt+← / Alt+→ в форме записи журнала — предыдущая/следующая запись
+// списка (те же кнопки «◀ ▶» в шапке формы). В других видах сочетание
+// остаётся браузеру.
+document.addEventListener("keydown",e=>{
+  if(!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || curView!=="edit") return;
+  if(e.key!=="ArrowLeft" && e.key!=="ArrowRight") return;
+  e.preventDefault();
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  листатьНаШаг(e.key==="ArrowLeft"?-1:1);
 });
 document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey) && (e.key==="k"||e.key==="K")){

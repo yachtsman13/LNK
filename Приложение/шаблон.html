@@ -409,6 +409,7 @@
   .поручено{margin-left:8px;font-size:12px;color:var(--ok);cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
   .поручено:hover{color:var(--accent)}
   .листание{display:inline-flex;align-items:center}
+  .недавние{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0 4px}
   .ппрформа th,.ппрформа td{padding:3px 2px;text-align:center;vertical-align:middle}
   .ппрформа .btn{white-space:nowrap}
   .form .ппрформа input.ппрч{width:44px;padding:4px 3px;text-align:right}
@@ -10743,7 +10744,9 @@ const КЛЮЧИ_НАСТРОЕК=["lnk_ws","lnk_theme","lnk_jsort","lnk_psort",
   // когда от какого места получен последний файл — сведения этого места
   "lnk_exch_places",
   // «принято как есть» в проверке данных — решение этого места
-  "lnk_check_ok"];
+  "lnk_check_ok",
+  // недавние запросы «Поиска по базе» — удобство этого места
+  "lnk_find_recent"];
 function реестрыМимоКопии(){
   let вКопии={};
   try{ вКопии=всеДанные(); }catch(e){ return []; }
@@ -12029,6 +12032,7 @@ const СПРАВКА_КЛАВИШ=[
   {г:"Везде", с:[
     ["<kbd>Ctrl</kbd>+<kbd>K</kbd>","Поиск по всей базе (из формы — с вопросом, если есть несохранённое)"],
     ["<kbd>F1</kbd>","Эта справка"],
+    ["<kbd>Enter</kbd>","В «Поиске по базе» — запомнить запрос в недавних (запоминается и тот, по которому открыли найденное)"],
     ["<kbd>Esc</kbd>","Закрыть боковую панель (карточка объекта, прибора, эта справка)"]]},
   {г:"В формах", с:[
     ["<kbd>Ctrl</kbd>+<kbd>S</kbd>","Сохранить — то же, что кнопка «✓ Сохранить». Работает и в русской раскладке (Ctrl+Ы)"],
@@ -12375,6 +12379,37 @@ function найтиПоВсем(q){
   return из;
 }
 function поискВвод(v){ _поиск=v; renderНайти(true); }
+// Недавние запросы. Поиск идёт на каждую букву, поэтому запоминать каждое
+// состояние поля нельзя — в списке оказались бы «12», «129», «1297»…
+// Запрос запоминается, когда он себя оправдал: по нему открыли найденное
+// или нажали Enter. Хранится на этом месте (lnk_find_recent), в обмен и
+// копию не идёт — это привычки места, не данные. Последние 10, без
+// повторов (без учёта регистра), свежий — первым.
+const ПОИСК_НЕДАВНИХ=10, REG_ПОИСК_НЕДАВНИЕ="lnk_find_recent";
+function недавниеПоиски(){
+  try{ const a=JSON.parse(localStorage.getItem(REG_ПОИСК_НЕДАВНИЕ)||"[]"); return Array.isArray(a)?a.filter(x=>typeof x==="string"):[]; }
+  catch(e){ return []; }
+}
+function запомнитьПоиск(q){
+  q=String(q||"").trim(); if(q.length<2) return;
+  const н=q.toLowerCase();
+  const сп=[q].concat(недавниеПоиски().filter(x=>x.toLowerCase()!==н)).slice(0,ПОИСК_НЕДАВНИХ);
+  try{ localStorage.setItem(REG_ПОИСК_НЕДАВНИЕ, JSON.stringify(сп)); }catch(e){}
+}
+function повторитьПоиск(i){
+  const q=недавниеПоиски()[i]; if(q==null) return;
+  _поиск=q; renderНайти();
+}
+function забытьПоиски(){
+  try{ localStorage.removeItem(REG_ПОИСК_НЕДАВНИЕ); }catch(e){}
+  renderНайти();
+}
+function блокНедавнихПоисков(){
+  const сп=недавниеПоиски(); if(!сп.length) return "";
+  return `<div class="недавние"><span class="muted" style="font-size:12px">Недавние:</span>
+    ${сп.map((q,i)=>`<button class="btn small" onclick="повторитьПоиск(${i})" title="Повторить поиск">${esc(q)}</button>`).join("")}
+    <button class="btn small" style="opacity:.7" onclick="забытьПоиски()" title="Очистить список недавних запросов">✕ очистить</button></div>`;
+}
 function открытьИзПоиска(вид, kind, ид){
   if(kind) editReg(kind, ид); else if(вид==="journal") editJournal(ид); else switchView(вид);
 }
@@ -12501,8 +12536,9 @@ function renderНайти(толькоРезультат){
   const гр=найтиПоВсем(_поиск);
   const всего=гр.reduce((n,г)=>n+г.записи.length,0);
   const тело=(_поиск.trim().length<2)
-    ? `<div class="note">Введите хотя бы два знака. Ищу по журналу, объектам, приборам,
-        специалистам, подразделениям, норм. документам, помещениям и задачам — сразу по всем.</div>`
+    ? `${блокНедавнихПоисков()}<div class="note">Введите хотя бы два знака. Ищу по журналу, объектам, приборам,
+        специалистам, подразделениям, норм. документам, помещениям и задачам — сразу по всем.
+        Запрос попадает в недавние, когда по нему открыли найденное или нажали Enter.</div>`
     : (всего
       ? гр.map(г=>`<div style="margin-top:10px">
           <div class="grp" style="padding-left:0">${esc(г.раздел.н)} — ${г.записи.length}</div>
@@ -12524,9 +12560,16 @@ function renderНайти(толькоРезультат){
     <div class="card" style="padding:20px">
       <div class="search"><span class="ic">⌕</span>
         <input id="поискQ" placeholder="Заводской номер, фамилия, ГОСТ, № акта, объект…"
-          value="${esc(_поиск)}" oninput="поискВвод(this.value)"></div>
+          value="${esc(_поиск)}" oninput="поискВвод(this.value)"
+          onkeydown="if(event.key==='Enter'){ запомнитьПоиск(this.value); }"></div>
       <div id="поискРез">${тело}</div>
     </div>`;
+  // Открыли найденное — запрос себя оправдал. Перехват в фазе захвата:
+  // обработчик строки сам перерисовывает #main, но _поиск к этому моменту
+  // ещё тот, по которому нашли.
+  document.getElementById("поискРез").addEventListener("click",e=>{
+    if(e.target.closest(".pr")) запомнитьПоиск(_поиск);
+  },true);
   const q=document.getElementById("поискQ");
   if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
 }

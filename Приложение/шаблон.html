@@ -3150,6 +3150,7 @@ function renderAkt(ключ){
 
   document.getElementById("main").innerHTML=`
     <div class="head noprint">
+      ${_актИзЗаписи&&_актИзЗаписи.ключ===ключ?`<button class="btn" onclick="вернутьсяКЗаписи()" title="Обратно в запись журнала, из которой открыт акт">← к записи</button>`:""}
       <button class="btn" onclick="switchView('docs')">← К списку</button>
       <h2 style="font-size:16px">Акт № ${e(номерАкта(ключ))}</h2>
       <span class="sub">объектов ${zs.length}</span>
@@ -5498,6 +5499,35 @@ function листатьЗапись(ид){
   _возвратВПроверку=возврат;
   window.scrollTo(0,0);
 }
+// Из записи — в её акт. Акт собирается по № акта записи (актКлюч), и
+// раньше, чтобы посмотреть его готовность к выдаче, приходилось уходить в
+// «Акты и протоколы» и искать номер в списке. Кнопка берёт СОХРАНЁННЫЙ
+// номер: только что вписанный в форму ещё не акт — несохранённое
+// спрашивается уходСФормы(), как везде. Рядом — число ошибок готовности
+// (готовностьАкта), чтобы было видно, стоит ли идти. Из акта обратно —
+// кнопка «← к записи» (_актИзЗаписи), пока человек сам не ушёл в меню.
+let _актИзЗаписи=null;          // {ключ, ид}
+function кнопкаАктаЗаписи(z){
+  const ключ=актКлюч(z); if(!ключ) return "";
+  const ош=готовностьАкта(ключ).filter(x=>x.ур==="ошибка").length;
+  return `<button class="btn small noprint" style="margin-left:6px" onclick="открытьАктЗаписи('${esc(z.id)}')"
+      title="Открыть акт с его готовностью к выдаче">→ акт № ${esc(номерАкта(ключ))}</button>${
+    ош?`<span class="st bad" style="margin-left:4px" title="ошибок в «Готовности к выдаче» этого акта">ошибок ${ош}</span>`:""}`;
+}
+function открытьАктЗаписи(ид){
+  const z=J.find(x=>String(x.id)===String(ид)&&!x.удалено); if(!z) return;
+  const ключ=актКлюч(z); if(!ключ){ toast("У записи нет № акта"); return; }
+  if(!уходСФормы()) return;
+  _возвратВПроверку=false;
+  _актИзЗаписи={ключ:ключ, ид:z.id};
+  renderAkt(ключ);
+  window.scrollTo(0,0);
+}
+function вернутьсяКЗаписи(){
+  const в=_актИзЗаписи; _актИзЗаписи=null;
+  if(!в || !J.some(x=>String(x.id)===String(в.ид)&&!x.удалено)){ switchView("docs"); return; }
+  editJournal(в.ид);
+}
 function листатьНаШаг(шаг){
   if(curView==="regedit"){
     if(!_листРег) return false;
@@ -5552,7 +5582,7 @@ function editJournal(id){
   }).join("");
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>${z?"Правка записи":"Новая запись"}</h2>
-      <span class="sub">${z?("акт № "+(z.акт||"—")):"журнал"}</span>
+      ${z&&актКлюч(z)?кнопкаАктаЗаписи(z):`<span class="sub">${z?"без акта":"журнал"}</span>`}
       ${z?листаниеЗаписи(z.id):""}</div>
     <datalist id="objlist">${objlist}</datalist>
     <datalist id="splist">${splist}</datalist>
@@ -12608,7 +12638,7 @@ document.addEventListener("keydown",e=>{
 function switchView(v){
   if(v!==curView && !уходСФормы()) return;
   if(_возвратВПроверку && ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) v="check";
-  curView=v;query="";
+  curView=v;query=""; _актИзЗаписи=null;
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
   ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",

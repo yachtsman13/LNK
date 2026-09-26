@@ -601,6 +601,142 @@
 <script id="lnk-ppr" type="application/json">/*ППР*/</script>
 <script>
 "use strict";
+// ── Хранилище базы: IndexedDB с зеркалом в памяти ─────────
+// До 3.30 база жила в localStorage: предел ~5 МБ, и он молчаливый —
+// браузер просто отказывает в записи. С историей правок (3.16) и
+// отброшенными версиями (3.13) база растёт с каждой правкой, поэтому она
+// перенесена в IndexedDB (в file:// работает, квота браузера — сотни МБ
+// и больше, замерено: navigator.storage.estimate отдаёт квоту и из file://).
+//
+// Программа написана на синхронном чтении (localStorage.getItem везде), а
+// IndexedDB асинхронная. Поэтому ХР — та же пятёрка методов, что у
+// localStorage, над картой в памяти: при запуске вся база один раз
+// читается из IndexedDB в память (основной код стартует только после
+// этого, см. запуск внизу страницы), чтение идёт из памяти, запись — в
+// память сразу и в IndexedDB следом.
+//
+// Первый запуск новой версии переносит ключи lnk_* из localStorage в
+// IndexedDB и ОСТАВЛЯЕТ localStorage как было — нетронутой копией: вдруг
+// на этом же компьютере откроют старый файл программы, он увидит свои
+// данные, а не пустоту. Правки, сделанные в старой версии после переноса,
+// новая версия замечает по отпечатку localStorage и предлагает принять
+// (см. правкиСтаройВерсии).
+//
+// Если IndexedDB недоступна (запрет браузера, частный режим) — работа
+// по-старому прямо в localStorage, с прежним пределом и счётчиком.
+const ХР=(function(){
+  const БД="lnk_data", ХРАН="kv", МЕТКА="__перенос";
+  const м=new Map();
+  let db=null, режим="ls", причина="", метка=null, ожидает=0, сообщено=false;
+  const висят=new Set();
+  let квота=null, занято=null;
+  function отпечатокLS(){
+    const кк=[];
+    try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+      if(k && k.indexOf("lnk_")===0) кк.push(k); } }catch(e){ return ""; }
+    кк.sort();
+    let h=0x811c9dc5, n=0;
+    кк.forEach(k=>{ const s=k+"\u0000"+(localStorage.getItem(k)||"")+"\u0001"; n+=s.length;
+      for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } });
+    return кк.length+":"+n+":"+(h>>>0).toString(16);
+  }
+  function открыть(){
+    return new Promise((ок,нет)=>{
+      let r; try{ r=indexedDB.open(БД,1); }catch(e){ return нет(e); }
+      r.onupgradeneeded=()=>{ try{ r.result.createObjectStore(ХРАН); }catch(e){} };
+      r.onsuccess=()=>ок(r.result); r.onerror=()=>нет(r.error);
+      r.onblocked=()=>нет(new Error("база занята другой вкладкой"));
+    });
+  }
+  function прочестьВсё(){
+    return new Promise((ок,нет)=>{
+      const t=db.transaction(ХРАН,"readonly"), st=t.objectStore(ХРАН);
+      const кл=st.getAllKeys(), зн=st.getAll();
+      t.oncomplete=()=>ок([кл.result||[], зн.result||[]]);
+      t.onerror=()=>нет(t.error); t.onabort=()=>нет(t.error);
+    });
+  }
+  function записатьПачку(пары){
+    return new Promise((ок,нет)=>{
+      const t=db.transaction(ХРАН,"readwrite"), st=t.objectStore(ХРАН);
+      пары.forEach(([k,v])=>st.put(v,k));
+      t.oncomplete=()=>ок(true); t.onerror=()=>нет(t.error); t.onabort=()=>нет(t.error);
+    });
+  }
+  // Отказ записи — правка НЕ сохранена. Как и в прежнем переполнении,
+  // молчать нельзя: окно, а не подсказка внизу. Одно на сеанс, чтобы не
+  // засыпать окнами при серии сохранений.
+  function сбой(e){
+    if(сообщено) return; сообщено=true;
+    alert("ЗАПИСЬ В ХРАНИЛИЩЕ БРАУЗЕРА НЕ УДАЛАСЬ — последняя правка может быть не сохранена.\n\n"+
+      "Причина: "+((e&&(e.name||e.message))||"неизвестна")+"\n\n"+
+      "Сделайте сейчас «Обмен» → «Сохранить копию» и перезапустите программу.");
+  }
+  function вБазу(k,v){
+    ожидает++;
+    const обещ=new Promise(готово=>{
+      let конец=false;
+      const итог=(ош)=>{ if(конец) return; конец=true; ожидает--; висят.delete(обещ); if(ош) сбой(ош); готово(); };
+      try{
+        const t=db.transaction(ХРАН,"readwrite"), st=t.objectStore(ХРАН);
+        if(v===null) st.delete(k); else st.put(v,k);
+        t.oncomplete=()=>итог(null); t.onerror=()=>итог(t.error||new Error("ошибка записи"));
+        t.onabort=()=>итог(t.error||new Error("запись прервана"));
+      }catch(e){ итог(e); }
+    });
+    висят.add(обещ);
+  }
+  async function загрузить(){
+    try{
+      if(typeof indexedDB==="undefined" || !indexedDB) throw new Error("IndexedDB нет в этом браузере");
+      db=await Promise.race([открыть(),
+        new Promise((_,нет)=>setTimeout(()=>нет(new Error("IndexedDB не ответила за 5 с")),5000))]);
+      const [кл,зн]=await прочестьВсё();
+      кл.forEach((k,i)=>{ k=String(k); if(k===МЕТКА){ try{ метка=JSON.parse(зн[i]); }catch(e){ метка={}; } }
+                          else м.set(k, String(зн[i])); });
+      if(!метка){
+        // Первый запуск версии с IndexedDB: переносим, что было.
+        const пары=[];
+        for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+          if(k && k.indexOf("lnk_")===0 && !м.has(k)){ const v=localStorage.getItem(k); if(v!=null){ м.set(k,v); пары.push([k,v]); } } }
+        метка={ когда:new Date().toISOString(), ключей:пары.length, отпечаток:отпечатокLS() };
+        пары.push([МЕТКА, JSON.stringify(метка)]);
+        await записатьПачку(пары);
+      }
+      режим="idb";
+      try{ if(navigator.storage && navigator.storage.estimate){ const е=await navigator.storage.estimate();
+             квота=е.quota||null; занято=(е.usage!=null)?е.usage:null; } }catch(e){}
+    }catch(e){
+      режим="ls"; причина=String((e&&(e.message||e.name))||e); db=null; м.clear(); метка=null;
+    }
+  }
+  window.addEventListener("beforeunload", e=>{ if(ожидает>0){ e.preventDefault(); e.returnValue=""; } });
+  const ls=()=>localStorage;
+  return {
+    загрузить,
+    getItem(k){ if(режим!=="idb") return ls().getItem(k); k=String(k); return м.has(k)?м.get(k):null; },
+    setItem(k,v){ if(режим!=="idb") return ls().setItem(k,v); k=String(k); v=String(v); м.set(k,v); вБазу(k,v); },
+    removeItem(k){ if(режим!=="idb") return ls().removeItem(k); k=String(k); if(!м.has(k)) return; м.delete(k); вБазу(k,null); },
+    key(i){ if(режим!=="idb") return ls().key(i); return [...м.keys()][i]||null; },
+    get length(){ return режим!=="idb" ? ls().length : м.size; },
+    режим(){ return режим; }, причина(){ return причина; }, метка(){ return метка; },
+    ожидает(){ return ожидает; }, квота(){ return квота; }, занято(){ return занято; },
+    // Все начатые записи дошли до IndexedDB (для проверок и перед
+    // перезагрузкой; в работе программы ждать не нужно).
+    дождаться(){ return Promise.all([...висят]); },
+    // Правки в localStorage после переноса = открывали старую версию.
+    стараяВерсияПравила(){ return режим==="idb" && !!метка && !!метка.отпечаток && отпечатокLS()!==метка.отпечаток; },
+    // Правки старой версии приняты (или отклонены) — запомнить нынешнее
+    // состояние localStorage, чтобы не спрашивать снова.
+    запомнитьСтаруюВерсию(){ if(режим!=="idb"||!метка) return Promise.resolve(false);
+      метка=Object.assign({},метка,{отпечаток:отпечатокLS(), принято:new Date().toISOString()});
+      return записатьПачку([[МЕТКА, JSON.stringify(метка)]]); },
+    прочестьLS(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  };
+})();
+</script>
+<script type="text/plain" id="lnk-main">
+"use strict";
 const DB = JSON.parse(document.getElementById("lnk-data").textContent);
 const METHODS = DB.методы || ["ВИК","УЗД","УЗТ","АЭ","ТВ","ТК","ВД","МК"];
 // Месяцы объявлены здесь, а не рядом с планом ППР, где были раньше:
@@ -660,11 +796,11 @@ function ждётНомеров(z){ return methodsOf(z).length>0 && методы
 // может только держатель. Приём тот же, что у «роли мастера».
 const GRANT_KEY="lnk_grant";
 function getGrant(){
-  try{ const r=localStorage.getItem(GRANT_KEY); if(r){ const o=JSON.parse(r);
+  try{ const r=ХР.getItem(GRANT_KEY); if(r){ const o=JSON.parse(r);
         return {место:o.место||"", изменено:o.изменено||""}; } }catch(e){}
   return {место:"", изменено:""};
 }
-function saveGrant(g){ try{ localStorage.setItem(GRANT_KEY, JSON.stringify(g)); }catch(e){} }
+function saveGrant(g){ try{ ХР.setItem(GRANT_KEY, JSON.stringify(g)); }catch(e){} }
 function правоМоё(){ const g=getGrant(); return !!g.место && g.место===getWS().код; }
 function правоСвободно(){ return !getGrant().место; }
 
@@ -678,11 +814,11 @@ const STORE_KEY = "lnk_journal";
 let J;
 function loadJournal(){
   try{
-    let raw = localStorage.getItem(STORE_KEY);
+    let raw = ХР.getItem(STORE_KEY);
     if(!raw){                                   // перенос со старого ключа с версией (до 3.1)
-      for(let i=0;i<localStorage.length;i++){
-        const k=localStorage.key(i);
-        if(k && k.indexOf("lnk_journal_")===0){ raw=localStorage.getItem(k); break; }
+      for(let i=0;i<ХР.length;i++){
+        const k=ХР.key(i);
+        if(k && k.indexOf("lnk_journal_")===0){ raw=ХР.getItem(k); break; }
       }
     }
     if(raw){ const p=JSON.parse(raw); const rows=Array.isArray(p)?p:p.rows;
@@ -702,7 +838,7 @@ function починитьАкты(){
 function saveJournal(){
   проставитьБазу(STORE_KEY, J);
   записатьИсторию(STORE_KEY, J);
-  try{ localStorage.setItem(STORE_KEY, JSON.stringify({baseVersion:DB.версия, сохранено:new Date().toISOString(), rows:J})); }
+  try{ ХР.setItem(STORE_KEY, JSON.stringify({baseVersion:DB.версия, сохранено:new Date().toISOString(), rows:J})); }
   catch(e){ переполнение(e); }
   снятьСнимок(STORE_KEY, J);
   setChrome();
@@ -716,8 +852,9 @@ function переполнение(e){
   if(квота) alert("ПАМЯТЬ БРАУЗЕРА ЗАПОЛНЕНА — правка не сохранена.\n\n"+
     "Что сделать сейчас:\n"+
     "1. «Обмен» → «Сохранить копию» (файл уйдёт в папку загрузок).\n"+
-    "2. Удалите из журнала то, что уже сдано в архив, либо сообщите мне — "+
-    "перенесу базу в хранилище на 1 ГБ вместо 5 МБ.\n\n"+
+    "2. Удалите из журнала то, что уже сдано в архив, либо сообщите мне.\n"+
+    "(Программа работает в старом хранилище с пределом 5 МБ, потому что "+
+    "IndexedDB в этом браузере недоступна"+(ХР.причина()?": "+ХР.причина():"")+".)\n\n"+
     "Пока память не освободится, новые правки сохраняться не будут.");
   else toast("Не удалось сохранить в память браузера");
 }
@@ -725,12 +862,12 @@ function переполнение(e){
 // Код места входит в id новых записей — тогда при слиянии журналов
 // с разных мест записи не сталкиваются (у каждого места свои id).
 function getWS(){
-  try{ const r=localStorage.getItem("lnk_ws"); if(r){ const o=JSON.parse(r);
+  try{ const r=ХР.getItem("lnk_ws"); if(r){ const o=JSON.parse(r);
         return {код:(o.код||"М1"), мастер:!!o.мастер, начальник:!!o.начальник}; } }catch(e){}
   return {код:"М1", мастер:false, начальник:false};
 }
 function saveWS(o){
-  try{ localStorage.setItem("lnk_ws", JSON.stringify(o)); }catch(e){}
+  try{ ХР.setItem("lnk_ws", JSON.stringify(o)); }catch(e){}
   const el=document.getElementById("wsName"); if(el) el.textContent=o.код;
 }
 function newId(pfx){
@@ -1289,14 +1426,14 @@ const СПЕЦИАЛИСТ_ПАСПОРТ={
 };
 let O, S, P, A, ПОДР, ПАДЕЖИ, НД, ПОМ;
 function loadReg(key, seed){
-  try{ const raw=localStorage.getItem(key); if(raw){ const p=JSON.parse(raw);
+  try{ const raw=ХР.getItem(key); if(raw){ const p=JSON.parse(raw);
        const rows=Array.isArray(p)?p:p.rows; if(Array.isArray(rows)) return rows; } }catch(e){}
   return JSON.parse(JSON.stringify(seed||[]));
 }
 function saveReg(key, arr){
   проставитьБазу(key, arr);
   записатьИсторию(key, arr);
-  try{ localStorage.setItem(key, JSON.stringify({версия:DB.версия, сохранено:new Date().toISOString(), rows:arr})); }
+  try{ ХР.setItem(key, JSON.stringify({версия:DB.версия, сохранено:new Date().toISOString(), rows:arr})); }
   catch(e){ переполнение(e); }
   снятьСнимок(key, arr);
   копияПоСлучаю();
@@ -1525,11 +1662,11 @@ function setChrome(){
 // открыть журнал, увидеть 12 записей вместо 315 и решить, что данные
 // пропали. Сортировка запоминается — она ничего не прячет.
 let jf={год:"",метод:"",статус:"",исп:"",с:"",по:""};
-let jsort=(function(){ try{ const r=localStorage.getItem("lnk_jsort");
+let jsort=(function(){ try{ const r=ХР.getItem("lnk_jsort");
   if(r){ const o=JSON.parse(r); if(o&&o.c) return {c:o.c,d:o.d===1?1:-1}; } }catch(e){}
   return {c:"дата", d:-1}; })();   // по умолчанию — свежие сверху
 
-function jsortSave(){ try{ localStorage.setItem("lnk_jsort",JSON.stringify(jsort)); }catch(e){} }
+function jsortSave(){ try{ ХР.setItem("lnk_jsort",JSON.stringify(jsort)); }catch(e){} }
 function setJF(k,v){ jf[k]=v; renderJournal(); }
 function resetJF(){ jf={год:"",метод:"",статус:"",исп:"",с:"",по:""}; query=""; renderJournal(); }
 function sortJournal(c){
@@ -1824,14 +1961,14 @@ const ПОРЯДОК_В_АКТЕ=["ВИК","УЗТ","УЗД","ТВ","АЭ","МК
 // компьютера: вписали на одном месте — должно доехать до остальных. Поэтому
 // они ходят в файле обмена и сливаются по свежести, как право выдачи.
 function имена(){
-  try{ const o=JSON.parse(localStorage.getItem("lnk_docnames")||"{}");
+  try{ const o=JSON.parse(ХР.getItem("lnk_docnames")||"{}");
        if(o && o.имена) return {имена:o.имена, ед:o.ед||{}, изменено:o.изменено||""};
        if(o && typeof o==="object") return {имена:o, ед:{}, изменено:""};   // старый вид
   }catch(e){}
   return {имена:{}, ед:{}, изменено:""};
 }
 function saveИмена(п){
-  try{ localStorage.setItem("lnk_docnames", JSON.stringify(п)); }catch(e){}
+  try{ ХР.setItem("lnk_docnames", JSON.stringify(п)); }catch(e){}
 }
 function имяДок(м,один){
   const п=имена();
@@ -1971,7 +2108,7 @@ function getЛаб(){
                // пуст, программа больше не подставляет свои даты).
                праздники:null};
   let рез=пусто;
-  try{ const r=localStorage.getItem("lnk_lab");
+  try{ const r=ХР.getItem("lnk_lab");
        if(r) рез=Object.assign({}, пусто, JSON.parse(r)); }catch(e){}
   if(рез.праздники==null) рез=Object.assign({}, рез, {праздники:ПРАЗДНИКИ_ПО_УМОЛЧАНИЮ.slice()});
   if(рез.область_объекты==null) рез=Object.assign({}, рез, {область_объекты:ОБЛАСТЬ_ОБЪЕКТЫ_ПО_УМОЛЧАНИЮ.slice()});
@@ -2011,7 +2148,7 @@ function срокЛаб(дата){
 }
 function saveЛаб(о){
   о=Object.assign({}, о, {изменено:new Date().toISOString(), место:getWS().код});
-  try{ localStorage.setItem("lnk_lab", JSON.stringify(о)); }catch(e){}
+  try{ ХР.setItem("lnk_lab", JSON.stringify(о)); }catch(e){}
 }
 function saveЛабИзФормы(){
   const п=id=>{ const el=document.getElementById(id); return el?el.value.trim():""; };
@@ -5949,8 +6086,8 @@ const ПРЕДЕЛ_ХРАНИЛИЩА = 5 * 1024 * 1024;   // символов, 
 function объёмХранилища(){
   let занято=0, по={};
   try{
-    for(let i=0;i<localStorage.length;i++){
-      const k=localStorage.key(i), v=localStorage.getItem(k)||"";
+    for(let i=0;i<ХР.length;i++){
+      const k=ХР.key(i), v=ХР.getItem(k)||"";
       if(k.indexOf("lnk_")!==0) continue;
       по[k]=k.length+v.length; занято+=k.length+v.length;
     }
@@ -5965,6 +6102,16 @@ function объёмХранилища(){
              JSON.stringify(НД)+JSON.stringify(ПОМ)+JSON.stringify(ЗАД)).length; }catch(e){}
   const всего=Math.max(занято,факт);
   const наЗапись = liveJ().length ? всего/liveJ().length : 0;
+  // IndexedDB: предел — квота браузера (navigator.storage.estimate).
+  // Долю считаю сверху: знак строки — не больше 2 байт; на диске выходит
+  // меньше (строки там сжимаются: 20 млн знаков заняли ~2 МБ, замерено).
+  // Собственный замер браузера «сколько занято» не беру: он снимается при
+  // запуске и отстаёт от записей, на свежей установке показывал 1 КБ.
+  if(ХР.режим()==="idb"){
+    const кв=ХР.квота();
+    return { всего:всего, по:по, занято:занято, idb:true, квота:кв,
+             доля: кв ? всего*2/кв : 0, местаНаЗаписей:null };
+  }
   return { всего:всего, по:по, занято:занято,
            доля: всего/ПРЕДЕЛ_ХРАНИЛИЩА,
            местаНаЗаписей: наЗапись>1 ? Math.round((ПРЕДЕЛ_ХРАНИЛИЩА-всего)/наЗапись) : null };
@@ -6248,7 +6395,7 @@ async function копияВПапку(тихо){
     const ф=await h.getFileHandle(имяКопии(),{create:true});
     const w=await ф.createWritable();
     await w.write(данныеКопии()); await w.close();
-    try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
+    try{ ХР.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
     await чиститьСтарые();
     if(!тихо) toast("Копия записана в папку");
     return true;
@@ -6264,7 +6411,7 @@ function копияПоСлучаю(){
   папкаКопий().then(h=>{ if(h) копияВПапку(true); });
 }
 function когдаКопия(){
-  try{ return localStorage.getItem("lnk_last_backup")||""; }catch(e){ return ""; }
+  try{ return ХР.getItem("lnk_last_backup")||""; }catch(e){ return ""; }
 }
 function днейБезКопии(){
   const t=когдаКопия(); if(!t) return null;
@@ -6336,7 +6483,7 @@ function backupSave(){
   const name="Резервная копия ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(Object.assign({ тип:"резервная копия ЛНК", формат:2, место:ws.код,
     версия:DB.версия, сохранено:new Date().toISOString() }, всеДанные()), null, 1));
-  try{ localStorage.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
+  try{ ХР.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
   toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
         ", СИ "+live(S).length+", спец. "+live(P).length);
 }
@@ -6607,14 +6754,14 @@ function renderPremises(){
 function getМетодики(){
   const пусто={}; METHODS.forEach(м=>{ пусто[м]={приборы:[],нд:[]}; });
   let рез=Object.assign({},пусто);
-  try{ const r=localStorage.getItem("lnk_metodiki"); if(r) рез=Object.assign({},пусто,JSON.parse(r)); }catch(e){}
+  try{ const r=ХР.getItem("lnk_metodiki"); if(r) рез=Object.assign({},пусто,JSON.parse(r)); }catch(e){}
   METHODS.forEach(м=>{ if(!рез[м]||typeof рез[м]!=="object") рез[м]={приборы:[],нд:[]};
     рез[м].приборы=рез[м].приборы||[]; рез[м].нд=рез[м].нд||[]; });
   return рез;
 }
 function saveМетодики(мт){
   мт=Object.assign({},мт,{изменено:new Date().toISOString(), место:getWS().код});
-  try{ localStorage.setItem("lnk_metodiki", JSON.stringify(мт)); }catch(e){}
+  try{ ХР.setItem("lnk_metodiki", JSON.stringify(мт)); }catch(e){}
   копияПоСлучаю();
 }
 // Сортировка списка для чекбоксов: карточки с совпадающим полем «метод»
@@ -7507,10 +7654,10 @@ function ширинаФИОКолонки(значения){
 // пустые значения всегда внизу. Статусные колонки сортируются по
 // СЫРОЙ дате «до» (не по тексту статуса — «просрочено» не должно
 // сортироваться как обычная строка вперемешку с «до …»).
-let псорт=(function(){ try{ const r=localStorage.getItem("lnk_psort");
+let псорт=(function(){ try{ const r=ХР.getItem("lnk_psort");
   if(r){ const o=JSON.parse(r); if(o&&o.c) return {c:o.c,d:o.d===1?1:-1}; } }catch(e){}
   return {c:"фио", d:1}; })();
-function псортSave(){ try{ localStorage.setItem("lnk_psort",JSON.stringify(псорт)); }catch(e){} }
+function псортSave(){ try{ ХР.setItem("lnk_psort",JSON.stringify(псорт)); }catch(e){} }
 function sortPeople(c){
   if(псорт.c===c) псорт.d=-псорт.d; else { псорт.c=c; псорт.d=1; }
   псортSave(); renderPeople();
@@ -7542,10 +7689,10 @@ function peopleRows(){
 // Сортировка прогноза аттестации — отдельное состояние (свои колонки),
 // применяется поверх прогнозАттестации(год), который сам отбирает и
 // расставляет строки по сроку; клик по заголовку переставляет их же.
-let прогСорт=(function(){ try{ const r=localStorage.getItem("lnk_progsort");
+let прогСорт=(function(){ try{ const r=ХР.getItem("lnk_progsort");
   if(r){ const o=JSON.parse(r); if(o&&o.c) return {c:o.c,d:o.d===1?1:-1}; } }catch(e){}
   return {c:"до", d:1}; })();
-function прогСортSave(){ try{ localStorage.setItem("lnk_progsort",JSON.stringify(прогСорт)); }catch(e){} }
+function прогСортSave(){ try{ ХР.setItem("lnk_progsort",JSON.stringify(прогСорт)); }catch(e){} }
 function sortПрогноз(c){
   if(прогСорт.c===c) прогСорт.d=-прогСорт.d; else { прогСорт.c=c; прогСорт.d=1; }
   прогСортSave(); renderPeople();
@@ -7934,11 +8081,11 @@ const REG_ИСТ="lnk_history";
 const ИСТ_НА_ЗАПИСЬ=15, ИСТ_ДЛИНА=300;
 let ИСТ=null;
 function ист(){
-  if(!ИСТ){ try{ ИСТ=JSON.parse(localStorage.getItem(REG_ИСТ)||"{}")||{}; }catch(e){ ИСТ={}; } }
+  if(!ИСТ){ try{ ИСТ=JSON.parse(ХР.getItem(REG_ИСТ)||"{}")||{}; }catch(e){ ИСТ={}; } }
   return ИСТ;
 }
 function сохранитьИсторию(){
-  try{ localStorage.setItem(REG_ИСТ, JSON.stringify(ист())); }catch(e){ переполнение(e); }
+  try{ ХР.setItem(REG_ИСТ, JSON.stringify(ист())); }catch(e){ переполнение(e); }
 }
 const ИСТ_СЛУЖЕБНЫЕ=new Set(["изменено","база","место_правки","удалено"]);
 function плоскоИст(key,o,пр,выход,гл){
@@ -8045,9 +8192,9 @@ function блокИстории(key,id){
 // называю: откатывать поверх новой правки значило бы потерять её.
 const REG_ОТМЕНА="lnk_undo";
 let _отменаПодг=null;
-function отменаЗагрузить(){ try{ return JSON.parse(localStorage.getItem(REG_ОТМЕНА)||"null"); }catch(e){ return null; } }
+function отменаЗагрузить(){ try{ return JSON.parse(ХР.getItem(REG_ОТМЕНА)||"null"); }catch(e){ return null; } }
 function отменаСохранить(о){
-  try{ if(о) localStorage.setItem(REG_ОТМЕНА, JSON.stringify(о)); else localStorage.removeItem(REG_ОТМЕНА); }
+  try{ if(о) ХР.setItem(REG_ОТМЕНА, JSON.stringify(о)); else ХР.removeItem(REG_ОТМЕНА); }
   catch(e){ toast("Не хватило памяти запомнить состояние для отмены — эту загрузку отменить будет нельзя"); }
   обновитьКнопкуОтмены();
 }
@@ -8257,7 +8404,7 @@ function exchangeExport(){
     версия:DB.версия, выгружено:new Date().toISOString(), право:getGrant() }, всеДанные());
   const name="Обмен ЛНК "+new Date().toISOString().slice(0,10)+" ("+ws.код+").json";
   dl(name, JSON.stringify(payload));
-  try{ localStorage.setItem("lnk_last_export", new Date().toISOString()); }catch(e){}
+  try{ ХР.setItem("lnk_last_export", new Date().toISOString()); }catch(e){}
   toast("Выгружено: журнал "+liveJ().length+", объекты "+live(O).length+", СИ "+live(S).length+", спец. "+live(P).length);
   if(curView==="exchange") renderExchange();
 }
@@ -8306,7 +8453,7 @@ function exchangeImport(){
               ", СИ +"+rs.added+"/"+rs.updated+", спец. +"+rp.added+"/"+rp.updated);
           }catch(err){ отчёт.push(f.name+": ошибка — "+err.message); }
           if(++done===files.length){
-            try{ localStorage.setItem("lnk_last_import", new Date().toISOString()); }catch(e){}
+            try{ ХР.setItem("lnk_last_import", new Date().toISOString()); }catch(e){}
             renderExchange();
             const столк=проверитьСтолкновения();
             if(столк.length) alert("ВНИМАНИЕ: одинаковые номера у разных записей.\n\n"+
@@ -9574,10 +9721,10 @@ function сегодняПериод(){ зф.база=""; renderTasks(); }
 // localStorage, стрелка на заголовке. Выбранная колонка идёт первым
 // ключом, срок — вторым (стабильный порядок при равных значениях,
 // раньше было единственным ключом).
-let здсорт=(function(){ try{ const r=localStorage.getItem("lnk_tsort");
+let здсорт=(function(){ try{ const r=ХР.getItem("lnk_tsort");
   if(r){ const o=JSON.parse(r); if(o&&o.c) return {c:o.c,d:o.d===1?1:-1}; } }catch(e){}
   return {c:"срок", d:1}; })();
-function здсортSave(){ try{ localStorage.setItem("lnk_tsort",JSON.stringify(здсорт)); }catch(e){} }
+function здсортSave(){ try{ ХР.setItem("lnk_tsort",JSON.stringify(здсорт)); }catch(e){} }
 function sortTasks(c){
   if(здсорт.c===c) здсорт.d=-здсорт.d; else { здсорт.c=c; здсорт.d=1; }
   здсортSave(); renderTasks();
@@ -10806,13 +10953,61 @@ const КЛЮЧИ_НАСТРОЕК=["lnk_ws","lnk_theme","lnk_jsort","lnk_psort",
   "lnk_check_ok",
   // недавние запросы «Поиска по базе» — удобство этого места
   "lnk_find_recent"];
+// Правки старой версии программы. После переноса в IndexedDB localStorage
+// остаётся нетронутой копией, и старый файл программы, открытый на этом же
+// компьютере, работает с ней — его правки новая версия не видит. ХР
+// замечает это по отпечатку; принять их — тем же слиянием «свежее
+// побеждает», что и файл обмена (правки несут свои отметки времени, так
+// что старые, давно перенесённые записи ничего не перебьют).
+function данныеСтаройВерсии(){
+  const прочесть=k=>{ try{ const r=ХР.прочестьLS(k); return r?JSON.parse(r):null; }catch(e){ return null; } };
+  const d={};
+  Object.keys(КЛЮЧИ_ДАННЫХ).forEach(k=>{
+    const поле=КЛЮЧИ_ДАННЫХ[k]; if(поле==="конфликты"||поле==="история") return;
+    const v=прочесть(k); if(!v) return;
+    d[поле]=(v && Array.isArray(v.rows)) ? v.rows : v;
+  });
+  const ж=прочесть(STORE_KEY); if(ж && Array.isArray(ж.rows)) d.записи=ж.rows;
+  return d;
+}
+function принятьПравкиСтаройВерсии(){
+  if(!ХР.стараяВерсияПравила()){ toast("Правок старой версии нет"); return; }
+  if(!confirm("Принять правки, сделанные в старой версии программы на этом компьютере?\n\n"+
+    "Они сольются с базой так же, как файл обмена: более свежая правка каждой записи побеждает.")) return;
+  const d=данныеСтаройВерсии();
+  отменаНачать("правки старой версии", Object.keys(КЛЮЧИ_ДАННЫХ).concat([STORE_KEY]));
+  const rj=Array.isArray(d.записи)?mergeJournal(d.записи):{added:0,updated:0};
+  const r=применитьДанные(d,false);
+  if(d.лаборатория && d.лаборатория.изменено && d.лаборатория.изменено>(getЛаб().изменено||"")) saveЛаб(d.лаборатория);
+  if(d.методики && d.методики.изменено && d.методики.изменено>(getМетодики().изменено||"")) saveМетодики(d.методики);
+  if(d.названия && d.названия.изменено && d.названия.изменено>(имена().изменено||"")) saveИмена(d.названия);
+  rebuildObjIndex();
+  отменаЗавершить();
+  ХР.запомнитьСтаруюВерсию().then(()=>{ setChrome(); if(curView==="exchange") renderExchange(); });
+  const сум=(x)=>x?(x.added||0)+(x.updated||0):0;
+  toast("Правки старой версии приняты: журнал "+сум(rj)+", объекты "+сум(r&&r.o)+", приборы "+сум(r&&r.s)+", специалисты "+сум(r&&r.p));
+  const столк=проверитьСтолкновения();
+  if(столк.length) alert("ВНИМАНИЕ: одинаковые номера у разных записей.\n\n"+столк.slice(0,12).join("\n"));
+}
+function отклонитьПравкиСтаройВерсии(){
+  if(!confirm("Не принимать правки старой версии?\n\nБольше спрашивать о них не буду. "+
+    "Сами они останутся в старом хранилище браузера, но в работе не участвуют.")) return;
+  ХР.запомнитьСтаруюВерсию().then(()=>{ setChrome(); if(curView==="exchange") renderExchange(); toast("Отмечено"); });
+}
+function блокСтаройВерсии(){
+  if(!ХР.стараяВерсияПравила()) return "";
+  return `<div class="draftnote" style="margin-top:8px"><b>На этом компьютере открывали старую версию программы
+    и что-то в ней меняли.</b> Эти правки лежат в старом хранилище, в работе их нет.
+    <div class="formbtns"><button class="btn primary" onclick="принятьПравкиСтаройВерсии()">Принять правки старой версии</button>
+    <button class="btn" onclick="отклонитьПравкиСтаройВерсии()">Не принимать</button></div></div>`;
+}
 function реестрыМимоКопии(){
   let вКопии={};
   try{ вКопии=всеДанные(); }catch(e){ return []; }
   const мимо=[];
   try{
-    for(let i=0;i<localStorage.length;i++){
-      const k=localStorage.key(i);
+    for(let i=0;i<ХР.length;i++){
+      const k=ХР.key(i);
       if(!k || k.indexOf("lnk_")!==0) continue;
       if(КЛЮЧИ_НАСТРОЕК.indexOf(k)>=0) continue;
       const поле=КЛЮЧИ_ДАННЫХ[k];
@@ -10854,6 +11049,11 @@ function проверки(){
     "Одни и те же записи правили на двух местах, отброшенные версии не разобраны: "+конфликтыОткрытые().length,
     конфликтыОткрытые().slice(0,10).map(к=>{ const р=разделКонфликта(к); return сс(р.н+" · "+р.подпись,"exchange",""); }),
     {вид:"exchange"});
+
+  if(ХР.стараяВерсияПравила()) доб("внимание","Сохранность данных",
+    "На этом компьютере открывали старую версию программы и меняли в ней данные",
+    ["Эти правки лежат в старом хранилище браузера и в работе не участвуют.",
+     "Принять или отклонить — в «Обмене файлами», блок «База и резервные копии»."], {вид:"exchange"});
 
   { const п=предупрежденияОбмена();
     if(п.length) доб("внимание","Обмен","Давно не было обмена файлами: "+п.length, п.concat(["Порог в днях задаётся "+
@@ -11515,8 +11715,8 @@ function числоПроблем(){
 // Хранится у этого места (в обмен не идёт): что принято на одном месте,
 // на другом могут ещё не видеть.
 const REG_ПРИНЯТО="lnk_check_ok";
-function принятыеПроверки(){ try{ return JSON.parse(localStorage.getItem(REG_ПРИНЯТО)||"{}")||{}; }catch(e){ return {}; } }
-function сохранитьПринятые(о){ try{ localStorage.setItem(REG_ПРИНЯТО,JSON.stringify(о)); }catch(e){ toast("Не удалось сохранить: память браузера недоступна"); } }
+function принятыеПроверки(){ try{ return JSON.parse(ХР.getItem(REG_ПРИНЯТО)||"{}")||{}; }catch(e){ return {}; } }
+function сохранитьПринятые(о){ try{ ХР.setItem(REG_ПРИНЯТО,JSON.stringify(о)); }catch(e){ toast("Не удалось сохранить: память браузера недоступна"); } }
 function отпечатокПроверки(x){
   const с=[x.ур,x.тема,x.текст].concat((x.подробно||[]).map(t=>typeof t==="string"?t:t.т)).join("\u0001");
   let h=5381; for(let i=0;i<с.length;i++) h=((h*33)^с.charCodeAt(i))>>>0;
@@ -11823,7 +12023,7 @@ function вернутьУдалённое(ключ,ид){
   toast("Запись возвращена");
 }
 function setИзмСПриёма(){
-  let t=""; try{ t=localStorage.getItem("lnk_last_import")||""; }catch(e){}
+  let t=""; try{ t=ХР.getItem("lnk_last_import")||""; }catch(e){}
   if(!t){ toast("Приёма файлов ещё не было"); return; }
   _изм={дней:0, с:t}; renderExchange();
 }
@@ -11838,10 +12038,10 @@ function setИзмСПриёма(){
 // у заказчика нет, это только напоминание, правится в «Обмене»).
 const REG_ОБМЕН_МЕСТА="lnk_exch_places";
 function обменМеста(){
-  let о={}; try{ о=JSON.parse(localStorage.getItem(REG_ОБМЕН_МЕСТА)||"{}")||{}; }catch(e){}
+  let о={}; try{ о=JSON.parse(ХР.getItem(REG_ОБМЕН_МЕСТА)||"{}")||{}; }catch(e){}
   return {места:о.места||{}, порог:+о.порог>0?+о.порог:7};
 }
-function сохранитьОбменМеста(о){ try{ localStorage.setItem(REG_ОБМЕН_МЕСТА, JSON.stringify(о)); }catch(e){} }
+function сохранитьОбменМеста(о){ try{ ХР.setItem(REG_ОБМЕН_МЕСТА, JSON.stringify(о)); }catch(e){} }
 function отметитьПриёмОтМеста(место, выгружено, файл){
   if(!место || место===getWS().код) return;
   const о=обменМеста();
@@ -11860,7 +12060,7 @@ function сведенияОбмена(){
     const дн=днейС(x.принят);
     return {место:м, принят:x.принят||"", выгружен:x.выгружен||"", файл:x.файл||"", правка:правки[м]||"",
       дней:дн, давно:дн!=null && дн>=о.порог}; });
-  let моя=""; try{ моя=localStorage.getItem("lnk_last_export")||""; }catch(e){}
+  let моя=""; try{ моя=ХР.getItem("lnk_last_export")||""; }catch(e){}
   const днейМоя=днейС(моя);
   return {ряды, порог:о.порог, моя, днейМоя, мояДавно:места.length>0 && (моя?днейМоя>=о.порог:true)};
 }
@@ -11947,7 +12147,7 @@ function renderExchange(){
   const об=объёмХранилища(), дн=днейБезКопии();
   const мои=J.filter(z=>z.место===ws.код).length;
   const пометки=J.filter(z=>z.изменено).length;
-  const last=(k,l)=>{ let t=""; try{t=localStorage.getItem(k)||"";}catch(e){}
+  const last=(k,l)=>{ let t=""; try{t=ХР.getItem(k)||"";}catch(e){}
     return t?`${l}: ${ru(t.slice(0,10))} ${t.slice(11,16)}`:`${l}: —`; };
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>Обмен между рабочими местами</h2>
@@ -12030,9 +12230,14 @@ function renderExchange(){
         <div class="bar"><span class="g" style="flex:1">Занято в памяти браузера</span>
           <b>${(об.всего/1024).toFixed(0)} КБ</b></div>
         <div class="bf"><span style="width:${Math.min(100,об.доля*100).toFixed(1)}%"></span></div>
-        <div class="note">Это ${(об.доля*100).toFixed(1)}% от предела в 5 МБ.
+        ${об.idb?`<div class="note">База в хранилище IndexedDB${об.квота?` — квота браузера ${(об.квота/1073741824).toFixed(1).replace(".",",")} ГБ, база занимает не больше ${об.доля<0.001?"0,1":(об.доля*100).toFixed(1).replace(".",",")} % квоты`:""}.
+          Прежний предел 5 МБ больше не действует.
+          ${об.доля>0.8?"<br><b style=\'color:var(--danger)\'>Хранилище почти заполнено — освободите место на диске или сообщите мне.</b>":""}</div>`
+        :`<div class="note">Это ${(об.доля*100).toFixed(1)}% от предела в 5 МБ.
           ${об.местаНаЗаписей!=null?("Хватит ещё примерно на <b>"+об.местаНаЗаписей.toLocaleString("ru")+"</b> записей."):""}
-          ${об.доля>0.8?"<br><b style=\'color:var(--danger)\'>Пора освобождать место или переносить базу в хранилище на 1 ГБ — скажите, сделаю.</b>":""}</div>
+          <br>Работаю в старом хранилище (localStorage): IndexedDB недоступна${ХР.причина()?" — "+esc(ХР.причина()):""}.
+          ${об.доля>0.8?"<br><b style=\'color:var(--danger)\'>Пора освобождать место — скажите, разберёмся, почему недоступна IndexedDB.</b>":""}</div>`}
+        ${блокСтаройВерсии()}
         <div class="bar"><span class="g" style="flex:1">Последняя копия</span>
           <b>${когдаКопия()?(ru(когдаКопия().slice(0,10))+" "+когдаКопия().slice(11,16)):"не делалась"}</b></div>
         ${дн!=null&&дн>=3?`<div class="note" style="color:var(--warn)"><b>Копии не было ${дн} дн.</b> Сделайте сейчас — это одна кнопка.</div>`:""}
@@ -12481,21 +12686,21 @@ function поискВвод(v){ _поиск=v; renderНайти(true); }
 // повторов (без учёта регистра), свежий — первым.
 const ПОИСК_НЕДАВНИХ=10, REG_ПОИСК_НЕДАВНИЕ="lnk_find_recent";
 function недавниеПоиски(){
-  try{ const a=JSON.parse(localStorage.getItem(REG_ПОИСК_НЕДАВНИЕ)||"[]"); return Array.isArray(a)?a.filter(x=>typeof x==="string"):[]; }
+  try{ const a=JSON.parse(ХР.getItem(REG_ПОИСК_НЕДАВНИЕ)||"[]"); return Array.isArray(a)?a.filter(x=>typeof x==="string"):[]; }
   catch(e){ return []; }
 }
 function запомнитьПоиск(q){
   q=String(q||"").trim(); if(q.length<2) return;
   const н=q.toLowerCase();
   const сп=[q].concat(недавниеПоиски().filter(x=>x.toLowerCase()!==н)).slice(0,ПОИСК_НЕДАВНИХ);
-  try{ localStorage.setItem(REG_ПОИСК_НЕДАВНИЕ, JSON.stringify(сп)); }catch(e){}
+  try{ ХР.setItem(REG_ПОИСК_НЕДАВНИЕ, JSON.stringify(сп)); }catch(e){}
 }
 function повторитьПоиск(i){
   const q=недавниеПоиски()[i]; if(q==null) return;
   _поиск=q; renderНайти();
 }
 function забытьПоиски(){
-  try{ localStorage.removeItem(REG_ПОИСК_НЕДАВНИЕ); }catch(e){}
+  try{ ХР.removeItem(REG_ПОИСК_НЕДАВНИЕ); }catch(e){}
   renderНайти();
 }
 function блокНедавнихПоисков(){
@@ -12714,12 +12919,12 @@ const THEME_KEY="lnk_theme";
 function applyTheme(t){
   if(t && t!=="default") document.documentElement.setAttribute("data-theme",t);
   else document.documentElement.removeAttribute("data-theme");
-  try{ localStorage.setItem(THEME_KEY,t); }catch(e){}
+  try{ ХР.setItem(THEME_KEY,t); }catch(e){}
   const sel=document.getElementById("theme"); if(sel) sel.value=t;
 }
 (function initTheme(){
   let t="default";
-  try{ t=localStorage.getItem(THEME_KEY)||"default"; }catch(e){}
+  try{ t=ХР.getItem(THEME_KEY)||"default"; }catch(e){}
   applyTheme(t);
   document.getElementById("theme").addEventListener("change",function(){ applyTheme(this.value); });
 })();
@@ -12887,6 +13092,19 @@ document.getElementById("wsName").textContent = getWS().код;
 if(перепривязатьОбъекты()) saveJournal();
 снятьВсеСнимки();
 setChrome(); switchView("dash");
+window.ЛНК_ГОТОВ=true;   // для проверок: загрузка дошла до конца
+</script>
+<script>
+// Запуск: основной код стартует только после того, как база прочитана
+// из IndexedDB в память (см. ХР выше). Сам код лежит выше обычным текстом
+// (type="text/plain") и исполняется здесь как обычный скрипт страницы —
+// с тем же глобальным пространством имён, поэтому onclick="…" в разметке
+// работают как раньше.
+ХР.загрузить().then(()=>{
+  const к=document.createElement("script");
+  к.textContent=document.getElementById("lnk-main").textContent;
+  document.body.appendChild(к);
+});
 </script>
 </body>
 </html>

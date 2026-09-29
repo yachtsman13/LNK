@@ -256,6 +256,12 @@
   .mrow input{min-width:0}
   .mrow .btn.small{white-space:nowrap}
   .mrow .mname{font-weight:600;color:var(--muted);font-size:13px}
+  /* допуск метода — под строкой, с отступом на ширину названия метода */
+  .допуск-метода{margin:-2px 0 6px 58px;font-size:12px;line-height:1.35}
+  .допуск-метода:empty{display:none}
+  .допуск-метода .доп-ош{color:var(--danger)}
+  .допуск-метода .доп-вн{color:var(--muted)}
+  .допуск-метода .доп-ок{color:var(--ok)}
   .formbtns{display:flex;gap:10px;margin-top:20px;align-items:center}
   .btn.danger{color:#fff;background:var(--danger);border-color:var(--danger)}
   .btn.danger:hover{filter:brightness(.92)}

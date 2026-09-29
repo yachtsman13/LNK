@@ -181,14 +181,15 @@ function editJournal(id){
     const mm=(z&&z.методы&&z.методы[m])||{};
     const ст=_мт[m]||{приборы:[],нд:[]};
     _методНаборЗаписи[m]={ приборы: mm.приборы!=null?mm.приборы:ст.приборы.slice(),
-                            нд: mm.нд!=null?mm.нд:ст.нд.slice() };
+                            нд: mm.нд!=null?mm.нд:ст.нд.slice(), свой: mm.приборы!=null };
     return `<div class="mrow"><div class="mname">${m}</div>
-      <input id="m_${m}_н" placeholder="№" value="${val(mm.н)}">
-      <input id="m_${m}_исп" list="splist" placeholder="исполнитель" value="${val(mm.исп)}">
-      <input id="m_${m}_файл" placeholder="файл протокола (PDF)" value="${val(mm.файл)}"
+      <input id="m_${m}_н" placeholder="№" value="${val(mm.н)}" oninput="обновитьДопуск('${m}')">
+      <input id="m_${m}_исп" list="splist" placeholder="исполнитель" value="${val(mm.исп)}" oninput="обновитьДопуск('${m}')">
+      <input id="m_${m}_файл" placeholder="файл протокола (PDF)" value="${val(mm.файл)}" oninput="обновитьДопуск('${m}')"
         title="имя файла в папке с документами — пойдёт в пачку к акту в порядке перечня">
       <button class="btn small" type="button" onclick="переключитьМетодСписки('${m}')">⚙ Приборы и НД</button></div>
-      <div id="mset_${m}" class="мет-набор" style="display:none"></div>`;
+      <div id="m_${m}_доп" class="допуск-метода"></div>
+      <div id="mset_${m}" class="мет-набор" style="display:none" onchange="обновитьДопуск('${m}')"></div>`;
   }).join("");
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>${z?"Правка записи":"Новая запись"}</h2>
@@ -202,7 +203,7 @@ function editJournal(id){
         <div class="grid">
           <label>Статус<select id="e_статус">${opts(STATUSES,z?z.статус:"Черновик")}</select></label>
           <label class="wide">Номер акта${блокНомераАкта(z)}</label>
-          <label>Дата контроля<input id="e_дата" type="date" value="${z?val(z.дата):new Date().toISOString().slice(0,10)}"></label>
+          <label>Дата контроля<input id="e_дата" type="date" value="${z?val(z.дата):new Date().toISOString().slice(0,10)}" onchange="обновитьДопускВсе()"></label>
           <label>Заказывающее подразделение<input id="e_подразделение" value="${val(z&&z.подразделение)}"></label>
         </div>
         <div class="sect">Объект контроля</div>
@@ -238,8 +239,31 @@ function editJournal(id){
       </div>
     </div>`;
   objHint();
+  обновитьДопускВсе();
   const f=document.getElementById("e_объект"); if(f&&!z) setTimeout(()=>f.focus(),50);
 }
+// Допуск прямо в форме записи — под строкой каждого заполненного метода:
+// аттестация и ПБ исполнителя на дату контроля, поверка приборов на ту же
+// дату. Те же правила, что в «Готовности к выдаче» акта и в «Проверке
+// данных» (замечанияДопуска), только видны сразу, пока запись заполняют, а
+// не после. Сохранять запись это не мешает: программа не знает всего
+// (удостоверение могли не внести), решение за человеком.
+function обновитьДопуск(m){
+  const бл=document.getElementById("m_"+m+"_доп"); if(!бл) return;
+  const зн=k=>((document.getElementById(k)||{}).value||"").trim();
+  const пан=document.getElementById("mset_"+m), трогали=пан && пан.dataset.filled==="1";
+  const исп=зн("m_"+m+"_исп");
+  if(!исп && !зн("m_"+m+"_н") && !зн("m_"+m+"_файл") && !трогали){ бл.innerHTML=""; return; }
+  const н=_методНаборЗаписи[m]||{приборы:[]};
+  const приборы=трогали?[...document.querySelectorAll(".мчб_си_"+m+":checked")].map(c=>c.value):(н.приборы||[]);
+  const зм=замечанияДопуска(исп, m, зн("e_дата"), приборы, трогали||!!н.свой);
+  if(!зм.length){
+    бл.innerHTML=исп?`<span class="доп-ок">✓ допуск: аттестация и ПБ на дату действуют${приборы.length?", приборы поверены":""}</span>`:"";
+    return;
+  }
+  бл.innerHTML=зм.map(x=>`<div class="${x.ур==="ошибка"?"доп-ош":"доп-вн"}">${x.ур==="ошибка"?"✕":"!"} ${esc(x.т)}</div>`).join("");
+}
+function обновитьДопускВсе(){ METHODS.forEach(обновитьДопуск); }
 // Карточка по строке поля «Объект» — ТОЧНОЕ совпадение: либо строка из
 // списка выбора («наименование, зав. № …, рег. № …»), либо голое
 // наименование. Раньше подсказка искала только по наименованию, а в списке
@@ -322,6 +346,7 @@ function какВПрошлыйРаз(ид){
     toast(пропущено.length?"Строки методов уже заполнены — ничего не менял":"В прошлой записи переносить нечего"); return;
   }
   _несохранено=true;
+  обновитьДопускВсе();
   toast("Из записи от "+(ru(п.дата)||"—")+": "+взято.concat(ещё).join("; ")+
     (пропущено.length?". Уже заполненные строки не тронуты: "+пропущено.join(", "):"")+
     ". Дату и номера протоколов проставьте свои.");

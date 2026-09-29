@@ -230,16 +230,26 @@ function renderPremises(){
 // лаборатории (getЛаб/saveЛаб): один плоский объект плюс «изменено» —
 // не отдельный REGS-справочник.
 function getМетодики(){
+  let сырое=null;
+  try{ const r=ХР.getItem("lnk_metodiki"); if(r) сырое=JSON.parse(r); }catch(e){}
+  return нормМетодики(сырое);
+}
+function нормМетодики(сырое){
   const пусто={}; METHODS.forEach(м=>{ пусто[м]={приборы:[],нд:[]}; });
   let рез=Object.assign({},пусто);
-  try{ const r=ХР.getItem("lnk_metodiki"); if(r) рез=Object.assign({},пусто,JSON.parse(r)); }catch(e){}
+  if(сырое) рез=JSON.parse(JSON.stringify(Object.assign({},пусто,сырое)));
   METHODS.forEach(м=>{ if(!рез[м]||typeof рез[м]!=="object") рез[м]={приборы:[],нд:[]};
     рез[м].приборы=рез[м].приборы||[]; рез[м].нд=рез[м].нд||[]; });
   return рез;
 }
-function saveМетодики(мт){
-  мт=Object.assign({},мт,{изменено:new Date().toISOString(), место:getWS().код});
-  try{ ХР.setItem("lnk_metodiki", JSON.stringify(мт)); }catch(e){}
+// какЕсть — как у saveЛаб: набор пришёл с другого места или это починка
+// при загрузке, своей отметкой времени и местом не перебиваю.
+function saveМетодики(мт, какЕсть){
+  мт=Object.assign({},мт);
+  if(!какЕсть){ мт.изменено=new Date().toISOString(); мт.место=getWS().код; }
+  одиночноеПередЗаписью(REG_МЕТОДИКИ, мт);
+  try{ ХР.setItem("lnk_metodiki", JSON.stringify(мт)); }catch(e){ переполнение(e); }
+  одиночноеПослеЗаписи(REG_МЕТОДИКИ);
   копияПоСлучаю();
 }
 // Сортировка списка для чекбоксов: карточки с совпадающим полем «метод»
@@ -297,7 +307,8 @@ function renderMetod(){
       как новый стандарт для метода.</div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>Метод</th><th>По классификатору СДАНК</th><th style="width:140px">Приборов</th><th style="width:170px">Норм. документов</th></tr></thead>
-      <tbody>${body}</tbody></table></div></div>`;
+      <tbody>${body}</tbody></table></div>
+      <div style="padding:0 16px 12px">${блокИстории(REG_МЕТОДИКИ,ОДИНОЧНЫЕ[REG_МЕТОДИКИ].ид)}</div></div>`;
 }
 function editMetodika(м){
   формаСохранена();
@@ -326,6 +337,7 @@ function editMetodika(м){
         <button class="btn primary" onclick="saveMetodika('${esc(м)}')">✓ Сохранить</button>
         <button class="btn" onclick="switchView('metod')">Отмена</button>
       </div>
+      ${блокИстории(REG_МЕТОДИКИ,ОДИНОЧНЫЕ[REG_МЕТОДИКИ].ид,путь=>путь.split(".")[0]===м)}
     </div></div>`;
 }
 function saveMetodika(м){

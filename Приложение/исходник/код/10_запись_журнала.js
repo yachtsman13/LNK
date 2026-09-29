@@ -1,0 +1,517 @@
+// ── Ввод и правка записи ──────────────────────────────────
+const STATUSES = ["Черновик","В работе","Зарегистрирован","Аннулирован"];
+// Номер акта выбирается, а не вписывается: либо уже существующий (список
+// от большего номера к меньшему, наверху самый свежий), либо новый —
+// следующий по порядку, либо акт не оформляется.
+function блокНомераАкта(z){
+  const текущий=String(z&&z.акт||"").trim();
+  const год=(z&&годЗаписи(z))||String(new Date().getFullYear());
+  const существующие=списокАктов().map(g=>g.ключ)
+    .sort((a,b)=>b.localeCompare(a,"ru",{numeric:true}));
+  const след="АКТ "+дваЗнака(следующийАкт(год))+"-"+год;
+  const режим = !текущий ? "нет" : (существующие.indexOf(текущий)>=0 ? "есть" : "свой");
+  const rb=(v,т,вн)=>`<label class="актвар">
+      <input type="radio" name="актреж" value="${v}" ${режим===v?"checked":""}
+        onchange="актРежим()"> <span>${т}</span>${вн||""}</label>`;
+  return `<div class="актвыбор" id="актвыбор">
+    ${rb("есть","Существующий акт",
+      `<select id="e_актсущ" onchange="актВыбран()">
+         ${существующие.map(к=>`<option value="${esc(к)}" ${к===текущий?"selected":""}>${esc(к)}</option>`).join("")
+           || `<option value="">— актов пока нет —</option>`}
+       </select>`)}
+    ${rb("новый","Новый номер",`<span class="актподсказ">${esc(след)}</span>`)}
+    ${rb("нет","Без акта")}
+    ${режим==="свой"?rb("свой","Как есть",`<span class="актподсказ">${esc(текущий)}</span>`):""}
+    <input type="hidden" id="e_акт" value="${esc(текущий)}">
+  </div>`;
+}
+function актРежим(){
+  const в=document.querySelector('input[name="актреж"]:checked');
+  if(!в) return;
+  const скрытое=document.getElementById("e_акт");
+  const сп=document.getElementById("e_актсущ");
+  if(в.value==="есть")      скрытое.value=сп?sp_знач(сп):"";
+  else if(в.value==="нет")  скрытое.value="";
+  else if(в.value==="новый"){
+    const п=document.querySelector('input[value="новый"]').parentNode.querySelector(".актподсказ");
+    скрытое.value=п?п.textContent.trim():"";
+  }
+  // «свой» оставляет как было
+}
+function sp_знач(сп){ return сп.value||""; }
+function актВыбран(){
+  const р=document.querySelector('input[name="актреж"][value="есть"]');
+  if(р){ р.checked=true; актРежим(); }
+}
+// Приборы и НД метода на КОНКРЕТНОЙ записи журнала — панель заполняется
+// лениво (при первом клике «⚙ Приборы и НД»), чтобы не строить чекбоксы
+// на все 8 методов сразу в каждой форме записи. Текущий выбор на момент
+// открытия панели живёт здесь, saveJournalRec читает уже сам DOM.
+let _методНаборЗаписи={};
+function панельМетодНабор(m){
+  const н=_методНаборЗаписи[m]||{приборы:[],нд:[]};
+  const si=методСортировка(live(S), m), nd=методСортировка(live(НД), m);
+  return `
+    <div class="grp" style="padding-left:0">Приборы (СИ) — ${esc(m)}</div>
+    <input placeholder="Фильтр…" oninput="фильтрСписка(this,'mset_${m}_си')" style="margin-bottom:4px">
+    <div id="mset_${m}_си" class="сд-список" style="max-height:180px">
+      ${списокМетодЧекбоксы(si, н.приборы, "мчб_си_"+m, x=>esc(x.наименование)+(x.зав?(" · зав. № "+esc(x.зав)):"")+
+        (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
+    </div>
+    <div class="grp" style="padding-left:0;margin-top:8px">Нормативные документы — ${esc(m)}</div>
+    <input placeholder="Фильтр…" oninput="фильтрСписка(this,'mset_${m}_нд')" style="margin-bottom:4px">
+    <div id="mset_${m}_нд" class="сд-список" style="max-height:180px">
+      ${списокМетодЧекбоксы(nd, н.нд, "мчб_нд_"+m, x=>esc(x.наименование)+(x.обозначение?(" · "+esc(x.обозначение)):"")+
+        (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
+    </div>
+    <button class="btn small" type="button" onclick="сохранитьСтандартМетода('${m}')" style="margin-top:6px">
+      ✓ Сохранить как стандартный набор метода ${esc(m)}</button>`;
+}
+function переключитьМетодСписки(m){
+  const d=document.getElementById("mset_"+m); if(!d) return;
+  if(d.dataset.filled!=="1"){ d.innerHTML=панельМетодНабор(m); d.dataset.filled="1"; }
+  d.style.display = d.style.display==="none" ? "" : "none";
+}
+function сохранитьСтандартМетода(m){
+  const приборы=[...document.querySelectorAll(".мчб_си_"+m+":checked")].map(c=>c.value);
+  const нд=[...document.querySelectorAll(".мчб_нд_"+m+":checked")].map(c=>c.value);
+  const мт=getМетодики(); мт[m]={приборы:приборы, нд:нд};
+  saveМетодики(мт);
+  toast("Стандартный набор метода «"+m+"» обновлён — на другие записи не влияет");
+}
+// Листание записей прямо в форме — по списку журнала, КАК ОН ПОКАЗАН
+// (отбор и сортировка те же, что на экране: journalRows). Разбирают обычно
+// подряд — проставить исходящий, проверить исполнителей, — и каждый раз
+// выходить в список и искать следующую строку было долго. Несохранённое
+// спрашивается тем же уходСФормы(), что и при уходе в другой раздел.
+// Запись не из показанного списка (открыта из поиска или проверки, а
+// отбор её скрывает) — листать не по чему, кнопок нет.
+function соседиЗаписи(id){
+  const ряды=journalRows(), i=ряды.findIndex(z=>String(z.id)===String(id));
+  if(i<0) return null;
+  return {i:i, всего:ряды.length, пред:i>0?ряды[i-1].id:null, след:i<ряды.length-1?ряды[i+1].id:null};
+}
+function листаниеЗаписи(id){
+  const с=соседиЗаписи(id); if(!с || с.всего<2) return "";
+  const кн=(ид,т,подсказка)=>ид==null
+    ? `<button class="btn small" disabled>${т}</button>`
+    : `<button class="btn small" title="${подсказка} (Alt+${т==="◀"?"←":"→"})" onclick="листатьЗапись('${esc(ид)}')">${т}</button>`;
+  return `<div class="spring"></div><span class="листание noprint" title="По списку журнала с текущим отбором и сортировкой">
+    ${кн(с.пред,"◀","Предыдущая запись списка")}
+    <span class="muted" style="font-size:12px;margin:0 6px">${с.i+1} из ${с.всего}</span>
+    ${кн(с.след,"▶","Следующая запись списка")}</span>`;
+}
+function листатьЗапись(ид){
+  if(ид==null || ид==="") return;
+  if(!уходСФормы()) return;
+  const возврат=_возвратВПроверку;
+  editJournal(ид);
+  _возвратВПроверку=возврат;
+  window.scrollTo(0,0);
+}
+// Из записи — в её акт. Акт собирается по № акта записи (актКлюч), и
+// раньше, чтобы посмотреть его готовность к выдаче, приходилось уходить в
+// «Акты и протоколы» и искать номер в списке. Кнопка берёт СОХРАНЁННЫЙ
+// номер: только что вписанный в форму ещё не акт — несохранённое
+// спрашивается уходСФормы(), как везде. Рядом — число ошибок готовности
+// (готовностьАкта), чтобы было видно, стоит ли идти. Из акта обратно —
+// кнопка «← к записи» (_актИзЗаписи), пока человек сам не ушёл в меню.
+let _актИзЗаписи=null;          // {ключ, ид}
+function кнопкаАктаЗаписи(z){
+  const ключ=актКлюч(z); if(!ключ) return "";
+  const ош=готовностьАкта(ключ).filter(x=>x.ур==="ошибка").length;
+  return `<button class="btn small noprint" style="margin-left:6px" onclick="открытьАктЗаписи('${esc(z.id)}')"
+      title="Открыть акт с его готовностью к выдаче">→ акт № ${esc(номерАкта(ключ))}</button>${
+    ош?`<span class="st bad" style="margin-left:4px" title="ошибок в «Готовности к выдаче» этого акта">ошибок ${ош}</span>`:""}`;
+}
+function открытьАктЗаписи(ид){
+  const z=J.find(x=>String(x.id)===String(ид)&&!x.удалено); if(!z) return;
+  const ключ=актКлюч(z); if(!ключ){ toast("У записи нет № акта"); return; }
+  if(!уходСФормы()) return;
+  _возвратВПроверку=false;
+  _актИзЗаписи={ключ:ключ, ид:z.id};
+  renderAkt(ключ);
+  window.scrollTo(0,0);
+}
+function вернутьсяКЗаписи(){
+  const в=_актИзЗаписи; _актИзЗаписи=null;
+  if(!в || !J.some(x=>String(x.id)===String(в.ид)&&!x.удалено)){ switchView("docs"); return; }
+  editJournal(в.ид);
+}
+function листатьНаШаг(шаг){
+  if(curView==="regedit"){
+    if(!_листРег) return false;
+    const с=соседиКарточки(_листРег.kind,_листРег.id); if(!с) return false;
+    const ид=шаг<0?с.пред:с.след; if(ид==null) return false;
+    листатьКарточку(_листРег.kind,ид); return true;
+  }
+  const card=document.querySelector("#main .card[data-id]"); if(!card||!card.dataset.id) return false;
+  const с=соседиЗаписи(card.dataset.id); if(!с) return false;
+  const ид=шаг<0?с.пред:с.след; if(ид==null) return false;
+  листатьЗапись(ид); return true;
+}
+function editJournal(id){
+  формаСохранена();
+  curView="edit";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
+  const z = id ? J.find(x=>String(x.id)===String(id)) : null;
+  const val=(v)=>esc(v==null?"":v);
+  const opts=(arr,cur)=>arr.map(x=>`<option${x===cur?" selected":""}>${esc(x)}</option>`).join("");
+  // В списке объектов — наименование ВМЕСТЕ с номерами: так их и ищут.
+  // Браузер отбирает подсказки по любому куску строки, значит поиск по
+  // заводскому или регистрационному номеру работает сам собой.
+  const строкаОбъекта=o=>{
+    const ч=[o.наименование];
+    if(String(o.зав||"").trim()) ч.push("зав. № "+o.зав.trim());
+    if(String(o.рег||"").trim()) ч.push("рег. № "+o.рег.trim());
+    return ч.join(", ");
+  };
+  const objlist = live(O)
+    .slice().sort((a,b)=>String(a.наименование||"").localeCompare(String(b.наименование||""),"ru"))
+    .map(o=>`<option value="${esc(строкаОбъекта(o))}">`).join("");
+  const splist = live(P).map(p=>`<option value="${esc(p.вдок||p.фио)}">`).join("");
+  // Приборы и НД по методу для ЭТОЙ записи — при первом открытии панели
+  // подставляется стандартный набор метода (getМетодики), пока запись
+  // не сохранена с открытой панелью, ничего не переопределяет: см.
+  // saveJournalRec — методы[m].приборы/нд пишутся, только если панель
+  // была открыта (dataset.filled==="1"), иначе запись молча следует за
+  // текущим стандартом метода.
+  _методНаборЗаписи = {}; const _мт=getМетодики();
+  const mrows = METHODS.map(m=>{
+    const mm=(z&&z.методы&&z.методы[m])||{};
+    const ст=_мт[m]||{приборы:[],нд:[]};
+    _методНаборЗаписи[m]={ приборы: mm.приборы!=null?mm.приборы:ст.приборы.slice(),
+                            нд: mm.нд!=null?mm.нд:ст.нд.slice() };
+    return `<div class="mrow"><div class="mname">${m}</div>
+      <input id="m_${m}_н" placeholder="№" value="${val(mm.н)}">
+      <input id="m_${m}_исп" list="splist" placeholder="исполнитель" value="${val(mm.исп)}">
+      <input id="m_${m}_файл" placeholder="файл протокола (PDF)" value="${val(mm.файл)}"
+        title="имя файла в папке с документами — пойдёт в пачку к акту в порядке перечня">
+      <button class="btn small" type="button" onclick="переключитьМетодСписки('${m}')">⚙ Приборы и НД</button></div>
+      <div id="mset_${m}" class="мет-набор" style="display:none"></div>`;
+  }).join("");
+  document.getElementById("main").innerHTML=`
+    <div class="head"><h2>${z?"Правка записи":"Новая запись"}</h2>
+      ${z&&актКлюч(z)?кнопкаАктаЗаписи(z):`<span class="sub">${z?"без акта":"журнал"}</span>`}
+      ${z?листаниеЗаписи(z.id):""}</div>
+    <datalist id="objlist">${objlist}</datalist>
+    <datalist id="splist">${splist}</datalist>
+    <div class="card" style="padding:20px" data-id="${z?esc(z.id):""}">
+      <div class="form">
+        <div class="sect" style="margin-top:0">Основное</div>
+        <div class="grid">
+          <label>Статус<select id="e_статус">${opts(STATUSES,z?z.статус:"Черновик")}</select></label>
+          <label class="wide">Номер акта${блокНомераАкта(z)}</label>
+          <label>Дата контроля<input id="e_дата" type="date" value="${z?val(z.дата):new Date().toISOString().slice(0,10)}"></label>
+          <label>Заказывающее подразделение<input id="e_подразделение" value="${val(z&&z.подразделение)}"></label>
+        </div>
+        <div class="sect">Объект контроля</div>
+        <div class="grid">
+          <label class="wide">Объект (из справочника или вручную)
+            <input id="e_объект" list="objlist" value="${val(z&&z.объект)}" oninput="objHint()" placeholder="Начните вводить наименование…">
+            <span class="hint" id="objHint"></span></label>
+          <label class="wide">Наименование в документе (если отличается)
+            <input id="e_наим" value="${val(z&&z.наименование)}"></label>
+        </div>
+        <div class="sect">Методы контроля <span class="hint" style="display:inline">— заполняйте только применённые</span></div>
+        ${mrows}
+        <div class="sect">Заключение <span class="hint" style="display:inline">— по нему раздел
+          «Акты и протоколы» считает документ оформленным</span></div>
+        <div class="grid"><label class="wide"><textarea id="e_заключение"
+          placeholder="Вывод по результатам контроля — как он записан в документе">${val(z&&z.заключение)}</textarea></label></div>
+        <div class="sect">Движение экземпляров</div>
+        <div class="grid">
+          <label class="wide">В архив ЛНК (№ экз., дата)<input id="e_архив" value="${val(z&&z.архив)}"></label>
+          <label class="wide">Исходящий (№ экз., дата отправки)<input id="e_исходящий" value="${val(z&&z.исходящий)}"></label>
+          <label>Отправитель<input id="e_отправитель" list="splist" value="${val(z&&z.отправитель)}"></label>
+        </div>
+        <div class="sect">Примечание</div>
+        <div class="grid"><label class="wide"><textarea id="e_примечание">${val(z&&z.примечание)}</textarea></label></div>
+        <div class="formbtns">
+          <button class="btn primary" onclick="saveJournalRec('${z?esc(z.id):""}')">✓ Сохранить</button>
+          <button class="btn" onclick="switchView('journal')">Отмена</button>
+          ${z?`<button class="btn" onclick="размножитьОткрыть('${esc(z.id)}')"
+            title="Создать такие же записи по другим объектам">⧉ Повторить по объектам</button>`:""}
+          ${z?`<button class="btn danger" style="margin-left:auto" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>`:""}
+        </div>
+        ${z?блокИстории(STORE_KEY,z.id):""}
+      </div>
+    </div>`;
+  objHint();
+  const f=document.getElementById("e_объект"); if(f&&!z) setTimeout(()=>f.focus(),50);
+}
+// Карточка по строке поля «Объект» — ТОЧНОЕ совпадение: либо строка из
+// списка выбора («наименование, зав. № …, рег. № …»), либо голое
+// наименование. Раньше подсказка искала только по наименованию, а в списке
+// выбора у объекта с номером строка длиннее — поэтому объект, выбранный из
+// списка, объявлялся «нет в справочнике», и рядом стояла кнопка завести
+// его ещё раз. Нестрогий поиск (карточкаПоСтроке) здесь не годится: при
+// неверном номере он вернул бы одноимённую карточку с другим номером.
+function карточкаТочно(строка){
+  const с=String(строка||"").trim(); if(!с) return null;
+  return live(O).find(o=>строкаОбъектаСпр(o)===с) || objByName[с] || null;
+}
+function objHint(){
+  const name=((document.getElementById("e_объект")||{}).value||"").trim();
+  const o=карточкаТочно(name);
+  const h=document.getElementById("objHint"); if(!h) return;
+  if(o){
+    h.innerHTML="Из справочника: зав. № "+esc(o.зав||"—")+", рег. "+esc(o.рег||"—");
+    // «Как в прошлый раз» — только в НОВОЙ записи: в сохранённой всё уже
+    // заполнено, а переносить поверх своего чужое незачем.
+    const карт=document.querySelector("#main .card[data-id]");
+    if(карт && !карт.dataset.id){
+      const пред=прошлаяЗаписьОбъекта(o);
+      if(пред) h.innerHTML+=' <button type="button" class="btn" style="padding:2px 9px;margin-left:6px" '+
+        'onclick="какВПрошлыйРаз(\''+esc(пред.id)+'\')" title="Методы, исполнители, приборы и НД, подразделение — из прошлой записи по этому объекту">'+
+        '↺ Как в прошлый раз'+(пред.дата?" ("+ru(пред.дата)+")":"")+'</button>';
+    }
+    // Подставляем подразделение из карточки объекта, только если поле
+    // ещё пустое — не перезаписываем то, что уже вписали руками.
+    const п=найтиПоИд(live(ПОДР),o.подразделение);
+    const поле=document.getElementById("e_подразделение");
+    if(п && поле && !поле.value.trim()) поле.value=п.наименование||"";
+  }
+  else if(name){
+    // Объекта нет в справочнике — предлагаем завести его отсюда же, не
+    // уходя из записи: иначе приходится бросать заполнение, идти в
+    // «Объекты», заводить, возвращаться и набирать заново.
+    h.innerHTML="Нет в справочнике — зав./рег. № не подставятся. "+
+      '<button type="button" class="btn" style="padding:2px 9px;margin-left:6px" '+
+      'onclick="quickAddObject()">＋ Завести объект</button>';
+  } else h.innerHTML="";
+}
+// ── «Как в прошлый раз» ─────────────────────────────────────
+// Объекты контролируются повторно, и новая запись по объекту почти
+// целиком повторяет прошлую: те же методы, те же исполнители, тот же набор
+// приборов и НД. Прошлая запись — самая поздняя по дате контроля среди
+// записей ЭТОЙ карточки (записиОбъекта — по объект_ид), где указан хоть
+// один метод.
+// Что переносится: исполнители по методам, отмеченные в прошлой записи
+// приборы и НД (если там набор переопределяли; иначе запись и так следует
+// за стандартом метода), подразделение и наименование в документе — только
+// в ПУСТЫЕ поля и только в строки методов, которых ещё не касались.
+// Что НЕ переносится: дата, номера протоколов (их выдаёт механизм с правом
+// выдачи), имена файлов протоколов, № акта, заключение, движение
+// экземпляров, примечание — у новой работы они свои.
+function прошлаяЗаписьОбъекта(o){
+  return записиОбъекта(o).find(z=>methodsOf(z).length) || null;
+}
+function какВПрошлыйРаз(ид){
+  const п=J.find(z=>тотЖеИд(z.id,ид)); if(!п) return;
+  const эл=k=>document.getElementById(k);
+  const взято=[], пропущено=[];
+  methodsOf(п).forEach(м=>{
+    const src=(п.методы||{})[м]||{};
+    const н=эл("m_"+м+"_н"), и=эл("m_"+м+"_исп"), ф=эл("m_"+м+"_файл"), пан=эл("mset_"+м);
+    if(!и) return;
+    if(н.value.trim()||и.value.trim()||ф.value.trim()||(пан&&пан.dataset.filled==="1")){ пропущено.push(м); return; }
+    и.value=src.исп||"";
+    if(src.приборы!=null || src.нд!=null){
+      _методНаборЗаписи[м]={приборы:(src.приборы||[]).slice(), нд:(src.нд||[]).slice()};
+      if(пан){ пан.innerHTML=панельМетодНабор(м); пан.dataset.filled="1"; }
+    }
+    взято.push(м+(src.исп?" — "+src.исп:""));
+  });
+  const ещё=[];
+  const под=эл("e_подразделение");
+  if(под && !под.value.trim() && п.подразделение){ под.value=п.подразделение; ещё.push("подразделение"); }
+  const наим=эл("e_наим"), имя=разобратьСтрокуОбъекта(п.объект).имя;
+  if(наим && !наим.value.trim() && п.наименование && п.наименование!==имя){ наим.value=п.наименование; ещё.push("наименование в документе"); }
+  if(!взято.length && !ещё.length){
+    toast(пропущено.length?"Строки методов уже заполнены — ничего не менял":"В прошлой записи переносить нечего"); return;
+  }
+  _несохранено=true;
+  toast("Из записи от "+(ru(п.дата)||"—")+": "+взято.concat(ещё).join("; ")+
+    (пропущено.length?". Уже заполненные строки не тронуты: "+пропущено.join(", "):"")+
+    ". Дату и номера протоколов проставьте свои.");
+}
+function quickAddObject(){
+  const name=((document.getElementById("e_объект")||{}).value||"").trim();
+  if(!name) return;
+  if(карточкаТочно(name)){ toast("Такой объект уже есть"); objHint(); return; }
+  // Строка могла быть набрана в виде «наименование, зав. № …, рег. № …» —
+  // номера кладутся в свои поля, а не остаются хвостом наименования.
+  const р=разобратьСтрокуОбъекта(name);
+  O.push({ id:newId("ОБ"), наименование:р.имя||name, зав:р.зав, рег:р.рег,
+           изменено:new Date().toISOString(), место:getWS().код });
+  saveReg(REG_OBJ,O); rebuildObjIndex(); setChrome(); objHint();
+  toast("Объект заведён. Заводской и рег. номера допишите в разделе «Объекты».");
+}
+// Строка объекта «наименование, зав. № …, рег. № …» — та же, что в списке
+// выбора объекта у записи журнала (там она была локальной), нужна и при
+// повторе записи по объектам.
+function строкаОбъектаСпр(o){
+  const ч=[o.наименование];
+  if(String(o.зав||"").trim()) ч.push("зав. № "+String(o.зав).trim());
+  if(String(o.рег||"").trim()) ч.push("рег. № "+String(o.рег).trim());
+  return ч.join(", ");
+}
+// ── Повторить запись по другим объектам ───────────────────────────────
+// Одна и та же работа ложится в журнал десятками почти одинаковых
+// записей: у заказчика 305 объектов, среди них дюжина однотипных
+// теплообменников, и каждая запись набивается целиком заново. Здесь
+// готовая запись берётся за образец: отмечаются объекты — на каждый
+// создаётся своя запись.
+// Что НЕ копируется и почему: номера протоколов (их выдаёт отдельный
+// механизм с правом выдачи — подставить чужой номер нельзя) и имена
+// файлов протоколов (файл у каждого объекта свой). Всё остальное —
+// дата, статус, акт, подразделение, исполнители по методам, отмеченные
+// приборы и НД, примечание — переносится как есть, дальше правится в
+// самой записи.
+let _размн={ид:"", поиск:"", выбор:{}};
+function размножитьОткрыть(ид){
+  формаСохранена();
+  _размн={ид:String(ид), поиск:"", выбор:{}};
+  renderРазмножить();
+}
+function размножитьПоиск(v){ _размн.поиск=v; renderРазмножить(true); }
+function размножитьОтметить(ид, вкл){ _размн.выбор[String(ид)]=!!вкл; }
+function размножитьВсе(вкл){
+  размножитьСписок().forEach(o=>{ _размн.выбор[String(o.id)]=!!вкл; });
+  renderРазмножить();
+}
+function размножитьСписок(){
+  const q=(_размн.поиск||"").trim().toLowerCase();
+  const сп=live(O);
+  if(!q) return сп.slice(0,300);
+  return сп.filter(o=>[o.наименование,o.зав,o.рег,o.инв].some(
+    v=>String(v==null?"":v).toLowerCase().includes(q))).slice(0,300);
+}
+function размножитьОтмечено(){ return Object.keys(_размн.выбор).filter(k=>_размн.выбор[k]); }
+function renderРазмножить(толькоСписок){
+  const z=J.find(x=>String(x.id)===_размн.ид);
+  if(!z){ toast("Запись не найдена"); switchView("journal"); return; }
+  curView="edit";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
+  const сп=размножитьСписок(), отм=размножитьОтмечено().length;
+  const строки=сп.map(o=>`<label class="мет-стр"><input type="checkbox" value="${esc(o.id)}"
+      ${_размн.выбор[String(o.id)]?"checked":""}
+      onchange="размножитьОтметить('${esc(o.id)}',this.checked)">
+      <span>${esc(строкаОбъектаСпр(o))}</span></label>`).join("")
+    || `<div class="note">Объектов не нашлось.</div>`;
+  if(толькоСписок && document.getElementById("размнСписок")){
+    document.getElementById("размнСписок").innerHTML=строки; return;
+  }
+  const методы=Object.keys(z.методы||{});
+  document.getElementById("main").innerHTML=`
+    <div class="head"><h2>Повторить запись по объектам</h2>
+      <span class="sub">образец: ${esc(z.объект||z.наименование||"запись")} от ${z.дата?ru(z.дата):"—"}</span></div>
+    <div class="card" style="padding:20px">
+      <div class="note">Создам по записи на каждый отмеченный объект. Перенесу дату, статус,
+        № акта, подразделение, исполнителей по методам${методы.length?(" ("+методы.join(", ")+")"):""},
+        отмеченные приборы и НД, примечание. <b>Номера протоколов не переношу</b> — их выдаёт
+        «Выдать номера» в журнале, чужой номер подставлять нельзя. Имя файла протокола тоже
+        не переношу: у каждого объекта он свой.</div>
+      <div class="search" style="margin:10px 0"><span class="ic">⌕</span>
+        <input id="размнQ" placeholder="Поиск объекта: наименование, зав. №, рег. №…"
+          value="${esc(_размн.поиск)}" oninput="размножитьПоиск(this.value)"></div>
+      <div class="mrow" style="margin-bottom:8px">
+        <button class="btn small" type="button" onclick="размножитьВсе(true)">Отметить показанные</button>
+        <button class="btn small" type="button" onclick="размножитьВсе(false)">Снять отметки</button>
+        <span class="note" style="margin:0">Отмечено: <b id="размнСчёт">${отм}</b></span>
+      </div>
+      <div id="размнСписок" class="сд-список мет-набор"
+        style="max-height:46vh;overflow:auto">${строки}</div>
+      <div class="formbtns">
+        <button class="btn primary" onclick="размножитьСоздать()">✓ Создать записи</button>
+        <button class="btn" onclick="editJournal('${esc(z.id)}')">Отмена</button>
+      </div>
+    </div>`;
+  const q=document.getElementById("размнQ");
+  if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
+}
+function размножитьСоздать(){
+  const z=J.find(x=>String(x.id)===_размн.ид);
+  if(!z) return;
+  const ид=размножитьОтмечено();
+  if(!ид.length){ toast("Не отмечен ни один объект"); return; }
+  const объекты=ид.map(k=>найтиПоИд(live(O),k)).filter(Boolean);
+  if(!объекты.length){ toast("Отмеченные объекты не нашлись"); return; }
+  if(!confirm("Создать "+объекты.length+" "+числослово(объекты.length,["запись","записи","записей"])+
+    " по образцу?\n\nНе переносятся: номера протоколов (выдадите их в журнале), "+
+    "имена файлов протоколов и заключение — они у каждого объекта свои.")) return;
+  const отметка=new Date().toISOString(), место=getWS().код;
+  const созданные=[];
+  // id и порядковый номер — ровно как у обычной новой записи журнала
+  // (newId() без префикса, нп по длине списка, новая запись сверху).
+  объекты.forEach(o=>{
+    const методы={};
+    Object.keys(z.методы||{}).forEach(м=>{
+      const исх=z.методы[м]||{}, нов={};
+      if(исх.исп) нов.исп=исх.исп;                 // номер и файл — не переносим
+      if(исх.приборы) нов.приборы=исх.приборы.slice();
+      if(исх.нд) нов.нд=исх.нд.slice();
+      if(Object.keys(нов).length) методы[м]=нов;
+    });
+    созданные.push({
+      id:newId(), нп:J.length+созданные.length+1, статус:z.статус||"", акт:z.акт||"", дата:z.дата||"",
+      год:z.дата?String(z.дата).slice(0,4):"", подразделение:z.подразделение||"",
+      объект:строкаОбъектаСпр(o), объект_ид:o.id, наименование:o.наименование||"",
+      зав:o.зав||"", рег:o.рег||"", методы:методы,
+      заключение:"",                               // вывод у каждого объекта свой — не переносим
+      архив:"", исходящий:"", отправитель:z.отправитель||"", примечание:z.примечание||"",
+      изменено:отметка, место:место });
+  });
+  созданные.forEach(r=>J.unshift(r));
+  saveJournal();
+  формаСохранена();
+  switchView("journal");
+  toast("Создано записей: "+созданные.length+" — номера протоколов выдайте в журнале");
+}
+
+function saveJournalRec(id){
+  // Объект выбирается строкой «наименование, зав. № …, рег. № …» —
+  // разбираем её, чтобы номера легли в свои поля, а не только в строку.
+  const v=(k)=>{const el=document.getElementById(k);return el?el.value.trim():"";};
+  const объект=v("e_объект");
+  if(!объект && !v("e_акт")){ toast("Заполните объект или № акта"); return; }
+  const методы={};
+  METHODS.forEach(m=>{
+    const н=v("m_"+m+"_н"), исп=v("m_"+m+"_исп"), файл=v("m_"+m+"_файл");
+    // Панель «Приборы и НД» открывалась — записываем её выбор в саму
+    // запись (переопределение стандарта метода только здесь); не
+    // открывалась — запись ничего не хранит и всегда следует за
+    // текущим стандартным набором метода (getМетодики).
+    const панель=document.getElementById("mset_"+m);
+    const трогали=панель && панель.dataset.filled==="1";
+    const запись={};
+    if(н) запись.н=н; if(исп) запись.исп=исп; if(файл) запись.файл=файл;
+    if(трогали){
+      запись.приборы=[...document.querySelectorAll(".мчб_си_"+m+":checked")].map(c=>c.value);
+      запись.нд=[...document.querySelectorAll(".мчб_нд_"+m+":checked")].map(c=>c.value);
+    }
+    if(н||исп||файл||трогали) методы[m]=запись;
+  });
+  // Строка объекта приходит из списка вместе с номерами: разбираем её,
+  // а карточку ищем по имени вместе с заводским номером — по одному имени
+  // нельзя, у десятков баллонов оно одинаковое.
+  const {имя:имяОб, зав:завОб, рег:регОб}=разобратьСтрокуОбъекта(объект);
+  const spr=карточкаПоСтроке(объект) || {};
+  const дата=v("e_дата");
+  const rec={
+    статус:v("e_статус"), акт:v("e_акт"), дата:дата, год:дата?дата.slice(0,4):"",
+    подразделение:v("e_подразделение"), объект:объект,
+    объект_ид:spr.id||"", наименование:v("e_наим")||имяОб,
+    зав:завОб||spr.зав||"", рег:регОб||spr.рег||"", методы:методы,
+    заключение:v("e_заключение"),
+    архив:v("e_архив"), исходящий:v("e_исходящий"), отправитель:v("e_отправитель"),
+    примечание:v("e_примечание"),
+    изменено:new Date().toISOString(), место:getWS().код
+  };
+  if(id){ const i=J.findIndex(x=>String(x.id)===String(id)); if(i>=0) J[i]=Object.assign({},J[i],rec); }
+  else { rec.id=newId(); rec.нп=J.length+1; J.unshift(rec); }
+  формаСохранена();
+  saveJournal(); switchView("journal");
+  toast(id?"Запись изменена":"Запись добавлена");
+}
+function delJournal(id){
+  const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
+  if(!confirm("Удалить запись?\n\nАкт № "+(z.акт||"—")+" · "+(z.объект||"")+
+     "\n\nУдаление перенесётся на другие места при обмене.")) return;
+  // Мягкое удаление: запись остаётся надгробием (скрыта), чтобы удаление
+  // можно было перенести файлом обмена. Метка времени решает споры.
+  z.удалено=new Date().toISOString(); z.место=getWS().код;
+  формаСохранена(); saveJournal(); closeDrawer(); switchView("journal"); toast("Запись удалена");
+}
+

@@ -1,0 +1,536 @@
+  :root{
+    --bg:#eef1f5; --panel:#fff; --ink:#1b2430; --muted:#5b6675; --faint:#8a94a2;
+    --line:#d6dbe3; --brand:#1f5c8f; --brand-d:#164668; --brand-soft:#e7f0f8;
+    --ok:#1c7a4a; --okbg:#e3f3ea; --warn:#b26a00; --warnbg:#fff2dc;
+    --danger:#b3261e; --dangerbg:#fbe6e4; --row:#f6f8fb;
+    --shadow:0 1px 3px rgba(20,30,50,.12),0 6px 20px rgba(20,30,50,.06);
+    --head-bg:#f2f5f9; --input-bg:#fff; --tip-bg:#1b2430; --tip-ink:#fff;
+    --top-bg:var(--brand); --top-ink:#fff; --top-tag:rgba(255,255,255,.18);
+    --logo-bg:#fff; --logo-ink:var(--brand); --radius:8px; --card-radius:12px;
+  }
+
+  /* ── Стили оформления (переключаются в шапке) ─────────── */
+  /* Тёмный с оранжевым акцентом */
+  :root[data-theme="ph"]{
+    --bg:#0f0f0f; --panel:#1c1c1c; --ink:#f3f3f3; --muted:#9a9a9a; --faint:#6a6a6a;
+    --line:#2e2e2e; --brand:#ff9000; --brand-d:#ffa733; --brand-soft:#2a1f00; --row:#171717;
+    --ok:#5cd08a; --okbg:#123320; --warn:#e0a300; --warnbg:#332608; --danger:#ff6b60; --dangerbg:#3a1512;
+    --shadow:0 1px 3px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.45);
+    --head-bg:#242424; --input-bg:#141414; --tip-bg:#ff9000; --tip-ink:#000;
+    --top-bg:#000; --top-ink:#fff; --top-tag:rgba(255,144,0,.25);
+    --logo-bg:#ff9000; --logo-ink:#000;
+  }
+  /* Метро — плоские блоки, прямые углы */
+  :root[data-theme="metro"]{
+    --bg:#e8e8e8; --panel:#fff; --ink:#1b1b1b; --muted:#5a5a5a; --faint:#8a8a8a;
+    --line:#cfcfcf; --brand:#2d89ef; --brand-d:#1e6fd0; --brand-soft:#d6e6fb; --row:#f2f2f2;
+    --head-bg:#efefef; --input-bg:#fff; --tip-bg:#2d89ef; --tip-ink:#fff;
+    --top-bg:#2d89ef; --top-ink:#fff; --top-tag:rgba(255,255,255,.22);
+    --logo-bg:#fff; --logo-ink:#2d89ef; --radius:0; --card-radius:0;
+  }
+  :root[data-theme="metro"] .card{box-shadow:none}
+  :root[data-theme="metro"] .btn{box-shadow:none}
+  :root[data-theme="metro"] .nav.on{background:var(--brand);color:#fff}
+  :root[data-theme="metro"] .nav.on .cnt{background:rgba(255,255,255,.25);color:#fff}
+  :root[data-theme="metro"] .pill{background:var(--brand);color:#fff}
+  :root[data-theme="metro"] h1,:root[data-theme="metro"] .head h2{font-weight:300;letter-spacing:.3px}
+  /* VK — синий, светлый, скруглённый */
+  :root[data-theme="vk"]{
+    --bg:#edeef0; --panel:#fff; --ink:#000000; --muted:#626d7a; --faint:#99a2ad;
+    --line:#e7e8ec; --brand:#2787f5; --brand-d:#1a6ee0; --brand-soft:#e5f0fd; --row:#f7f8fa;
+    --head-bg:#f0f2f5; --input-bg:#f0f2f5; --tip-bg:#2787f5; --tip-ink:#fff;
+    --top-bg:#2787f5; --top-ink:#fff; --top-tag:rgba(255,255,255,.22);
+    --logo-bg:#fff; --logo-ink:#2787f5; --radius:10px; --card-radius:12px;
+  }
+  /* Яндекс — жёлтая шапка, красный акцент */
+  :root[data-theme="ya"]{
+    --bg:#f2f2f2; --panel:#fff; --ink:#21201f; --muted:#6b6b6b; --faint:#9a9793;
+    --line:#e6e4e0; --brand:#fc3f1d; --brand-d:#e5330f; --brand-soft:#ffe9e4; --row:#f7f6f4;
+    --head-bg:#f4f2ef; --input-bg:#fff; --tip-bg:#21201f; --tip-ink:#fff;
+    --top-bg:#ffdb4d; --top-ink:#21201f; --top-tag:rgba(0,0,0,.10);
+    --logo-bg:#fc3f1d; --logo-ink:#fff;
+  }
+  /* Мой вкус — графитово-индиговый, мягкие тени */
+  :root[data-theme="taste"]{
+    --bg:#f4f5fb; --panel:#ffffff; --ink:#1e2233; --muted:#5c6480; --faint:#9096ad;
+    --line:#e6e7f2; --brand:#5b5bd6; --brand-d:#4a4ac0; --brand-soft:#ecebfc; --row:#f8f8fd;
+    --okbg:#e8f5ee; --warnbg:#fdf1dc; --dangerbg:#fbe7e5;
+    --shadow:0 1px 2px rgba(40,40,90,.08),0 10px 30px rgba(40,40,90,.10);
+    --head-bg:#f4f4fb; --input-bg:#fff; --tip-bg:#2b2f45; --tip-ink:#fff;
+    --top-bg:#4f46e5; --top-ink:#fff; --top-tag:rgba(255,255,255,.20);
+    --logo-bg:#fff; --logo-ink:#4f46e5; --card-radius:14px;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.45 "Segoe UI",system-ui,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  button{font:inherit;cursor:pointer}
+
+  .app{display:grid;grid-template-columns:224px 1fr;grid-template-rows:52px 1fr 30px;
+    grid-template-areas:"top top" "side main" "side foot";height:100vh}
+  .top{grid-area:top;background:var(--top-bg);color:var(--top-ink);display:flex;align-items:center;
+    gap:12px;padding:0 16px;box-shadow:var(--shadow);z-index:3}
+  .top .logo{width:26px;height:26px;border-radius:6px;background:var(--logo-bg);color:var(--logo-ink);
+    display:grid;place-items:center;font-weight:800}
+  .top h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
+  .top .tag{font-size:11px;background:var(--top-tag);padding:2px 8px;border-radius:20px}
+  .top .spring{flex:1}
+  .top .who{font-size:12px;opacity:.92}
+  .top .справкакн{width:26px;height:26px;border-radius:50%;border:1px solid currentColor;background:transparent;
+    color:var(--top-ink);font:inherit;font-weight:700;font-size:13px;cursor:pointer;opacity:.85;padding:0;flex:none}
+  .top .справкакн:hover{opacity:1;background:var(--top-tag)}
+  table.клавиши{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px}
+  table.клавиши td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.клавиши td:first-child{white-space:nowrap;width:160px}
+  kbd{display:inline-block;font:12px/1.4 ui-monospace,Consolas,monospace;padding:1px 6px;border:1px solid var(--line);
+    border-bottom-width:2px;border-radius:4px;background:var(--panel);margin:1px 0}
+  .top .styleSel{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.95}
+  .top .styleSel select{font:inherit;font-size:12px;color:var(--top-ink);
+    background:var(--top-tag);border:0;border-radius:7px;padding:5px 8px;cursor:pointer}
+  .top .styleSel select option{color:#1b2430;background:#fff}
+
+  .side{grid-area:side;background:var(--panel);border-right:1px solid var(--line);
+    padding:10px 8px;overflow:auto}
+  .side .grp{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);
+    padding:12px 10px 4px}
+  .nav{display:flex;width:100%;text-align:left;border:0;background:transparent;color:var(--ink);
+    padding:9px 10px;border-radius:8px;margin:1px 0;gap:9px;align-items:center}
+  .nav:hover{background:var(--row)}
+  .nav.on{background:var(--brand-soft);color:var(--brand-d);font-weight:600}
+  .nav .ic{width:18px;text-align:center;opacity:.85}
+  .nav .cnt{margin-left:auto;font-size:11px;color:var(--muted);background:var(--row);
+    border-radius:20px;padding:1px 8px}
+  .nav.on .cnt{background:#fff}
+
+  .main{grid-area:main;overflow:auto;padding:18px 22px}
+  .foot{grid-area:foot;background:var(--panel);border-top:1px solid var(--line);
+    display:flex;align-items:center;gap:16px;padding:0 16px;font-size:11.5px;color:var(--muted)}
+  .foot b{color:var(--ink);font-weight:600}
+
+  .head{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .head h2{margin:0;font-size:19px;font-weight:650}
+  .head .sub{color:var(--muted);font-size:12.5px;margin-left:2px}
+  .head .spring{flex:1}
+  .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 13px;
+    border-radius:8px;display:inline-flex;gap:7px;align-items:center;box-shadow:var(--shadow)}
+  .btn:hover{border-color:#b9c2ce}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.primary:hover{background:var(--brand-d)}
+
+  .search{flex:1;min-width:200px;max-width:380px;position:relative}
+  .search input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--line);border-radius:8px;
+    background:var(--input-bg);font:inherit}
+  .search .ic{position:absolute;left:11px;top:8px;color:var(--faint)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--card-radius);
+    box-shadow:var(--shadow);overflow:hidden}
+  .tblwrap{overflow:auto;max-height:calc(100vh - 190px)}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--head-bg);color:var(--muted);font-weight:600;position:sticky;top:0;z-index:1;
+    font-size:11px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+  tbody tr{cursor:pointer}
+  tbody tr:nth-child(even){background:var(--row)}
+  tbody tr:hover{background:var(--brand-soft)}
+  td.num{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+  td.obj{min-width:280px}
+  .pill{font-size:10.5px;padding:2px 7px;border-radius:5px;font-weight:600;display:inline-block;
+    margin:1px 2px 1px 0;background:var(--brand-soft);color:var(--brand-d)}
+  .st{font-size:11px;padding:2px 9px;border-radius:20px;font-weight:600;white-space:nowrap}
+  .st.ok{background:var(--okbg);color:var(--ok)} .st.work{background:var(--warnbg);color:var(--warn)}
+  .st.new{background:var(--brand-soft);color:var(--brand-d)} .st.bad{background:var(--dangerbg);color:var(--danger)}
+  /* «warn» отдаёт срокЛаб() — срок истекает в ближайшие 30 дней (инструктаж,
+     ОЗП, ПБ, аттестация у специалистов); стиля у плашки не было, и она
+     рисовалась бесцветной. «check» — задача выполнена и ждёт проверки:
+     зелёная рамка, не заливка — заливка у «Принята начальником». */
+  .st.warn{background:var(--warnbg);color:var(--warn)}
+  .st.check{background:transparent;color:var(--ok);box-shadow:inset 0 0 0 1px var(--ok)}
+  .empty{padding:44px;text-align:center;color:var(--muted)}
+  .muted{color:var(--muted)}
+
+  /* Детальная карточка справа */
+  .veil{position:fixed;inset:0;background:rgba(20,30,50,.35);display:none;z-index:10}
+  .veil.show{display:block}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(560px,100%);background:var(--panel);
+    box-shadow:-8px 0 40px rgba(0,0,0,.2);transform:translateX(100%);transition:.22s;
+    z-index:11;display:flex;flex-direction:column}
+  .drawer.show{transform:none}
+  .drawer .dh{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px}
+  .drawer .dh h3{margin:0;font-size:16px;flex:1}
+  .drawer .dh .x{border:0;background:var(--row);border-radius:8px;width:30px;height:30px;color:var(--muted)}
+  .drawer .db{padding:6px 20px 24px;overflow:auto}
+  .fld{padding:10px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:150px 1fr;gap:12px}
+  .fld .k{color:var(--muted);font-size:12.5px}
+  .fld .v{font-size:13.5px;white-space:pre-wrap}
+  .sect{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);
+    margin:18px 0 2px;font-weight:700}
+  .mtab{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}
+  .mtab td,.mtab th{border:1px solid var(--line);padding:6px 9px;text-align:left}
+  .mtab th{background:var(--head-bg);font-size:11px;text-transform:uppercase;color:var(--muted)}
+
+  .toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--tip-bg);color:var(--tip-ink);padding:10px 18px;border-radius:10px;opacity:0;
+    transition:.25s;z-index:30;box-shadow:var(--shadow);font-size:13px}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .placeholder{display:grid;place-items:center;height:65%;color:var(--muted);text-align:center}
+  .placeholder .big{font-size:44px;margin-bottom:10px;opacity:.5}
+
+  /* Фильтры журнала */
+  .filters{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:-4px 0 12px}
+  .filters label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+  .filters select{font:inherit;font-size:13px;color:var(--ink);background:var(--input-bg);
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 8px;cursor:pointer}
+  .filters .btn{padding:5px 10px;box-shadow:none}
+  .filters .fnote{font-size:12px;color:var(--faint);margin-left:auto}
+  /* Выбранная кнопка в «сегменте» (годы плана, периоды задач, год поверки).
+     Раньше правило требовало ОБА класса — .filters.seg; панель «Документы по
+     поверке» стоит в шапке карточки, а не в полосе фильтров, и у неё был
+     только .seg — выбранный год ничем не отличался от остальных, нажатие
+     выглядело как «ничего не происходит». Селектор ослаблен до .seg:
+     .filters.seg ему по-прежнему соответствует, прочие свойства не тронуты. */
+  .seg .btn.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  /* Мастер первого запуска: строка шагов и выбор варианта */
+  .шаги{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px}
+  .шаги span{padding:4px 12px;border-radius:14px;background:var(--head-bg);color:var(--muted);font-size:12.5px}
+  .шаги span.on{background:var(--brand);color:#fff}
+  .шаги span.сделан{color:var(--ink)}
+  .мастер .panel{max-width:760px}
+  .мастер .вариант{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+  .мастер .вариант:first-of-type{border-top:0}
+  .мастер .вариант .btn{flex:0 0 250px;text-align:left}
+  .мастер .вариант .note{margin:0}
+  .seg .btn b{font-weight:700;opacity:.85}
+  /* Месяц представления на поверку — по выпадающему списку на каждый год
+     в одну строку; подпись года над списком, чтобы не спутать колонки. */
+  .запасполе{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+  .запасполе input{width:58px;font:inherit;font-size:13px;color:var(--ink);background:var(--input-bg);
+    border:1px solid var(--line);border-radius:var(--radius);padding:4px 6px}
+  .месручной{border-color:var(--brand)}
+  .месгоды{display:flex;gap:10px;flex-wrap:wrap}
+  .месгод{display:flex;flex-direction:column;gap:2px}
+  .месгод b{font-size:11.5px;color:var(--muted);font-weight:600}
+  .pill.nonum{background:transparent;color:var(--muted);border:1px dashed var(--line)}
+  th.sortable{cursor:pointer;user-select:none}
+  th.sortable:hover{color:var(--brand-d);background:var(--brand-soft)}
+
+  /* Пульт */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:14px;margin-bottom:18px}
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--card-radius);
+    box-shadow:var(--shadow);padding:14px 16px}
+  .tile.click{cursor:pointer} .tile.click:hover{border-color:var(--brand)}
+  .tile .n{font-size:27px;font-weight:700;line-height:1.05}
+  .tile .l{color:var(--muted);font-size:12.5px;margin-top:4px}
+  .tile.bad .n{color:var(--danger)} .tile.warn .n{color:var(--warn)}
+  .tile.ok .n{color:var(--ok)} .tile.accent .n{color:var(--brand)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+  @media(max-width:920px){.cols{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--card-radius);
+    box-shadow:var(--shadow);padding:16px 18px}
+  .panel h3{margin:0 0 12px;font-size:14px;display:flex;align-items:center;gap:8px}
+  .panel h3 .pc{margin-left:auto;font-size:12px;color:var(--muted);font-weight:500}
+  .bar{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:13px}
+  .bar .bn{width:42px;color:var(--muted);font-weight:600}
+  .bar .bt{flex:1;background:var(--row);border-radius:6px;height:20px;overflow:hidden}
+  .bar .bf{display:block;height:100%;background:var(--brand);border-radius:6px;min-width:2px}
+  .bar .bc{width:34px;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .plist{font-size:13px}
+  .plist .pr{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);cursor:pointer}
+  .plist .pr:last-child{border-bottom:0} .plist .pr:hover{background:var(--brand-soft)}
+  .plist .pr .g{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .note{color:var(--muted);font-size:12.5px;padding:6px 0}
+
+  /* Редактор записи */
+  .form{max-width:780px}
+  .form .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
+  .form label.wide{grid-column:1/-1}
+  .form input,.form select,.form textarea{padding:8px 10px;border:1px solid var(--line);
+    border-radius:var(--radius);font:inherit;color:var(--ink);background:var(--input-bg)}
+  .form textarea{resize:vertical;min-height:52px}
+  .form .hint{font-size:11.5px;color:var(--faint);min-height:15px}
+  /* Пять элементов строки: метод, №, исполнитель, файл протокола, кнопка.
+     Сетка была на четыре (поле файла добавлено позже) — кнопка уезжала
+     на отдельную строку под названием метода. */
+  .mrow{display:grid;grid-template-columns:50px minmax(60px,.6fr) minmax(120px,1.3fr) minmax(120px,1.2fr) auto;gap:8px;align-items:center;margin:5px 0}
+  .mrow input{min-width:0}
+  .mrow .btn.small{white-space:nowrap}
+  .mrow .mname{font-weight:600;color:var(--muted);font-size:13px}
+  .formbtns{display:flex;gap:10px;margin-top:20px;align-items:center}
+  .btn.danger{color:#fff;background:var(--danger);border-color:var(--danger)}
+  .btn.danger:hover{filter:brightness(.92)}
+  .drawer .db .dbtns{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+
+  /* Документ (акт/заключение) */
+  .draftnote{background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);
+    border-radius:var(--radius);padding:9px 13px;font-size:12.5px;margin-bottom:14px}
+  .sheet{background:#fff;color:#111;max-width:820px;margin:0 auto;padding:40px 48px;
+    border:1px solid var(--line);border-radius:var(--card-radius);box-shadow:var(--shadow);
+    font-family:"Times New Roman",Georgia,serif;font-size:15px;line-height:1.5}
+  .sheet .org{text-align:center;font-weight:700;min-height:22px;outline:none}
+  .sheet .org:empty:before,.sheet .concl:empty:before{content:attr(data-ph);color:#aaa;font-weight:400;font-style:italic}
+  .sheet h1{text-align:center;font-size:20px;letter-spacing:1px;margin:16px 0 2px}
+  .sheet .docsub{text-align:center;font-size:14px;margin-bottom:4px}
+  .sheet .docmeta{text-align:center;color:#333;margin-bottom:18px}
+  .sheet .doch{font-weight:700;margin:12pt 0;text-align:center}
+  .doctbl{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed}
+  .doctbl td,.doctbl th{border:1px solid #8a8a8a;padding:6px 10px;font-size:13.5px;text-align:center;vertical-align:middle}
+  /* Шапка таблицы документа — не как шапка списков программы: общий стиль
+     th (строка «th{...}» выше) запрещает перенос, делает ЗАГЛАВНЫЕ и
+     разрежает буквы — из-за этого длинная подпись колонки паспорта лезла
+     за границу ячейки и налезала на соседнюю. В документе шапка обычная:
+     переносится по словам, своим регистром, без разрядки. */
+  .doctbl th{background:transparent;color:inherit;font-weight:600;
+    white-space:normal;text-transform:none;letter-spacing:normal;position:static}
+  .doctbl td.k{width:36%;color:#333}
+  .пасподзаг{font-weight:700;font-size:13.5px;margin:10px 0 2px}
+  .тблскролл{overflow-x:auto;margin:4px 0}
+  .тблскролл .doctbl{margin:0}
+  /* Форма 2 паспорта — две таблицы подряд (подписи и данные, см. прТабл):
+     сдвиг на пиксель вверх накладывает верхнюю рамку второй таблицы на
+     нижнюю рамку первой, иначе на стыке была бы двойная линия.
+     Специфичность (0,3,0) — выше «.тблскролл .doctbl{margin:0}». */
+  .тблскролл .doctbl.пасданные{margin-top:-1px}
+  /* Ряд кнопок-символов под полем ввода (знак градуса и прочее, чего нет
+     на клавиатуре). Своя мелкая кнопка, а не .btn: .btn в форме тянется
+     по ширине ячейки сетки, здесь нужен плотный ряд. */
+  .симряд{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+  .симкн{min-width:26px;padding:2px 6px;font-size:14px;line-height:1.2;
+    border:1px solid var(--line);border-radius:5px;background:#fff;cursor:pointer}
+  .симкн:hover{background:var(--head-bg)}
+  .пасссылка{font-size:12px;color:#555;font-style:italic}
+  .паспул{margin:2px 0 4px;padding-left:22px}
+  .паспул li{margin:2px 0;font-size:13.5px}
+  .sheet .concl{min-height:70px;border:1px solid #ccc;border-radius:4px;padding:8px 10px;outline:none}
+  .sheet .signs{margin-top:26px}
+  .signrow{display:flex;align-items:flex-end;gap:12px;margin:16px 0 4px}
+  .signrow .line{flex:0 0 200px;border-bottom:1px solid #333;height:16px}
+  .signrow .nm{color:#333;font-size:13.5px}
+
+  /* Акт о проведении работ: вёрстка снята с ваших актов 28-2026 и 35-2026 */
+  /* Свидетельство об аттестации — по центру курсивом */
+  .sheet .labcert{font-size:13px;margin-bottom:28px;text-align:center;font-style:italic}
+  /* Номер протокола не рвётся ни по дефисам, ни от знака № */
+  .ном{white-space:nowrap}
+  .sheet h1.akt{margin:0 0 2px;letter-spacing:0}
+  .sheet .aktsub{text-align:center;font-size:15px;margin-bottom:20px}
+  .sheet .aktp{text-align:justify;margin:0 0 11px;text-indent:1.25cm}
+  .sheet .aktp.noind{text-indent:0}
+  /* Номер раздела: висячий отступ, текст всех разделов от 2 см — как
+     табуляция в Word, чтобы нумерация выглядела одинаково */
+  /* Раздел не разрывается между страницами — то же, что keepLines в Word */
+  .sheet .aktp.вис{text-indent:0;padding-left:2cm;break-inside:avoid}
+  .sheet .aktp.вис .нр{display:inline-block;width:2cm;margin-left:-2cm;
+    text-indent:1.25cm;box-sizing:border-box}
+  .sheet sup{font-size:.7em;line-height:0}
+  .падежи{background:var(--chip);border:1px solid var(--line);border-radius:var(--radius);
+    padding:10px 12px;margin:8px 0 14px;font-family:var(--font)}
+  .падежи .пзаг{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+  .пстрока{display:flex;gap:9px;align-items:center;margin-bottom:6px;font-size:13px}
+  .пстрока .писх{flex:0 0 42%;color:var(--ink)}
+  .пстрока .пстрелка{color:var(--muted)}
+  .пстрока input{flex:1}
+  .nbr{white-space:nowrap;display:inline-block}
+  /* Поля идут В ПОТОКЕ строки. Пока они были inline-block, Chromium
+     переносил строку по границе такого блока и неразрывный пробел перед
+     ним не помогал — строка кончалась на «с», «от», «в». Ширина нужна
+     только пустому полю, чтобы его было видно и куда нажать. */
+  .fld{background:#fff8dc;border-bottom:1px dotted #a07800;padding:0 3px;outline:none;
+    display:inline}
+  .fld:empty{display:inline-block;min-width:70px}
+  .fld:empty:before{content:attr(data-ph);color:#a07800;font-style:italic}
+  .fld.flow{display:inline;min-width:0}
+  .fld.blk{display:block;text-indent:0;border:1px dotted #a07800;border-bottom:1px dotted #a07800;
+    border-radius:4px;padding:6px 9px;margin:2px 0}
+  .fldhint{font-family:var(--font);font-size:11.5px;color:#a07800;margin:2px 0 10px;text-indent:0}
+  /* Подписи: колонка должностей не заходит дальше 8 см от левой границы
+     листа (лист 21 см, левое поле 2,75 см → колонка 5,25 см = 32,8%
+     ширины текста), должности центрированы в этой колонке одинаково для
+     всех; фамилии — по правому краю. Таблица не отрывается от текста. */
+  .signtbl{width:100%;border-collapse:collapse;margin-top:30px;break-inside:avoid}
+  .signtbl td{border:0;padding:10px 0;font-size:14.5px;vertical-align:bottom}
+  .signtbl td.pos{text-align:center}
+  .signtbl td.nm{text-align:right;white-space:nowrap}
+  /* Последний раздел держится вместе с подписями: иначе лист с одними
+     фамилиями — ровно то, чего быть не должно. */
+  .sheet .aktp.последний{break-after:avoid}
+  .sheet .aktp.последний + .fldhint{break-after:avoid}
+  .aktbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .btn.small{padding:4px 9px;font-size:12px}
+  td.mets{font-size:12px;color:var(--muted)}
+  /* План ППР: месяц — узкая ячейка-кнопка */
+  .плантбл th.мес,.плантбл td.мес{width:40px;text-align:center;padding:4px 2px;font-size:12px}
+  .плантбл th.мес.тек{color:var(--accent);font-weight:700}
+  .плантбл td.мес.план{background:var(--chip);cursor:pointer}
+  .плантбл td.мес.сделано{background:#d8f0dd;color:#17692c;font-weight:700;cursor:pointer}
+  .плантбл td.мес.просрочено{background:#fadcdc;color:#a11;font-weight:700;cursor:pointer}
+  .плантбл td.мес.пусто{background:transparent}
+  th.жчб,td.жчб{width:26px;padding-left:8px;padding-right:0;text-align:center}
+  tr.отм td{background:var(--chip)}
+  .кал{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  .кал .дн{min-height:86px;border:1px solid var(--line);border-radius:6px;padding:4px 5px;cursor:pointer;
+    overflow:hidden;background:var(--panel)}
+  .кал .дн:hover{background:var(--brand-soft)}
+  .кал .дн.чуж{opacity:.4} .кал .дн.сег{border-color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand)}
+  .кал .дн.выб{background:var(--brand-soft)}
+  .кал .чис{font-size:12px;font-weight:600;display:flex;justify-content:space-between}
+  .кал .шап{font-size:11px;color:var(--muted);text-align:center;text-transform:uppercase}
+  .кал .сб{font-size:11px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    border-left:3px solid var(--brand);padding-left:3px;margin-top:2px}
+  .кал .сб.прос{border-color:var(--danger);color:var(--danger)} .кал .сб.сдел{border-color:var(--ok);opacity:.6}
+  .form.жмасс label{min-width:150px}
+  /* Тепловая карта «метод × месяц» на пульте: один синий тон, светлее —
+     меньше (правило для величины: одна краска, от светлого к тёмному). В
+     тёмном стиле шкала своя: малое уходит в фон, большое светлеет. */
+  :root{--т1:#cde2fb;--т2:#9ec5f4;--т3:#6da7ec;--т4:#3987e5;--т5:#256abf;--т6:#184f95;--т7:#0d366b;
+        --ти1:#1a1a1a;--ти2:#1a1a1a;--ти3:#1a1a1a;--ти4:#fff;--ти5:#fff;--ти6:#fff;--ти7:#fff}
+  :root[data-theme="ph"]{--т1:#0d366b;--т2:#104281;--т3:#1c5cab;--т4:#2a78d6;--т5:#5598e7;--т6:#86b6ef;--т7:#b7d3f6;
+        --ти1:#f3f3f3;--ти2:#f3f3f3;--ти3:#f3f3f3;--ти4:#fff;--ти5:#1a1a1a;--ти6:#1a1a1a;--ти7:#1a1a1a}
+  .тепло{border-collapse:separate;border-spacing:2px;width:100%;font-size:12px}
+  .тепло th{position:static;background:none;font-weight:600;color:var(--muted);text-transform:none;
+    letter-spacing:0;padding:2px 4px;white-space:nowrap}
+  .тепло td{text-align:center;padding:5px 2px;border-radius:4px;border:0;min-width:30px;cursor:pointer;
+    font-variant-numeric:tabular-nums}
+  .тепло tr,.тепло tbody tr:hover,.тепло tbody tr:nth-child(even){background:none!important}
+  .тепло td.пусто{color:var(--faint);cursor:default;background:none}
+  .тепло td.итог{background:none;color:var(--ink);font-weight:600;cursor:default}
+  .тепло td.м{text-align:left;font-weight:600;color:var(--ink);cursor:default;white-space:nowrap}
+  .тепло td:not(.пусто):not(.итог):not(.м):hover{outline:2px solid var(--ink)}
+  /* Строки сравнения с прошлым годом — тише итогов текущего года. */
+  .тепло tr.срав td{font-weight:normal;color:var(--muted)}
+  .тепло tr.срав td.м{color:var(--muted)}
+  .тепло .т1{background:var(--т1);color:var(--ти1)}.тепло .т2{background:var(--т2);color:var(--ти2)}
+  .тепло .т3{background:var(--т3);color:var(--ти3)}.тепло .т4{background:var(--т4);color:var(--ти4)}
+  .тепло .т5{background:var(--т5);color:var(--ти5)}.тепло .т6{background:var(--т6);color:var(--ти6)}
+  .тепло .т7{background:var(--т7);color:var(--ти7)}
+  .тепло-подск{position:fixed;pointer-events:none;background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;padding:6px 9px;font-size:12px;box-shadow:var(--shadow);z-index:50;display:none}
+  .готовн li{margin:3px 0}
+  .form.жмасс .жмочист{border-color:var(--danger);background:var(--dangerbg)}
+  .пп li.пссылка{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+  .пп li.пссылка:hover{color:var(--accent)}
+  .поручено{margin-left:8px;font-size:12px;color:var(--ok);cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+  .поручено:hover{color:var(--accent)}
+  .листание{display:inline-flex;align-items:center}
+  .недавние{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0 4px}
+  .ппрформа th,.ппрформа td{padding:3px 2px;text-align:center;vertical-align:middle}
+  .ппрформа .btn{white-space:nowrap}
+  .form .ппрформа input.ппрч{width:44px;padding:4px 3px;text-align:right}
+  .плантбл tfoot td{border-top:2px solid var(--line);background:var(--chip)}
+  /* Проверка данных */
+  h3.прз{font-size:14px;margin:20px 0 10px;color:var(--muted);font-weight:600}
+  .кстрока{display:flex;gap:7px;align-items:center;margin-bottom:6px}
+  .кстрока input{flex:1}
+  .допстрока{display:flex;gap:7px;align-items:center;margin-bottom:6px}
+  .допстрока input{flex:1}
+  .празд-табл{display:flex;flex-wrap:wrap;gap:6px 10px;margin:4px 0 6px;
+    max-height:280px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius);
+    padding:8px 10px;background:var(--card)}
+  .празд-стр{display:flex;gap:5px;align-items:center;flex:0 0 auto}
+  .празд-стр input[type=date]{width:140px}
+  .празд-стр select{width:170px}
+  .астрока{display:flex;gap:7px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+  .астрока input{flex:1;min-width:120px}
+  .астрока .ro{padding:6px 4px;color:var(--faint);font-size:13px;white-space:nowrap}
+  .допблок{margin-top:6px;display:flex;flex-direction:column;gap:8px}
+  /* .form label{display:flex;flex-direction:column} (специфичность 0,1,1)
+     иначе перебивает разметку ниже — тот же случай, что уже был с
+     флажками СДАНК (см. комментарий у .сд-список): нужен явный
+     ".form label.допстрк", а не просто ".допстрк". */
+  .form label.допстрк{display:grid;grid-template-columns:minmax(220px,420px) 170px;
+    align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+  .допстрк input{width:100%}
+  .актвыбор{display:flex;flex-direction:column;gap:7px;margin-top:5px}
+  /* Та же ловушка специфичности, что у флажков СДАНК и блока допусков:
+     «.form label» (0,1,1) делал строки выбора столбиком — переключатель над
+     подписью, а список актов растягивался в высокую колонку. Отсюда
+     «.form label.актвар» (0,2,1). */
+  /* Карточка объекта на печать: подписи полей — обычным текстом, не
+     капсом шапки списков (у «th» он общий для всей программы). */
+  table.карт th{text-transform:none;letter-spacing:normal;white-space:normal;position:static;font-size:13px}
+  /* Исполнители в журнале: по человеку в строку, без переноса внутри ФИО. */
+  td.жисп{white-space:nowrap;font-size:12.5px}
+  .актвар,.form label.актвар{display:flex;flex-direction:row;gap:8px;align-items:center;font-size:13.5px;color:var(--ink)}
+  .актвар input[type=radio]{width:auto;padding:0;margin:0}
+  .актвар select{flex:0 1 220px;align-self:center}
+  .актподсказ{color:var(--muted);font-size:12.5px}
+  .полеподсказ{color:var(--muted);font-size:11.5px;line-height:1.35}
+  /* Поле, значение которого берётся из другой карточки и руками не
+     правится (даты поверки у неотъемлемой части) — видно, что оно
+     не для ввода. */
+  .form input.отосновного{background:var(--head-bg);color:var(--muted);cursor:not-allowed}
+  /* Карточка лаборатории: ответственные лица, классификаторы СДАНК */
+  .отв-табл{display:flex;flex-direction:column;gap:6px;margin:4px 0 2px}
+  .отв-стр{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .отв-роль{flex:0 0 340px;font-size:12.5px;color:var(--muted)}
+  .отв-стр input{flex:1;min-width:140px}
+  .сд-список{max-height:260px;overflow-y:auto;border:1px solid var(--line);
+    border-radius:var(--radius);padding:8px 12px;margin:4px 0 2px;background:var(--card)}
+  .сд-группа{margin-bottom:6px}
+  .сд-верх-имя{font-weight:600;font-size:13px;margin:6px 0 3px}
+  .сд-верх{font-weight:600;font-size:13px;margin:6px 0 3px}
+  .сд-под{font-size:12.5px;color:var(--ink);margin:2px 0 2px 18px}
+  .сд-список input[type=checkbox]{width:auto;margin-right:6px;flex:0 0 auto}
+  /* .form label{display:flex;flex-direction:column} задаёт вёрстку полям
+     формы (подпись сверху, поле снизу) — для флажков СДАНК нужна другая:
+     флажок и текст в строку. У «.form label» специфичность (0,1,1),
+     побеждаем явным (0,2,1), не трогая остальные правила выше. */
+  .сд-список label.сд-верх,.сд-список label.сд-под{display:flex;flex-direction:row;align-items:flex-start;gap:0}
+  /* Методики контроля (набор приборов/НД на метод) — тот же список, что
+     и у СДАНК, только строки плоские, без вложенности категорий. */
+  .сд-список label.мет-стр{display:flex;flex-direction:row;align-items:flex-start;gap:6px;font-size:12.5px;margin:2px 0}
+  .мет-набор{border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px;margin:6px 0}
+  .метки{display:flex;gap:14px;flex-wrap:wrap;margin:4px 0 2px}
+  .метка{display:flex;gap:6px;align-items:center;font-size:13.5px;color:var(--ink)}
+  .метка input{width:auto}
+  .пров{background:var(--card);border:1px solid var(--line);border-left-width:4px;
+    border-radius:var(--card-radius);padding:11px 14px;margin-bottom:9px}
+  .пров.ошибка{border-left-color:var(--danger)}
+  .пров.внимание{border-left-color:var(--warn)}
+  .пров.наблюдение{border-left-color:var(--line)}
+  .пг{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap}
+  .пз{font-weight:700;width:16px;text-align:center}
+  .пров.ошибка .пз{color:var(--danger)} .пров.внимание .пз{color:var(--warn)}
+  .пт{color:var(--muted)}
+  ul.пп{margin:7px 0 0 30px;padding:0;font-size:12.5px;color:var(--muted);line-height:1.65}
+
+  @media print{
+    .app{display:block;height:auto}
+    .top,.side,.foot,.head,.veil,.drawer,.noprint{display:none!important}
+    .main{padding:0;overflow:visible} .card{border:0;box-shadow:none}
+    .tblwrap{max-height:none;overflow:visible}
+    .print-only{display:block!important} @page{margin:14mm}
+    .sheet{border:0;box-shadow:none;max-width:none;padding:0;color:#000}
+    .sheet .concl{border:0;padding:0}
+    /* На бумаге подсветка полей не нужна — только текст */
+    .fld{background:transparent!important;border:0!important;padding:0}
+    .fld.blk{border:0!important;padding:0;margin:0}
+    .fldhint{display:none}
+    .signtbl td{border:0!important;font-size:13.5px!important;color:#000!important}
+
+    /* Многостраничная печать таблиц */
+    thead{display:table-header-group}      /* шапка повторяется на каждой странице */
+    tr{break-inside:avoid}                 /* строка не рвётся между страницами */
+    th{position:static;background:#eee!important;color:#000!important;
+       border:1px solid #999;font-size:10.5px}
+    /* Паспорт попросил без серой заливки шапок — своя, более частная
+       (и потому более сильная) отмена общего правила выше. */
+    .doctbl th{background:transparent!important}
+    /* В документе всё чёрным: экранные «приглушённые» цвета на бумаге
+       выглядят выцветшими. И никакой подсветки строки под курсором. */
+    td,td.num,td.obj,.muted{border-color:#999;font-size:11px;color:#000!important}
+    td{border:1px solid #999}
+    tbody tr:hover{background:transparent}
+    table{font-size:11px}
+    .pill{background:none!important;color:#000!important;border:1px solid #999;padding:0 3px}
+    .st{background:none!important;color:#000!important;padding:0}
+    .pnum{display:table-cell!important}
+    body{background:#fff}
+  }
+  .print-only{display:none}
+  .print-head .ph-title{font-size:17px;font-weight:700;text-align:center}
+  .print-head .ph-sub{font-size:12px;text-align:center;color:#333;margin:4px 0 12px}
+  .print-sign{margin-top:22px;font-size:12.5px}
+  .print-sign .sl{display:inline-block;width:220px;border-bottom:1px solid #333;margin:0 8px}
+  .pnum{display:none}
+  .noprint{}

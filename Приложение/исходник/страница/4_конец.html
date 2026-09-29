@@ -1,0 +1,15 @@
+</script>
+<script>
+// Запуск: основной код стартует только после того, как база прочитана
+// из IndexedDB в память (см. ХР выше). Сам код лежит выше обычным текстом
+// (type="text/plain") и исполняется здесь как обычный скрипт страницы —
+// с тем же глобальным пространством имён, поэтому onclick="…" в разметке
+// работают как раньше.
+ХР.загрузить().then(()=>{
+  const к=document.createElement("script");
+  к.textContent=document.getElementById("lnk-main").textContent;
+  document.body.appendChild(к);
+});
+</script>
+</body>
+</html>

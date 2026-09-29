@@ -1,0 +1,70 @@
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="logo">Л</div>
+    <h1>Система ЛНК</h1>
+    <span class="tag" id="verTag">проба • реальные данные</span>
+    <div class="spring"></div>
+    <label class="styleSel">Стиль
+      <select id="theme">
+        <option value="default">Спокойный</option>
+        <option value="taste">Мой вкус</option>
+        <option value="metro">Метро</option>
+        <option value="vk">VK</option>
+        <option value="ya">Яндекс</option>
+        <option value="ph">Тёмный (оранжевый)</option>
+      </select>
+    </label>
+    <div class="who">Место: <b id="wsName">М1</b></div>
+    <button class="справкакн" id="справкаКн" onclick="справкаКлавиш()" title="Клавиши и приёмы ввода (F1)">?</button>
+  </div>
+
+  <nav class="side" id="side">
+    <div class="grp">Обзор</div>
+    <button class="nav on" data-view="dash"><span class="ic">◈</span>Пульт</button>
+    <button class="nav" data-view="check"><span class="ic">✓</span>Проверка данных<span class="cnt" id="cCheck">0</span></button>
+    <button class="nav" data-view="find"><span class="ic">⌕</span>Поиск по базе</button>
+    <button class="nav" data-view="calendar"><span class="ic">▦</span>Календарь сроков</button>
+    <div class="grp">Работа</div>
+    <button class="nav" data-view="journal"><span class="ic">▤</span>Журнал<span class="cnt" id="cJournal">0</span></button>
+    <button class="nav" data-view="objects"><span class="ic">▢</span>Объекты<span class="cnt" id="cObjects">0</span></button>
+    <button class="nav" data-view="si"><span class="ic">⌗</span>Приборы (СИ)<span class="cnt" id="cSi">0</span></button>
+    <button class="nav" data-view="people"><span class="ic">☺</span>Специалисты<span class="cnt" id="cPeople">0</span></button>
+    <button class="nav" data-view="podr"><span class="ic">◨</span>Подразделения<span class="cnt" id="cPodr">0</span></button>
+    <button class="nav" data-view="nd"><span class="ic">▤</span>Норм. документы<span class="cnt" id="cНд">0</span></button>
+    <button class="nav" data-view="premises"><span class="ic">▦</span>Помещения<span class="cnt" id="cПом">0</span></button>
+    <button class="nav" data-view="lab"><span class="ic">⌂</span>Лаборатория</button>
+    <button class="nav" data-view="passport"><span class="ic">▤</span>Паспорт ЛНК</button>
+    <div class="grp">Документы</div>
+    <button class="nav" data-view="metod"><span class="ic">⚙</span>Методики контроля</button>
+    <button class="nav" data-view="docs"><span class="ic">▦</span>Акты и протоколы<span class="cnt" id="cDocs">0</span></button>
+    <button class="nav" data-view="plan"><span class="ic">◷</span>План работ</button>
+    <button class="nav" data-view="tasks"><span class="ic">✓</span>Задачи<span class="cnt" id="cTasks">0</span></button>
+    <div class="grp">Обмен</div>
+    <button class="nav" data-view="exchange"><span class="ic">⇄</span>Обмен файлами</button>
+  </nav>
+
+  <main class="main" id="main"></main>
+
+  <div class="foot">
+    <span>Собрано: <b id="fBuilt">—</b></span>
+    <span>Записей журнала: <b id="fRows">0</b></span>
+    <span id="fОтмена"></span>
+    <span style="margin-left:auto">данные только для примера</span>
+  </div>
+</div>
+
+<div class="veil" id="veil" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="dh"><h3 id="dTitle">—</h3><button class="x" onclick="closeDrawer()">✕</button></div>
+  <div class="db" id="dBody"></div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script id="lnk-data" type="application/json">/*ДАННЫЕ*/</script>
+<script id="lnk-ppr" type="application/json">/*ППР*/</script>
+<script>
+"use strict";

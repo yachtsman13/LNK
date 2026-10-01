@@ -453,6 +453,7 @@ async function главное(){
         // В картотеке метод не указан ни у одного прибора — ставим одному ВИК.
         const a = приборыВДокументы().find(x => приборКатегория(x) === "Средство НК" && !x.основной_ид);
         a.метод = "ВИК";
+        a.год_выпуска = "2015"; a.дата_ввода = "2016-03-12";
         S.push({ id: "ЧАСТЬ-Т", наименование: "ТЕСТ-ДАТЧИК", тип: "Д-9", основной_ид: String(a.id), метод: "УЗД",
           категория: "Вспомогательное оборудование", изменено: new Date().toISOString(), место: "М1" });
         saveReg(REG_SI, S);
@@ -483,6 +484,28 @@ async function главное(){
         "Word: часть после прибора, без «часть:»");
       да(/<w:gridSpan w:val="8"\/>(?:(?!<\/w:tc>).)*<w:b\/>(?:(?!<\/w:tc>).)*Визуальный и измерительный метод контроля/.test(xml.replace(/\u00a0/g, " ")),
         "Word: строка метода — ячейка на 8 колонок, жирным");
+      да(!/введ[её]н в эксплуатацию/.test(текст.replace(/\u00a0/g, " ")) &&
+         /<w:t xml:space="preserve">2015,<\/w:t><\/w:r><\/w:p><w:p>(?:(?!<\/w:p>).)*12\.03\.2016/.test(xml),
+        "Word: год выпуска с запятой, дата ввода — следующей строкой, без «введён в эксплуатацию»");
+      // Таблицы паспорта: 10 пт (sz 20), альбомные — 25 см (14173 твипа) по центру;
+      // сумма gridCol у каждой таблицы равна tblW.
+      const табл = xml.split("<w:tbl>").slice(1).map(x => x.split("</w:tbl>")[0]);
+      const ширины = табл.map(x => ({ tblW: +(/<w:tblW w:w="(\d+)"/.exec(x) || [])[1],
+        grid: [...x.matchAll(/<w:gridCol w:w="(\d+)"\/>/g)].reduce((s, m) => s + +m[1], 0),
+        центр: /<w:tblW[^>]*\/><w:jc w:val="center"\/>/.test(x),
+        кегли: [...new Set([...x.matchAll(/<w:sz w:val="(\d+)"\/>/g)].map(m => m[1]))] }));
+      const альб = ширины.filter(x => x.tblW > 10000);
+      да(альб.length >= 3 && альб.every(x => x.tblW === 14173 && x.центр),
+        "Word: альбомные таблицы паспорта — 25 см (14173 твипа) по центру", JSON.stringify(альб.map(x => [x.tblW, x.центр])));
+      да(ширины.every(x => x.tblW === x.grid), "Word: у всех таблиц паспорта сумма колонок равна ширине таблицы",
+        JSON.stringify(ширины.filter(x => x.tblW !== x.grid)));
+      да(ширины.every(x => x.кегли.length === 1 && x.кегли[0] === "20"), "Word: текст всех таблиц паспорта — 10 пт",
+        JSON.stringify(ширины.map(x => x.кегли)));
+      await q.evaluate(() => exportПланWord());
+      const [план] = await собратьФайлы(q);
+      const xmlП = execSync(`unzip -p "${план}" word/document.xml`, { maxBuffer: 64e6 }).toString();
+      да(/<w:sz w:val="24"\/>/.test(xmlП) && !/<w:jc w:val="center"\/><w:tblBorders>/.test(xmlП) && /<w:tblW w:w="14003"/.test(xmlП),
+        "план ППР в Word не затронут: 12 пт и прежняя ширина");
       const пр = spawnSync("python3", [path.join(КОРЕНЬ, "scripts", "проверка_docx.py"), паспорт], { encoding: "utf8" });
       да(пр.status === 0, "Word: паспорт проходит проверка_docx.py", (пр.stdout || "") + (пр.stderr || ""));
       await m.c.close();

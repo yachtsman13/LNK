@@ -800,9 +800,14 @@ function exportПланWord(){
 // wТаблШапка() паспорта считает ширину таблицы по ШИРИНА_ТЕКСТА (книжная
 // страница) — плану нужна альбомная, поэтому берём ту же вёрстку ячеек,
 // но с суммой ширин по ШИРИНА_АЛЬБОМ.
+// tblW — ширинаАльбомТабл(): у паспорта 25 см и таблица по центру (jc
+// стоит сразу после tblW — порядок CT_TblPr), у остальных — как было.
+function tblWАльбом(){
+  return '<w:tblW w:w="'+ширинаАльбомТабл()+'" w:type="dxa"/>'+(_таблПаспорт?'<w:jc w:val="center"/>':'');
+}
 function wТаблШапкаШир(шапка, ширины, строки, центр, серый){
   const grid=ширины.map(ш=>'<w:gridCol w:w="'+ш+'"/>').join('');
-  let из='<w:tbl><w:tblPr><w:tblW w:w="'+ШИРИНА_АЛЬБОМ+'" w:type="dxa"/>'+
+  let из='<w:tbl><w:tblPr>'+tblWАльбом()+
     '<w:tblBorders>'+wГраницыТабл()+'</w:tblBorders>'+
     '<w:tblLayout w:type="fixed"/>'+
     '<w:tblCellMar><w:left w:w="60" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tblCellMar>'+
@@ -818,7 +823,7 @@ function wТаблШапкаШир(шапка, ширины, строки, це�
 // отдельные таблицы, см. wРазделительТаблиц.
 function wКаркасАльбом(ширины, строкиXml){
   const grid=ширины.map(ш=>'<w:gridCol w:w="'+ш+'"/>').join('');
-  return '<w:tbl><w:tblPr><w:tblW w:w="'+ШИРИНА_АЛЬБОМ+'" w:type="dxa"/>'+
+  return '<w:tbl><w:tblPr>'+tblWАльбом()+
     '<w:tblBorders>'+wГраницыТабл()+'</w:tblBorders>'+
     '<w:tblLayout w:type="fixed"/>'+
     '<w:tblCellMar><w:left w:w="60" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tblCellMar>'+

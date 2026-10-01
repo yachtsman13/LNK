@@ -290,6 +290,9 @@
     white-space:normal;text-transform:none;letter-spacing:normal;position:static}
   .doctbl td.k{width:36%;color:#333}
   .пасподзаг{font-weight:700;font-size:13.5px;margin:10px 0 2px}
+  /* строка-раздел внутри таблицы паспорта: метод или группа документов */
+  .doctbl tr.пасраздел td{font-weight:700;text-align:center;vertical-align:middle}
+  .doctbl tr.пасраздел{break-after:avoid;page-break-after:avoid}
   .тблскролл{overflow-x:auto;margin:4px 0}
   .тблскролл .doctbl{margin:0}
   /* Форма 2 паспорта — две таблицы подряд (подписи и данные, см. прТабл):

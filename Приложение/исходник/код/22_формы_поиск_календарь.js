@@ -8,7 +8,7 @@
 // перерисовывают свой блок, не теряя полей. Выбор файла в «Обмене» —
 // тоже change, но импорт там происходит сразу, поэтому раздел в список
 // не входит: иначе после каждого импорта выскакивал бы ложный вопрос.
-const ВИДЫ_С_ФОРМОЙ=["edit","regedit","taskedit","lab","metod","planedit"];
+const ВИДЫ_С_ФОРМОЙ=["edit","regedit","taskedit","lab","metod","planedit","partsedit"];
 let _несохранено=false;
 function формаСохранена(){ _несохранено=false; }
 function уходСФормы(){
@@ -283,7 +283,7 @@ function renderНайти(толькоРезультат){
 document.addEventListener("keydown",e=>{
   if(!(e.ctrlKey||e.metaKey) || e.altKey || !(e.code==="KeyS" || /^[sSыЫ]$/.test(e.key))) return;
   if(ВИДЫ_С_ФОРМОЙ.indexOf(curView)<0) return;
-  const кн=[...document.querySelectorAll("#main button.btn.primary")].find(b=>/Сохранить/.test(b.textContent) && b.offsetParent!==null);
+  const кн=[...document.querySelectorAll("#main button.btn.primary")].find(b=>/Сохранить|Добавить части/.test(b.textContent) && b.offsetParent!==null);
   if(!кн) return;
   e.preventDefault();
   if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // дописанное поле — в его значение

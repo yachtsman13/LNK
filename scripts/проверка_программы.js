@@ -23,7 +23,8 @@
 //      карточки лаборатории и методик с двух мест, их история правок;
 //  10. паспорт: неотъемлемая часть сразу после прибора, без отметки
 //      «часть:», методы и группы документов — строками-разделами;
-//  11. неотъемлемые части списком: образец + столбик заводских номеров.
+//  11. неотъемлемые части списком: образец + столбик заводских номеров;
+//  12. файлы в папке с документами: подпапки, кнопка «📎», проверка.
 //
 // Итог — список ✓/✗ и код выхода: 0 — всё прошло, 1 — есть провалы.
 // Файлы выгрузок остаются во временной папке, путь печатается в конце.
@@ -574,6 +575,77 @@ async function главное(){
       await перезагрузить(q);
       const пз = await q.evaluate(() => частиПрибора(live(S).find(x => x.инв === "ИНВ-77" && !x.основной_ид).id).length);
       да(пз === 5, "после перезагрузки части на месте", String(пз));
+      await m.c.close();
+    }
+
+    // ── 12. Файлы в папке с документами ─────────────────────────
+    раздел("12. Файлы в папке с документами: подпапки, выбор, проверка");
+    {
+      const m = await место(b, "М1"); все.push(m.p); const q = m.p;
+      const r = await q.evaluate(async () => {
+        // Поддельная папка с тем же устройством, что у File System Access:
+        // выбрать настоящую папку безголовый браузер без человека не может.
+        const NF = () => new DOMException("нет", "NotFoundError");
+        function файл(имя, текст){ return { kind: "file", name: имя, _т: текст,
+          async getFile(){ const т = this._т; return { arrayBuffer: async () => new TextEncoder().encode(т).buffer }; },
+          async createWritable(){ const я = this; return { async write(d){ я._т = new TextDecoder().decode(d); }, async close(){} }; } }; }
+        function папка(имя){ return { kind: "directory", name: имя, д: {},
+          async getDirectoryHandle(n, o){ if(!this.д[n]){ if(o && o.create) this.д[n] = папка(n); else throw NF(); }
+            if(this.д[n].kind !== "directory") throw NF(); return this.д[n]; },
+          async getFileHandle(n, o){ if(!this.д[n]){ if(o && o.create) this.д[n] = файл(n, ""); else throw NF(); }
+            if(this.д[n].kind !== "file") throw NF(); return this.д[n]; },
+          async resolve(h){ const путь = (п, пр) => { for(const k in п.д){ const x = п.д[k];
+              if(x === h) return пр.concat(k); if(x.kind === "directory"){ const р = путь(x, пр.concat(k)); if(р) return р; } } return null; };
+            return путь(this, []); },
+          async queryPermission(){ return "granted"; }, async requestPermission(){ return "granted"; } }; }
+        const корень = папка("Документы");
+        const г27 = await корень.getDirectoryHandle("2027", { create: true });
+        const внутри = await г27.getFileHandle("Поверка 12978.pdf", { create: true }); внутри._т = "PDF-1";
+        const снаружи = файл("Скан.pdf", "PDF-2");
+        _папкаДок = корень;
+        const пути = [путьФайлаДок("2027\\Поверка 1.pdf"), путьФайлаДок(" /2027//a.pdf "), путьФайлаДок("../x.pdf"), имяБезПапок("2027/a.pdf")];
+        // выбор файла внутри подпапки
+        const a = live(S).find(x => x.поверка_до && !x.основной_ид);
+        editReg("si", a.id);
+        const кнопок = document.querySelectorAll(".файлкн").length;
+        let следующий = внутри;
+        window.showOpenFilePicker = async () => [следующий];
+        await выбратьФайлДок("rf_файл_поверки");
+        const значение1 = document.getElementById("rf_файл_поверки").value, грязная = _несохранено;
+        // файл снаружи — копируется в корень
+        следующий = снаружи;
+        await выбратьФайлДок("rf_файл_поверки");
+        const значение2 = document.getElementById("rf_файл_поверки").value, скопирован = корень.д["Скан.pdf"] && корень.д["Скан.pdf"]._т;
+        document.getElementById("rf_файл_поверки").value = "2027/Поверка 12978.pdf";
+        saveRegRec("si", a.id);
+        // второй прибор — имя с опечаткой
+        const b2 = live(S).find(x => x.поверка_до && !x.основной_ид && x !== a);
+        b2.файл_поверки = "2027/Поверка 99999.pdf"; saveReg(REG_SI, S);
+        await проверитьФайлыДок();
+        const р = _проверкаФайлов, экран = document.getElementById("main").textContent;
+        // пачка: путь с подпапкой читается, в пачку идёт под своим именем
+        const ф = await файлИзПапкиДок(корень, "2027/Поверка 12978.pdf");
+        const текст = new TextDecoder().decode(await (await ф.getFile()).arrayBuffer());
+        let нетФайла = false; try{ await файлИзПапкиДок(корень, "2027/нет.pdf"); }catch(e){ нетФайла = e.name === "NotFoundError"; }
+        // журнал и специалист: кнопки есть
+        editJournal(live(J)[0].id);
+        const кнопЖ = document.querySelectorAll(".mrow .файлкн").length;
+        return { пути, кнопок, значение1, грязная, значение2, скопирован, всего: р.всего, нет: р.нет.map(x => x.файл),
+          безИмени: р.безИмени.length, ожидБез: приборыБезФайлаПоверки().length, экранНет: /Нет в папке \(1\)/.test(экран),
+          текст, нетФайла, кнопЖ };
+      });
+      да(JSON.stringify(r.пути) === JSON.stringify([["2027", "Поверка 1.pdf"], ["2027", "a.pdf"], null, "a.pdf"]),
+        "путь с подпапкой: «\\» и «/», лишние разделители, «..» запрещено", JSON.stringify(r.пути));
+      да(r.кнопок >= 1 && r.кнопЖ === 8, "кнопка «📎» у поля файла в карточке прибора и у каждого метода записи журнала", JSON.stringify([r.кнопок, r.кнопЖ]));
+      да(r.значение1 === "2027/Поверка 12978.pdf" && r.грязная, "выбор файла в подпапке подставляет путь, форма считается изменённой", r.значение1);
+      да(r.значение2 === "Скан.pdf" && r.скопирован === "PDF-2", "файл вне папки — с вопросом копируется в папку, имя подставлено", r.значение2);
+      да(r.нет.length === 1 && r.нет[0] === "2027/Поверка 99999.pdf" && r.экранНет,
+        "проверка файлов находит отсутствующий и не трогает найденный в подпапке", JSON.stringify(r.нет));
+      да(r.безИмени === r.ожидБез && r.безИмени > 0, "проверка называет приборы без имени файла поверки", String(r.безИмени));
+      да(r.текст === "PDF-1" && r.нетФайла, "файл из подпапки читается для пачки, несуществующий — «не найден»");
+      const сост = await q.evaluate(() => { const о = { файл: "2027/Поверка 1.pdf" };
+        return имяБезПапок(о.файл); });
+      да(сост === "Поверка 1.pdf", "в пачку файл из подпапки кладётся под своим именем, без пути");
       await m.c.close();
     }
 

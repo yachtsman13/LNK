@@ -304,6 +304,11 @@
      на клавиатуре). Своя мелкая кнопка, а не .btn: .btn в форме тянется
      по ширине ячейки сетки, здесь нужен плотный ряд. */
   .симряд{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+  .form label .файлкн{align-self:flex-start;margin-top:4px}
+  .файлобёртка{display:flex;gap:4px;min-width:0}
+  .файлобёртка input{flex:1;min-width:0}
+  .form label .файлобёртка .файлкн,.атт-строка .файлкн{margin-top:0;align-self:center}
+  ul.файлсписок{margin:4px 0 8px;padding-left:20px;font-size:13px;line-height:1.6}
   .симкн{min-width:26px;padding:2px 6px;font-size:14px;line-height:1.2;
     border:1px solid var(--line);border-radius:5px;background:#fff;cursor:pointer}
   .симкн:hover{background:var(--head-bg)}

@@ -185,8 +185,8 @@ function editJournal(id){
     return `<div class="mrow"><div class="mname">${m}</div>
       <input id="m_${m}_н" placeholder="№" value="${val(mm.н)}" oninput="обновитьДопуск('${m}')">
       <input id="m_${m}_исп" list="splist" placeholder="исполнитель" value="${val(mm.исп)}" oninput="обновитьДопуск('${m}')">
-      <input id="m_${m}_файл" placeholder="файл протокола (PDF)" value="${val(mm.файл)}" oninput="обновитьДопуск('${m}')"
-        title="имя файла в папке с документами — пойдёт в пачку к акту в порядке перечня">
+      <span class="файлобёртка"><input id="m_${m}_файл" placeholder="файл протокола (PDF)" value="${val(mm.файл)}" oninput="обновитьДопуск('${m}')"
+        title="имя файла в папке с документами — пойдёт в пачку к акту в порядке перечня">${кнопкаФайлаДок("m_"+m+"_файл")}</span>
       <button class="btn small" type="button" onclick="переключитьМетодСписки('${m}')">⚙ Приборы и НД</button></div>
       <div id="m_${m}_доп" class="допуск-метода"></div>
       <div id="mset_${m}" class="мет-набор" style="display:none" onchange="обновитьДопуск('${m}')"></div>`;

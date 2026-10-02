@@ -258,10 +258,10 @@ function renderDash(){
         return `<div class="tile ${к} click" onclick="switchView('lab')">
           <div class="n" style="font-size:19px">${esc(т)}</div>
           <div class="l">аттестация ЛНК</div></div>`; })()}
-      ${(()=>{ const л=getЛаб(); if(!л.проверка) return "";
-        const [к,т]=срокЛаб(л.проверка);
+      ${(()=>{ const л=getЛаб(); if(!л.проверка && !л.проверка_пройдена) return "";
+        const [к,т]=состояниеПроверкиЛНК(л);
         return `<div class="tile ${к} click" onclick="switchView('lab')">
-          <div class="n" style="font-size:19px">${esc(т)}</div>
+          <div class="n" style="font-size:${т.length>24?14:19}px">${esc(т)}</div>
           <div class="l">плановая проверка ЛНК</div></div>`; })()}
     </div>
     <div id="мои_задачи">${блокМоихЗадач()}</div>

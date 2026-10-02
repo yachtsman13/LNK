@@ -180,7 +180,7 @@ function renderDash(){
   // поверка приборов — списанные не считаются: их не представляют на
   // поверку, поэтому их просрочка не дело, а просто история
   const groups={bad:[],work:[],ok:[],none:[]};
-  приборыВДокументы().forEach(s=>{ const[c]=siStatus(s);
+  приборыСПоверкой().forEach(s=>{ const[c]=siStatus(s);
     if(c==="bad")groups.bad.push(s); else if(c==="work")groups.work.push(s);
     else if(c==="ok")groups.ok.push(s); else groups.none.push(s); });
   const attn=groups.bad.concat(groups.work)
@@ -197,8 +197,8 @@ function renderDash(){
     <div class="n">${n}</div><div class="l">${l}</div></div>`;
 
   let поверкаHTML;
-  if(приборыВДокументы().length===0){ поверкаHTML=`<div class="note">${
-    live(S).length?"Все приборы списаны — следить за поверкой нечего.":"Приборы не заведены."}</div>`; }
+  if(приборыСПоверкой().length===0){ поверкаHTML=`<div class="note">${
+    !live(S).length?"Приборы не заведены.":приборыВДокументы().length?"Поверяемых приборов нет (только вспомогательное оборудование).":"Все приборы списаны — следить за поверкой нечего."}</div>`; }
   else {
     поверкаHTML=`
       <div class="tiles" style="margin-bottom:12px">

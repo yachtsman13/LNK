@@ -44,6 +44,7 @@ function peopleSortKey(p,c){
     case "электробез": return электробезДо(p.эл_безоп_дата)||"";
     case "пожбез": return пожбезДо(p.пожбез_дата)||"";
     case "пб": return пбДо(p)||"";
+    case "а1": return а1До(p.а1_дата)||"";
     case "аттестация": return ближайшаяАттестацияДата(p)||"";
     case "классность": return ближайшаяКлассностьДата(p)||"";
     default: return p.вдок||p.фио||"";
@@ -95,7 +96,7 @@ function renderPeople(){
   const th=(c,l,доп)=>`<th class="sortable" onclick="sortPeople('${c}')"${доп||""}>${l}${стр(c)}</th>`;
   const body=строки.map(p=>{ const[cи,tи]=срокИнструктажа(p);
     const[cо,tо]=срокОгрПространств(p); const[cэ,tэ]=срокЭлектробез(p);
-    const[cп,tп]=срокПожбез(p); const[cб,tб]=срокПБ(p);
+    const[cп,tп]=срокПожбез(p); const[cб,tб]=срокПБ(p); const[c1,t1]=срокА1(p);
     const[cа,tа]=ближайшаяАттестация(p); const[cк,tк]=ближайшаяКлассность(p); return `
     <tr onclick="showPerson('${esc(p.id)}')">
       <td class="obj" style="width:${шФИО}px;min-width:0">${esc(p.вдок||p.фио)}</td>
@@ -107,9 +108,10 @@ function renderPeople(){
       <td><span class="st ${cэ}">${esc(tэ)}</span></td>
       <td><span class="st ${cп}">${esc(tп)}</span></td>
       <td><span class="st ${cб}">${esc(tб)}</span></td>
+      <td><span class="st ${c1}">${t1==="не требуется"?"<span class='muted'>—</span>":esc(t1)}</span></td>
       <td><span class="st ${cа}">${esc(tа)}</span></td>
       <td><span class="st ${cк}">${esc(tк)}</span></td>
-    </tr>`;}).join("")||`<tr><td colspan="11" class="empty">Список пуст.</td></tr>`;
+    </tr>`;}).join("")||`<tr><td colspan="12" class="empty">Список пуст.</td></tr>`;
   const годТек=new Date().getFullYear();
   const годы=[годТек, годТек+1, годТек+2, годТек+3];
   const прогноз=прогнозРяды(аттПрогноз.год);
@@ -135,7 +137,7 @@ function renderPeople(){
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr>${th("фио","ФИО",` style="width:${шФИО}px"`)}${th("должность","Должность")}${th("функции","Функции в ЛНК")}${th("стаж","Стаж с")}${th("инструктаж","Инструктаж ОТ")}
-        ${th("огрпр","Огр. пространства")}${th("электробез","Электробезопасность")}${th("пожбез","Пожарная безопасность")}${th("пб","Проверка знаний ПБ")}
+        ${th("огрпр","Огр. пространства")}${th("электробез","Электробезопасность")}${th("пожбез","Пожарная безопасность")}${th("пб","Проверка знаний ПБ")}${th("а1","Аттестация А.1")}
         ${th("аттестация","Ближайшая аттестация")}${th("классность","Классность")}</tr></thead>
       <tbody>${body}</tbody></table></div></div>
     <div class="card">
@@ -282,6 +284,7 @@ function showPerson(id){
     ${F("Экзамен по электробезопасности",(p.эл_безоп_дата?ru(p.эл_безоп_дата)+" — ":"")+tэ)}
     ${F("Инструктаж по пожарной безопасности",(p.пожбез_дата?ru(p.пожбез_дата)+" — ":"")+tп)}
     ${F("Проверка знаний правил безопасности",(пбДата?ru(пбДата)+" — ":"")+tб)}
+    ${F("Аттестация по промышленной безопасности, А.1",(p.а1_дата?ru(p.а1_дата)+" — ":"")+срокА1(p)[1])}
     ${F("Ближайшая аттестация",tа)}
     ${F("Классность",tк)}
     ${блокРаботСпециалиста(p)}`);

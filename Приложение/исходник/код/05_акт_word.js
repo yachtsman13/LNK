@@ -232,7 +232,7 @@ function актВWord(ключ, вернуть){
            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
   // Шапка первой страницы: по центру курсивом, данные из настроек ЛНК
   const шапкаПервой='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
-    '<w:hdr '+НС+'>'+wP(типографика(шапкаЛаборатории()),{jc:"center",отступ:false,курсив:true})+'</w:hdr>';
+    '<w:hdr '+НС+'>'+wP(типографика(шапкаЛаборатории(датаРаботАкта(ключ))),{jc:"center",отступ:false,курсив:true})+'</w:hdr>';
   const шапкаПрочих='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<w:hdr '+НС+'><w:p><w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="exact"/>'+
     '<w:jc w:val="center"/>'+rPr(false)+'</w:pPr>'+
@@ -731,7 +731,7 @@ function renderAkt(ключ){
       пишется «на баллонах…», а из справочника приходит «Баллон…». Склонение я не подставляю.</div>
 
     <div class="sheet">
-      <div class="labcert">${e(типографика(шапкаЛаборатории()))}</div>
+      <div class="labcert">${e(типографика(шапкаЛаборатории(датаРаботАкта(ключ))))}</div>
       <h1 class="akt">АКТ № ${e(номерАкта(ключ))}</h1>
       <div class="aktsub">о проведении работ</div>
 

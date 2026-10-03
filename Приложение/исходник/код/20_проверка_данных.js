@@ -16,7 +16,7 @@
 // копию, ни в обмен, и ошибку было видно только в коде.
 const КЛЮЧИ_ДАННЫХ={ "lnk_obj":"объекты", "lnk_si":"приборы", "lnk_ppl":"специалисты",
   "lnk_akts":"акты", "lnk_ppr":"ппр", "lnk_ppr_plan":"планппр", "lnk_conflicts":"конфликты", "lnk_history":"история", "lnk_podr":"подразделения", "lnk_padezh":"падежи",
-  "lnk_tasks":"задачи", "lnk_nd":"нормдокументы", "lnk_pom":"помещения",
+  "lnk_tasks":"задачи", "lnk_nd":"нормдокументы", "lnk_pom":"помещения", "lnk_pasp_red":"редакции",
   "lnk_lab":"лаборатория", "lnk_metodiki":"методики", "lnk_docnames":"названия" };
 const КЛЮЧИ_НАСТРОЕК=["lnk_ws","lnk_setup","lnk_theme","lnk_jsort","lnk_psort","lnk_tsort","lnk_progsort",
   "lnk_last_backup","lnk_last_export","lnk_last_import","lnk_grant","lnk_fs",

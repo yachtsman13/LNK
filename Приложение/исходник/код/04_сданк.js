@@ -380,6 +380,7 @@ function renderLab(){
       <div class="tile"><div class="n">${(л.область_деятельность||[]).length}</div>
         <div class="l">видов деятельности в области аттестации (СДАНК)</div></div>
     </div>
+    ${блокГотовностиПродления()}
 
     <div class="card" style="padding:20px"><div class="form">
       <div class="grp" style="padding-left:0">Организация и лаборатория</div>

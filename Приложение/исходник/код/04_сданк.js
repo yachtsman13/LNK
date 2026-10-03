@@ -350,6 +350,9 @@ function деревоСДАНК(список, выбрано, класс){
 }
 function renderLab(){
   формаСохранена();
+  // сюда возвращаются из задачи, поставленной по «Готовности к продлению»:
+  // дошли — возврат больше не нужен, иначе уйти из карточки было бы нельзя
+  _возвратВПроверку=false;
   curView="lab";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="lab"));
   const л=getЛаб();

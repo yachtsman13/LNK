@@ -258,6 +258,11 @@ function renderDash(){
         return `<div class="tile ${к} click" onclick="switchView('lab')">
           <div class="n" style="font-size:19px">${esc(т)}</div>
           <div class="l">аттестация ЛНК</div></div>`; })()}
+      ${(()=>{ const г=готовностьПродления(); if(г.областьПуста) return "";
+        const гот=г.методы.filter(x=>!x.нет.length).length;
+        return `<div class="tile ${гот===г.методы.length?"ok":"warn"} click" onclick="открытьГотовностьПродления()"
+          title="Сводка в карточке лаборатории: допущенные, приборы с поверкой, документы по каждому методу области аттестации">
+          <div class="n">${гот} из ${г.методы.length}</div><div class="l">методов готово к продлению аттестации</div></div>`; })()}
       ${(()=>{ const л=getЛаб(); if(!л.проверка && !л.проверка_пройдена) return "";
         const [к,т]=состояниеПроверкиЛНК(л);
         return `<div class="tile ${к} click" onclick="switchView('lab')">

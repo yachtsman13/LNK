@@ -31,7 +31,8 @@
 //  16. пройденная плановая проверка ЛНК, план обучения по новым методам;
 //  17. объекты не ОПО и сверка с областью аттестации;
 //  18. допуски по методам, пустые графы и редакции паспорта, область в записи;
-//  19. готовность к продлению аттестации (и в Excel), сравнение редакций паспорта.
+//  19. готовность к продлению аттестации (и в Excel), сравнение редакций паспорта;
+//  20. «поручить» из готовности к продлению, плитка на пульте.
 //
 // Итог — список ✓/✗ и код выхода: 0 — всё прошло, 1 — есть провалы.
 // Файлы выгрузок остаются во временной папке, путь печатается в конце.
@@ -1022,6 +1023,54 @@ async function главное(){
         const rr = spawnSync("python3", [path.join(КОРЕНЬ, "scripts", "проверка_xlsx.py"), п], { encoding: "utf8" });
         да(rr.status === 0, "файл «" + path.basename(п) + "» проходит проверка_xlsx.py", (rr.stdout || rr.stderr).trim().split("\n").slice(0, 3).join(" / "));
       }
+      await m.c.close();
+    }
+
+    раздел("20. Готовность к продлению: «поручить» и плитка на пульте");
+    {
+      const m = await место(b, "М1"); все.push(m.p); const q = m.p;
+      const r = await q.evaluate(() => {
+        switchView("dash");
+        const плитка = [...document.querySelectorAll("#main .tile")].find(t => /готово к продлению/.test(t.textContent));
+        const текстПлитки = плитка ? плитка.textContent.replace(/\s+/g, " ").trim() : "";
+        открытьГотовностьПродления();
+        const раскрыт = curView === "lab" && document.querySelector("details.готпрод").open;
+        const кнопокНеНач = document.querySelectorAll("details.готпрод button[onclick^='поручитьПродление']").length;
+        saveWS({ код: "М1", мастер: false, начальник: true });
+        switchView("lab");
+        const кнопок = document.querySelectorAll("details.готпрод button[onclick^='поручитьПродление']").length;
+        поручитьПродление("УЗД");
+        const вФорме = curView, что = (document.getElementById("t_что") || {}).value || "";
+        return { текстПлитки, раскрыт, кнопокНеНач, кнопок, вФорме, что };
+      });
+      да(/0 из 6/.test(r.текстПлитки), "плитка на пульте: «0 из 6 методов готово»", r.текстПлитки);
+      да(r.раскрыт, "щелчок по плитке — карточка лаборатории, сводка развёрнута");
+      да(r.кнопокНеНач === 0 && r.кнопок === 6, "«поручить» только у начальника, по строке на метод", r.кнопокНеНач + " / " + r.кнопок);
+      да(r.вФорме !== "lab" && /УЗД: к продлению аттестации ЛНК нет/.test(r.что), "открыта новая задача с подставленным текстом", r.вФорме + " | " + r.что);
+      // сохранить задачу: возврат в карточку лаборатории, вместо кнопки — «поручено»
+      const р2 = await q.evaluate(() => {
+        const и = document.getElementById("t_исполнитель"); if(и && и.options.length > 1) и.value = и.options[1].value;
+        document.getElementById("t_срок").value = "2026-12-01";
+        const btn = [...document.querySelectorAll("#main button")].find(b => /Поставить|Сохранить/.test(b.textContent));
+        btn.click();
+        const вид = curView;
+        const пор = [...document.querySelectorAll("details.готпрод .поручено")].map(x => x.textContent.replace(/\s+/g, " ").trim());
+        const кнопок = document.querySelectorAll("details.готпрод button[onclick^='поручитьПродление']").length;
+        return { вид, пор, кнопок, задач: live(ЗАД).filter(з => /^ПРОД\|УЗД\|/.test(з.из_проверки || "")).length };
+      });
+      да(р2.вид === "lab" && р2.задач === 1 && р2.пор.length === 1 && /поручено/.test(р2.пор[0]) && р2.кнопок === 5,
+        "после постановки — снова карточка лаборатории, у УЗД «поручено», у остальных кнопка", JSON.stringify(р2));
+      // всё есть — плитка зелёная и полная
+      const р3 = await q.evaluate(() => {
+        const л = getЛаб(); л.область_методы = ["Визуальный и измерительный"]; saveЛаб(л);
+        const sp = live(P)[0]; sp.аттестации = [{ метод: "ВИК", уровень: "II", дата: "2025-01-10", до: "2030-01-10" }];
+        sp.пб = { номер: "ПБ-20", дата: "2025-02-01" }; saveReg(REG_PPL, P);
+        const п = приборыСПоверкой()[0]; п.метод = "ВИК"; п.поверка_до = "2099-01-01"; saveReg(REG_SI, S);
+        switchView("dash");
+        const т = [...document.querySelectorAll("#main .tile")].find(t => /готово к продлению/.test(t.textContent));
+        return { т: т.textContent.replace(/\s+/g, " ").trim(), ок: т.classList.contains("ok") };
+      });
+      да(/1 из 1/.test(р3.т) && р3.ок, "всё нужное есть — плитка «1 из 1», зелёная", JSON.stringify(р3));
       await m.c.close();
     }
 

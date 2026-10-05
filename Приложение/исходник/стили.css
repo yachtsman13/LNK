@@ -189,7 +189,10 @@
      только .seg — выбранный год ничем не отличался от остальных, нажатие
      выглядело как «ничего не происходит». Селектор ослаблен до .seg:
      .filters.seg ему по-прежнему соответствует, прочие свойства не тронуты. */
-  .seg .btn.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  /* Выбранная кнопка (год, период, фильтр) — подсвечена везде, а не только
+     внутри .seg: в шапках карточек кнопки годов стоят без него. */
+  .прогпометка{font-size:11.5px;color:var(--warn);white-space:normal;margin-top:2px}
+  .btn.on,.seg .btn.on{background:var(--brand);color:#fff;border-color:var(--brand)}
   /* Мастер первого запуска: строка шагов и выбор варианта */
   .шаги{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px}
   .шаги span{padding:4px 12px;border-radius:14px;background:var(--head-bg);color:var(--muted);font-size:12.5px}
@@ -529,6 +532,25 @@
   .пров.ошибка .пз{color:var(--danger)} .пров.внимание .пз{color:var(--warn)}
   .пт{color:var(--muted)}
   ul.пп{margin:7px 0 0 30px;padding:0;font-size:12.5px;color:var(--muted);line-height:1.65}
+
+  /* ── Тёмная тема: то, что раньше было задано светлыми цветами ──────── */
+  /* Лист документа (акт, паспорт, карточка на печать) — белая бумага с
+     тёмным текстом в любой теме; полосы и подсветка строк списков внутри
+     него не нужны: в тёмной теме они давали тёмные строки с тёмным
+     текстом — текст пропадал. */
+  .sheet tbody tr,.sheet tbody tr:nth-child(even),.sheet tbody tr:hover{background:transparent}
+  .sheet a{color:#1f5c8f}
+  :root[data-theme="ph"]{color-scheme:dark}
+  :root[data-theme="ph"] a{color:var(--brand-d)}
+  :root[data-theme="ph"] select,:root[data-theme="ph"] input,:root[data-theme="ph"] textarea{
+    background:var(--input-bg);color:var(--ink);border-color:var(--line)}
+  :root[data-theme="ph"] .sheet input,:root[data-theme="ph"] .sheet select{background:#fff;color:#111;border-color:#bbb}
+  :root[data-theme="ph"] .btn:hover{border-color:var(--brand)}
+  :root[data-theme="ph"] .плантбл td.мес.сделано{background:var(--okbg);color:var(--ok)}
+  :root[data-theme="ph"] .плантбл td.мес.просрочено{background:var(--dangerbg);color:var(--danger)}
+  :root[data-theme="ph"] .плантбл td.мес.план{background:#262626}
+  :root[data-theme="ph"] tr.отм td{background:#2a1f00}
+  :root[data-theme="ph"] .top .styleSel select option{color:var(--ink);background:var(--panel)}
 
   @media print{
     .app{display:block;height:auto}

@@ -102,7 +102,7 @@ function renderPeople(){
       <td class="obj" style="width:${шФИО}px;min-width:0">${esc(p.вдок||p.фио)}</td>
       <td>${esc(p.должность)||"—"}</td>
       <td>${esc(p.функции)||"<span class='muted'>—</span>"}</td>
-      <td class="num">${esc(p.стаж)||"—"}</td>
+      <td class="num">${esc(ru(p.стаж))||"—"}</td>
       <td><span class="st ${cи}">${esc(tи)}</span></td>
       <td><span class="st ${cо}">${esc(tо)}</span></td>
       <td><span class="st ${cэ}">${esc(tэ)}</span></td>
@@ -352,7 +352,7 @@ function showPerson(id){
   openDrawer(p.фио,`<div class="dbtns">
       <button class="btn primary" onclick="closeDrawer();editReg('ppl','${esc(p.id)}')">✎ Изменить</button>
       <button class="btn danger" onclick="delReg('ppl','${esc(p.id)}')">✕ Удалить</button>
-    </div>${F("В документах",p.вдок)}${F("Должность",p.должность)}${F("Функции в ЛНК",p.функции)}${F("Стаж по НК с",p.стаж)}
+    </div>${F("В документах",p.вдок)}${F("Должность",p.должность)}${p.должность_полно?F("Полное наименование должности",p.должность_полно):""}${F("Функции в ЛНК",p.функции)}${F("Стаж по НК с",ru(p.стаж))}
     ${F("Инструктаж по охране труда",(p.инструктаж_дата?ru(p.инструктаж_дата)+" — ":"")+tи)}
     ${F("Обучение по работе в ограниченных и замкнутых пространствах (группа I)",(p.огр_простр_дата?ru(p.огр_простр_дата)+" — ":"")+tо)}
     ${F("Экзамен по электробезопасности",(p.эл_безоп_дата?ru(p.эл_безоп_дата)+" — ":"")+tэ)}

@@ -307,6 +307,7 @@
   .doctbl th.верт div{writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto;max-height:3.8cm;white-space:normal}
   /* Лист ознакомления: место для подписи. */
   .doctbl.листозн tbody td{height:2cm}
+  .sheet .doctbl.листозн td,.sheet .doctbl.листозн th{font-size:12pt}
   /* Узкий первый столбец «№ п/п» — без широких полей, иначе «п/п» рвётся. */
   .doctbl.узк1 th:first-child,.doctbl.узк1 td:first-child{padding-left:2px;padding-right:2px}
   .doctbl{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed}

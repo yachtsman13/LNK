@@ -519,7 +519,7 @@ async function главное(){
         "Word: альбомные таблицы паспорта — 25 см (14173 твипа) по центру", JSON.stringify(альб.map(x => [x.tblW, x.центр])));
       да(ширины.every(x => x.tblW === x.grid), "Word: у всех таблиц паспорта сумма колонок равна ширине таблицы",
         JSON.stringify(ширины.filter(x => x.tblW !== x.grid)));
-      да(ширины.every(x => x.кегли.length === 1 && x.кегли[0] === "20"), "Word: текст всех таблиц паспорта — 10 пт",
+      да(ширины.slice(0, -1).every(x => x.кегли.length === 1 && x.кегли[0] === "20"), "Word: текст всех таблиц паспорта, кроме листа ознакомления (12 пт), — 10 пт",
         JSON.stringify(ширины.map(x => x.кегли)));
       await q.evaluate(() => exportПланWord());
       const [план] = await собратьФайлы(q);
@@ -1556,16 +1556,26 @@ wb.save(sys.argv[2])`, фж, правл], { encoding: "utf-8" });
       const xml = require("child_process").execSync(`unzip -p "${п}" word/document.xml`, { maxBuffer: 1 << 26 }).toString();
       const повт = (xml.match(/<w:tr><w:trPr>(?:<w:cantSplit\/>)?(?:<w:trHeight[^>]*\/>)?<w:tblHeader\/><\/w:trPr>.*?<\/w:tr>/g) || []);
       const тексты = повт.map(tr => (tr.match(/<w:t xml:space="preserve">([^<]*)<\/w:t>/g) || []).map(x => x.replace(/<[^>]+>/g, "")));
-      да(повт.length >= 6 && тексты.every(т => т.length && т.every(x => /^\d+$/.test(x))),
+      да(повт.length >= 5 && тексты.every(т => т.length && т.every(x => /^\d+$/.test(x))),
         "Word: повторяемая строка (tblHeader) во всех таблицах паспорта — только номера столбцов", повт.length + " строк; " + JSON.stringify(тексты.filter(т => !т.every(x => /^\d+$/.test(x))).slice(0, 2)));
       const таблицы = xml.split("<w:tbl>");
       const спИ = таблицы.findIndex(x => x.includes(">Ф.И.О.<"));
       const спД = таблицы[спИ + 1] || "";
-      да(спИ > 0 && !таблицы[спИ].includes("tblHeader") && />1<\/w:t>.*>6<\/w:t>/.test(спД) && !/>1\.<\/w:t><\/w:r><\/w:p><\/w:tc><w:tc><w:tcPr><w:tcW[^>]*\/>(?:<w:shd[^>]*\/>)?<w:tcMar>.*>2\.</.test(спД) && спД.includes(">1.</w:t>"),
+      const номСтр = (спД.split("</w:tr>")[0].match(/<w:t xml:space="preserve">([^<]*)<\/w:t>/g) || []).map(x => x.replace(/<[^>]+>/g, ""));
+      да(спИ > 0 && !таблицы[спИ].includes("tblHeader") && JSON.stringify(номСтр) === JSON.stringify(["1", "2", "3", "4", "5", "6"]) && спД.includes(">1.</w:t>"),
         "Word, раздел II: подписи один раз, номера столбцов без точки повторяются, номер строки «1.»");
       const озн = таблицы.find(x => x.includes(">ознакомленного<")) || "";
       да(/>Денисов<\/w:t>/.test(озн) && />Сергей<\/w:t>/.test(озн) && />Валерьевич<\/w:t>/.test(озн) && />Фамилия, Имя,<\/w:t>/.test(озн) && !озн.includes("tblHeader"),
         "Word, лист ознакомления: ФИО и подписи по строкам, шапка не повторяется");
+      const мера = await q.evaluate(() => { _таблПаспорт = true; const w = твипыТабл("объекты контроля № 1, 6"); _таблПаспорт = false;
+        switchView("passport"); const з = document.querySelector("table.листозн td"); return { w, лист: з ? getComputedStyle(з).fontSize : "" }; });
+      const кол4 = +((спД.match(/<w:gridCol w:w="(\d+)"\/>/g) || [])[3] || "").replace(/\D/g, "");
+      const всех = (спД.match(/<w:t xml:space="preserve">\d\.<\/w:t>/g) || []).length;
+      да(всех === 5 && !xml.includes("pageBreakBefore") && таблицы.filter(x => x.includes(">Ф.И.О.<")).length === 1,
+        "Word, раздел II: одна таблица на всех специалистов, без разрывов страниц", всех + " строк");
+      да(кол4 - 160 >= мера.w, "Word, раздел II: столбец 4 вмещает «объекты контроля № 1, 6» одной строкой", кол4 + " твипов, текст " + мера.w);
+      const sz = (озн.split("</w:tbl>")[0].match(/<w:sz w:val="(\d+)"\/>/g) || []).map(x => x.replace(/\D/g, ""));
+      да(sz.length > 0 && sz.every(x => x === "24") && мера.лист === "16px", "лист ознакомления — 12 пт (Word sz 24, экран 12pt)", JSON.stringify([[...new Set(sz)], мера.лист]));
       да(xml.includes("Инженер 2 категории"), "Word: в наименовании должности цифра связана со следующим словом");
       да(xml.includes("до 100") && /второй ряд/.test(xml) && /<w:br\/><w:t xml:space="preserve">второй ряд/.test(xml), "Word: «^_» — неразрывный пробел, «^/» — разрыв строки w:br");
       const rr = spawnSync("python3", ["scripts/проверка_docx.py", п], { encoding: "utf-8" });

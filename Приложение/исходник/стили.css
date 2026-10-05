@@ -341,7 +341,7 @@
   .form label .файлобёртка .файлкн,.атт-строка .файлкн{margin-top:0;align-self:center}
   ul.файлсписок{margin:4px 0 8px;padding-left:20px;font-size:13px;line-height:1.6}
   .симкн{min-width:26px;padding:2px 6px;font-size:14px;line-height:1.2;
-    border:1px solid var(--line);border-radius:5px;background:#fff;cursor:pointer}
+    border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--ink);cursor:pointer}
   .симкн:hover{background:var(--head-bg)}
   .пасссылка{font-size:12px;color:#555;font-style:italic}
   .паспул{margin:2px 0 4px;padding-left:22px}

@@ -35,7 +35,8 @@ function renderSi(){
       <button class="btn" onclick="шаблонИмпортаXlsx('si')">⤓ Шаблон для импорта</button>
       <button class="btn" onclick="document.getElementById('imp_si').click()">⬆ Импорт из Excel</button>
       <input type="file" id="imp_si" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('si',this)">
-      <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
+      <button class="btn" onclick="window.print()">⎙ Печать / PDF</button>
+      <button class="btn" onclick="renderВыдачаСИ()" title="Ведётся сам: какие приборы применены в записях журнала и когда">▤ Журнал выдачи СИ</button></div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Метод</th><th>Поверка до</th><th>Статус</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>
@@ -783,4 +784,88 @@ function частиСоздать(){
   формаСохранена();
   switchView("si"); showSi(осн.id);
   toast("Добавлено частей: "+р.добавить.length);
+}
+
+// ── Журнал выдачи средств измерений (ведётся сам) ─────────────────────
+// По указанию заказчика: журнал выдачи СИ строится из журнала контроля —
+// какие приборы применены в конкретной записи и в какую дату. Своего
+// хранения нет: он ВЫЧИСЛЯЕТСЯ из записей, поэтому всегда совпадает с
+// журналом и не требует ручного ввода. Приборы — те, что отмечены в
+// записи (панель «⚙ Приборы и НД»); если запись набор не переопределяла —
+// стандартный набор метода из «Методик контроля» (тот же порядок, что у
+// пачки к акту, `приборыАкта`); такие строки помечены «по набору
+// методики» — это предположение, что работали именно ими. Кому выдан —
+// исполнитель метода в записи. Образца формы журнала у меня нет —
+// колонки свои, форма внутренняя.
+const выдачаСИ={год:new Date().getFullYear(), прибор:""};
+function журналВыдачиСИ(год, приборИд){
+  const мт=getМетодики(), поИд={}; live(S).forEach(п=>поИд[String(п.id)]=п);
+  const из=[];
+  liveJ().forEach(z=>{
+    if(!z.дата) return;
+    if(год && String(z.дата).slice(0,4)!==String(год)) return;
+    methodsOf(z).forEach(м=>{
+      const з=(z.методы||{})[м]||{};
+      const свои=з.приборы!=null;
+      (свои?з.приборы:((мт[м]||{}).приборы||[])).forEach(id=>{
+        const п=поИд[String(id)]; if(!п) return;
+        if(приборИд && String(п.id)!==String(приборИд)) return;
+        const истекла=!безПоверки(п) && п.поверка_до && String(п.поверка_до)<String(z.дата);
+        из.push({дата:z.дата, п, м, z, исп:String(з.исп||"").trim(),
+          протокол:обозначениеПротокола(z,м)||"", свои, истекла});
+      });
+    });
+  });
+  из.sort((a,b)=>String(a.дата).localeCompare(String(b.дата)) ||
+    String(a.п.наименование||"").localeCompare(String(b.п.наименование||""),"ru"));
+  return из;
+}
+function setВыдачаСИ(k,v){ выдачаСИ[k]=v; renderВыдачаСИ(); }
+function renderВыдачаСИ(){
+  if(curView!=="siissue" && !уходСФормы()) return;
+  curView="siissue"; query="";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="si"));
+  const ряды=журналВыдачиСИ(выдачаСИ.год, выдачаСИ.прибор);
+  const всего=журналВыдачиСИ(выдачаСИ.год).length;
+  const п=выдачаСИ.прибор?найтиПоИд(S,выдачаСИ.прибор):null;
+  const имяП=x=>имяПрибораДок(x)+(x.зав?", зав. № "+x.зав:"");
+  const подзаг=выдачаСИ.год+" год"+(п?" · "+имяП(п):"")+" · записей "+ряды.length;
+  const поНабору=ряды.filter(r=>!r.свои).length, истекло=ряды.filter(r=>r.истекла).length;
+  document.getElementById("main").innerHTML=`
+    ${printHead("Журнал выдачи средств измерений", подзаг)}
+    <div class="head"><h2>Журнал выдачи СИ</h2><span class="sub">${esc(подзаг)}</span>
+      <div class="spring"></div>
+      ${годыНагрузки().map(г=>`<button class="btn ${г===+выдачаСИ.год?"on":""}" onclick="setВыдачаСИ('год',${г})">${г}</button>`).join("")}
+      <select onchange="setВыдачаСИ('прибор',this.value)" style="max-width:280px"><option value="">все приборы</option>${
+        live(S).slice().sort((a,b)=>String(a.наименование||"").localeCompare(String(b.наименование||""),"ru"))
+          .map(x=>`<option value="${esc(x.id)}" ${String(x.id)===String(выдачаСИ.прибор)?"selected":""}>${esc(имяП(x))}</option>`).join("")}</select>
+      <button class="btn" onclick="exportВыдачаСИ()">▤ Excel</button>
+      <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button>
+      <button class="btn" onclick="switchView('si')">← К приборам</button></div>
+    <div class="note noprint" style="margin:0 0 10px">Ведётся сам — из журнала контроля: на каждую запись и метод — приборы,
+      отмеченные в записи («⚙ Приборы и НД»), а если запись их не отмечала — стандартный набор метода из «Методик
+      контроля» (такие строки помечены «по набору методики»). Дата выдачи — дата контроля, кому выдан — исполнитель
+      метода. Чтобы журнал был точным, отмечайте приборы в самой записи.${!всего?` <b>За ${выдачаСИ.год} год строк нет:</b>
+      ни в одной записи не отмечены приборы, и стандартные наборы методик пусты.`:""}${поНабору?` По набору методики:
+      ${поНабору}.`:""}${истекло?` <b style="color:var(--danger)">С истёкшей поверкой на дату работы: ${истекло}.</b>`:""}</div>
+    <div class="card"><div class="tblwrap"><table>
+      <thead><tr><th>№</th><th>Дата выдачи</th><th>Средство измерений</th><th>Зав. №</th><th>Инв. №</th><th>Метод</th>
+        <th>Объект контроля</th><th>№ протокола</th><th>Кому выдано</th><th>Примечание</th></tr></thead>
+      <tbody>${ряды.length?ряды.map((r,i)=>`<tr onclick="editJournal('${esc(r.z.id)}')">
+        <td class="num">${i+1}</td><td class="num">${ru(r.дата)}</td><td class="obj">${esc(имяПрибораДок(r.п))}</td>
+        <td class="num">${esc(r.п.зав)||"—"}</td><td class="num">${esc(r.п.инв)||"—"}</td><td>${esc(r.м)}</td>
+        <td>${esc(r.z.объект||"")||"—"}</td><td class="num">${esc(r.протокол)||"—"}</td><td>${esc(r.исп)||"—"}</td>
+        <td>${[r.свои?"":"по набору методики", r.истекла?`<span class="st bad">поверка до ${ru(r.п.поверка_до)}</span>`:""].filter(Boolean).join(" ")||""}</td></tr>`).join("")
+        :`<tr><td colspan="10" class="empty">Строк нет.</td></tr>`}</tbody></table></div></div>
+    ${printSign()}`;
+}
+function exportВыдачаСИ(){
+  const ряды=журналВыдачиСИ(выдачаСИ.год, выдачаСИ.прибор);
+  if(!ряды.length){ toast("За "+выдачаСИ.год+" год строк нет — файл не создан"); return; }
+  xlsxФайл("Журнал выдачи СИ "+выдачаСИ.год+" ЛНК "+сегодня()+".xlsx",[{имя:"Выдача СИ "+выдачаСИ.год,
+    колонки:[{з:"№",ш:6,тип:"число"},{з:"Дата выдачи",ш:12,тип:"дата"},{з:"Средство измерений",ш:40},{з:"Зав. №",ш:16},
+      {з:"Инв. №",ш:12},{з:"Метод",ш:8},{з:"Объект контроля",ш:40},{з:"№ протокола",ш:18},{з:"Кому выдано",ш:20},{з:"Примечание",ш:30}],
+    строки:ряды.map((r,i)=>[i+1, r.дата, имяПрибораДок(r.п), r.п.зав||"", r.п.инв||"", r.м, r.z.объект||"", r.протокол, r.исп,
+      [r.свои?"":"по набору методики", r.истекла?"поверка до "+ru(r.п.поверка_до):""].filter(Boolean).join("; ")])}]);
+  toast("Выгружено: "+ряды.length+" строк");
 }

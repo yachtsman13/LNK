@@ -37,6 +37,7 @@
 //  22. полное наименование должности в паспорте, стаж по НК датой.
 //  23. паспорт, раздел II: 6 столбцов бланка, аттестация по удостоверениям.
 //  24. паспорт, раздел II: столбец 4 по бланку (должность, функции, уровни и объекты).
+//  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
 //  25. паспорт по бланку: III–IV абзацами, заголовки 16 пт, строки не разрываются, столбец 7, калибровка, IX–XI, лист ознакомления.
 //
@@ -1374,6 +1375,43 @@ async function главное(){
       да(r.пом.length >= 1, "прогноз на экране: пометка под датой", String(r.пом.length));
       да(r.выбранЦвет && r.цвет.filter(c => c === r.выбранЦвет).length === 1, "выбранный год прогноза подсвечен (одна кнопка своим цветом)", JSON.stringify(r.цвет));
       да(r.полоса === "rgba(0, 0, 0, 0)", "тёмная тема: строки таблиц в листе документа без тёмной полосы", r.полоса);
+      await m.c.close();
+    }
+
+    раздел("27. Ввод даты в фильтре журнала, журнал выдачи СИ");
+    {
+      const m = await место(b, "М1"); все.push(m.p); const q = m.p;
+      await q.evaluate(() => switchView("journal"));
+      const поле = q.locator('#main input[type="date"]').first();
+      await поле.click({ position: { x: 8, y: 8 } });
+      await q.keyboard.type("10052026", { delay: 30 });
+      const r1 = await q.evaluate(() => ({ jf: jf.с, фокус: document.activeElement && document.activeElement.type === "date",
+        знач: document.activeElement && document.activeElement.value }));
+      да(r1.jf === "2026-10-05" && r1.фокус, "фильтр журнала «Дата с»: год вводится целиком, фокус не слетает", JSON.stringify(r1));
+      const r = await q.evaluate(() => {
+        const [п1, п2] = live(S);
+        п2.поверка_до = "2000-01-01";
+        const мт = getМетодики(); мт.ВИК = Object.assign({}, мт.ВИК || {}, { приборы: [String(п1.id)] }); saveМетодики(мт);
+        const з = liveJ().find(z => (z.дата || "").startsWith("2026") && methodsOf(z).includes("УЗД"));
+        з.методы.УЗД.приборы = [String(п2.id)];
+        saveJournal();
+        const ряды = журналВыдачиСИ(2026);
+        const свой = ряды.filter(x => x.п === п2 && x.z === з);
+        const поНабору = ряды.filter(x => x.п === п1 && !x.свои).length;
+        const вики = liveJ().filter(z => (z.дата || "").startsWith("2026") && methodsOf(z).includes("ВИК") && !((z.методы.ВИК || {}).приборы)).length;
+        renderВыдачаСИ();
+        const строк = document.querySelectorAll("#main tbody tr").length;
+        setВыдачаСИ("прибор", String(п2.id));
+        const строкП = document.querySelectorAll("#main tbody tr").length;
+        exportВыдачаСИ();
+        return { свой: свой.length, истекла: свой[0] && свой[0].истекла, исп: свой[0] && свой[0].исп, поНабору, вики, всего: ряды.length, строк, строкП };
+      });
+      да(r.свой === 1 && r.истекла && r.поНабору === r.вики && r.строк === r.всего,
+        "журнал выдачи СИ: прибор из записи, приборы набора методики, истёкшая поверка на дату помечена", JSON.stringify(r));
+      да(r.строкП === 1, "журнал выдачи СИ: отбор по прибору", String(r.строкП));
+      const ф = await собратьФайлы(q); const п = ф.find(x => /xlsx$/.test(x));
+      const rr = п ? spawnSync("python3", ["scripts/проверка_xlsx.py", п], { encoding: "utf-8" }) : { status: 1, stdout: "нет файла" };
+      да(rr.status === 0, "журнал выдачи СИ в Excel проходит проверка_xlsx.py", (rr.stdout || rr.stderr || "").trim().split("\n").slice(0, 2).join(" / "));
       await m.c.close();
     }
 

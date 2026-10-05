@@ -176,7 +176,7 @@ function renderPeople(){
 // нет. Дата меняется — видно, кто будет допущен через месяц.
 const допускНа={дата:""};
 function датаДопусков(){ return допускНа.дата || new Date().toISOString().slice(0,10); }
-function setДатаДопусков(д){ допускНа.дата=д||""; renderPeople(); }
+function setДатаДопусков(д){ if((допускНа.дата||"")===(д||"")) return; допускНа.дата=д||""; renderPeople(); }
 function допускКлетка(сп, м, дата){
   if(!аттестации(сп).length) return {ок:false, кл:"нет", т:"аттестации не внесены"};
   const пбД=пбДо(сп);
@@ -208,7 +208,7 @@ function блокДопусковМетодов(){
   return `<div class="card">
     <div class="head"><h2>Кто к какому методу допущен</h2><span class="sub">на ${esc(ru(дата))}</span>
       <div class="spring"></div>
-      <label class="muted" style="font-size:13px">на дату <input type="date" value="${esc(дата)}" onchange="setДатаДопусков(this.value)"></label>
+      <label class="muted" style="font-size:13px">на дату <input id="допДата" type="date" value="${esc(дата)}" onchange="датаВвод(this,setДатаДопусков)" onblur="датаВвод(this,setДатаДопусков,1)"></label>
       <button class="btn" onclick="setДатаДопусков('')">сегодня</button>
       <button class="btn" onclick="exportДопускиXlsx()">⤓ Excel</button></div>
     <div class="tblwrap"><table class="допуски">

@@ -64,7 +64,19 @@ let jsort=(function(){ try{ const r=ХР.getItem("lnk_jsort");
   return {c:"дата", d:-1}; })();   // по умолчанию — свежие сверху
 
 function jsortSave(){ try{ ХР.setItem("lnk_jsort",JSON.stringify(jsort)); }catch(e){} }
-function setJF(k,v){ jf[k]=v; renderJournal(); }
+function setJF(k,v){ if(jf[k]===v) return; jf[k]=v; renderJournal(); }
+// Поле даты в фильтре, после которого раздел перерисовывается. Chromium
+// шлёт change уже после первых цифр года (значение «0020-10-05»), а
+// перерисовка заменяет само поле — фокус слетал, и год не удавалось
+// допечатать (баг, найденный заказчиком). Поэтому применяю, только когда
+// год полный (с 1900) или поле очищено; неполный — по уходу из поля.
+function датаВвод(el, fn, ушёл){
+  const v=el.value;
+  if(!(!v || ушёл || +v.slice(0,4)>=1900)) return;
+  const id=el.id; fn(v);
+  // после перерисовки — фокус обратно в то же поле (по id)
+  if(!ушёл && id){ const н=document.getElementById(id); if(н && н!==document.activeElement) н.focus(); }
+}
 function resetJF(){ jf={год:"",метод:"",статус:"",исп:"",с:"",по:""}; query=""; renderJournal(); }
 function sortJournal(c){
   if(jsort.c===c) jsort.d=-jsort.d; else { jsort.c=c; jsort.d=(c==="дата")?-1:1; }
@@ -176,8 +188,8 @@ function renderJournal(){
       <label>Метод <select onchange="setJF('метод',this.value)">${opt(jf.метод,методыЕсть,"любой")}</select></label>
       <label>Статус <select onchange="setJF('статус',this.value)">${opt(jf.статус,статусы,"любой")}</select></label>
       <label>Исполнитель <select onchange="setJF('исп',this.value)">${opt(jf.исп,исполнители,"любой")}</select></label>
-      <label>Дата с <input type="date" value="${esc(jf.с)}" onchange="setJF('с',this.value)"></label>
-      <label>по <input type="date" value="${esc(jf.по)}" onchange="setJF('по',this.value)"></label>
+      <label>Дата с <input id="jf_с" type="date" value="${esc(jf.с)}" onchange="датаВвод(this,v=>setJF('с',v))" onblur="датаВвод(this,v=>setJF('с',v),1)"></label>
+      <label>по <input id="jf_по" type="date" value="${esc(jf.по)}" onchange="датаВвод(this,v=>setJF('по',v))" onblur="датаВвод(this,v=>setJF('по',v),1)"></label>
       ${jf.с&&jf.по&&jf.с>jf.по?`<span class="fnote" style="color:var(--danger)">«с» позже «по» — ничего не попадёт</span>`:""}
       ${естьФильтр?`<button class="btn" onclick="resetJF()">✕ Сбросить отбор</button>
         <span class="fnote">показано ${rows.length} из ${liveJ().length}</span>`:

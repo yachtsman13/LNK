@@ -37,6 +37,7 @@
 //  22. полное наименование должности в паспорте, стаж по НК датой.
 //  23. паспорт, раздел II: 6 столбцов бланка, аттестация по удостоверениям.
 //  24. паспорт, раздел II: столбец 4 по бланку (должность, функции, уровни и объекты).
+//  28. закрытый год журнала: правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
 //  25. паспорт по бланку: III–IV абзацами, заголовки 16 пт, строки не разрываются, столбец 7, калибровка, IX–XI, лист ознакомления.
@@ -1413,6 +1414,94 @@ async function главное(){
       const rr = п ? spawnSync("python3", ["scripts/проверка_xlsx.py", п], { encoding: "utf-8" }) : { status: 1, stdout: "нет файла" };
       да(rr.status === 0, "журнал выдачи СИ в Excel проходит проверка_xlsx.py", (rr.stdout || rr.stderr || "").trim().split("\n").slice(0, 2).join(" / "));
       await m.c.close();
+    }
+
+    раздел("28. Закрытый год журнала");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p); const q = m1.p;
+      const m2 = await место(b, "М2"); все.push(m2.p); const q2 = m2.p;
+      const ид = await q.evaluate(() => { setJF("год", "2026"); закрытьГод("2026");
+        const z = liveJ().find(z => годЗаписи(z) === "2026" && methodsOf(z).length); return String(z.id); });
+      const r1 = await q.evaluate(ид => {
+        const замок = document.querySelectorAll("#main tbody td.num").length && /🔒/.test(document.querySelector("#main tbody").textContent);
+        const кн = /Открыть год/.test(document.querySelector("#main .filters").textContent);
+        editJournal(ид);
+        const fs = document.querySelector("#main fieldset.закрполя");
+        return { закрыт: годЗакрыт("2026"), замок, кн, запер: fs && fs.disabled, плашка: !!document.querySelector(".закрплашка"),
+          сохр: [...document.querySelectorAll("#main .formbtns button")].some(x => /Сохранить/.test(x.textContent)) };
+      }, ид);
+      да(r1.закрыт && r1.замок && r1.кн, "год закрыт: замок в строках журнала, кнопка «Открыть год» у фильтра", JSON.stringify(r1));
+      да(r1.запер && r1.плашка && !r1.сохр, "запись закрытого года открывается только для просмотра, без «Сохранить»", JSON.stringify(r1));
+      q.отказ = true;
+      const r2 = await q.evaluate(ид => { разрешитьПравкуЗаписи(ид);
+        const fs1 = document.querySelector("#main fieldset.закрполя").disabled;
+        // массовая правка, удаление, выдача номера, новая запись с датой закрытого года — с отказом
+        const [a, b2] = liveJ().filter(z => годЗаписи(z) === "2026").slice(0, 2);
+        const было = JSON.stringify([a, b2]);
+        жОтм.add(String(a.id)); жОтм.add(String(b2.id)); жмЗнач.исходящий = { v: "ТЕСТ-28", т: 1 }; жПрименить();
+        delJournal(a.id);
+        const безНом = liveJ().find(z => годЗаписи(z) === "2026" && методыБезНомера(z).length);
+        const номБыло = безНом ? JSON.stringify(безНом.методы) : "";
+        if(безНом) выдатьНомера(безНом.id);
+        const n = J.length;
+        editJournal(null); document.getElementById("e_объект").value = "Тест 28"; document.getElementById("e_дата").value = "2026-03-03";
+        saveJournalRec("");
+        return { fs1, цел: JSON.stringify([a, b2]) === было && !a.удалено, ном: !безНом || JSON.stringify(безНом.методы) === номБыло, n: J.length === n };
+      }, ид);
+      да(r2.fs1, "отказ в подтверждении — запись остаётся только для просмотра");
+      да(r2.цел && r2.ном && r2.n, "отказ: массовая правка, удаление, выдача номера и новая запись в закрытом году не прошли", JSON.stringify(r2));
+      q.отказ = false; q.диалоги.length = 0;
+      const r3 = await q.evaluate(ид => { разрешитьПравкуЗаписи(ид);
+        const fs = document.querySelector("#main fieldset.закрполя");
+        document.getElementById("e_примечание").value = "правка после закрытия";
+        const до = window.__дн = 0; return { открыт: fs && !fs.disabled }; }, ид);
+      const дДо = q.диалоги.length;
+      await q.evaluate(ид => saveJournalRec(ид), ид);
+      const r4 = await q.evaluate(ид => { const z = J.find(x => String(x.id) === ид);
+        const п = проверки().find(x => /изменены после закрытия/.test(x.текст));
+        return { прим: z.примечание, набл: п && п.ур, ссылка: п && п.подробно.some(с => с.ид === ид) }; }, ид);
+      да(r3.открыт && q.диалоги.length === дДо && r4.прим === "правка после закрытия",
+        "«Разрешить правку» с подтверждением — правка сохраняется без второго вопроса", JSON.stringify([r3, q.диалоги.length - дДо, r4.прим]));
+      да(r4.набл === "наблюдение" && r4.ссылка, "«Проверка данных»: запись изменена после закрытия года — наблюдение со ссылкой", JSON.stringify(r4));
+
+      // Импорт из Excel: строки закрытого года — отдельным вопросом, отказ пропускает их.
+      await q.evaluate(() => { setJF("год", "2026"); выгрузкаЖурналаДляПравки(); });
+      const фж = (await собратьФайлы(q)).find(x => /xlsx$/.test(x));
+      const правл = фж.replace(/\.xlsx$/, "-правка.xlsx");
+      const py = spawnSync("python3", ["-c", `
+import openpyxl,sys
+wb=openpyxl.load_workbook(sys.argv[1]); ws=wb.active
+h=[c.value for c in ws[1]]; k=h.index("Примечание")+1
+ws.cell(row=2,column=k).value="из файла 28"
+wb.save(sys.argv[2])`, фж, правл], { encoding: "utf-8" });
+      q.диалоги.length = 0; q.ответы = null;
+      // первый вопрос (что загрузить) — да, второй (закрытый год) — отказ
+      q.removeAllListeners("dialog");
+      q.on("dialog", d => { q.диалоги.push(d.message()); /Закрыт/.test(d.message()) ? d.dismiss() : d.accept(); });
+      await подать(q, () => switchView("journal") || document.getElementById("imp_journal").click(), правл);
+      await q.waitForTimeout(1500);
+      const r5 = await q.evaluate(() => liveJ().filter(z => z.примечание === "из файла 28").length);
+      да(py.status === 0 && q.диалоги.some(x => /Закрыт.*2026/.test(x)) && r5 === 0,
+        "импорт из Excel: правка записи закрытого года спрашивается, отказ — строка пропущена", JSON.stringify([py.stderr, q.диалоги.map(x => x.slice(0, 80)), r5]));
+      q.removeAllListeners("dialog");
+      q.on("dialog", d => { q.диалоги.push(d.message()); q.отказ ? d.dismiss() : d.accept(d.type() === "prompt" ? d.defaultValue() : undefined); });
+
+      // Обмен: закрытие уходит на другое место; предпросмотр называет его.
+      const обм = await скачать(q, () => exchangeExport(), "обмен-28-М1.json");
+      q2.диалоги.length = 0;
+      await подать(q2, () => exchangeImport(), обм);
+      await q2.waitForTimeout(800);
+      const r6 = await q2.evaluate(() => ({ закрыт: годЗакрыт("2026"), мимо: реестрыМимоКопии().length, вкопии: (всеДанные().закрытыегоды || []).length }));
+      да(r6.закрыт && q2.диалоги.some(x => /2026 год — будет закрыт/.test(x)), "обмен: закрытие года доходит до М2, предпросмотр его называет",
+        JSON.stringify([r6, q2.диалоги.map(x => x.slice(0, 300))]));
+      да(r6.мимо === 0 && r6.вкопии === 1, "закрытые годы — в резервной копии, реестров мимо копии 0", JSON.stringify(r6));
+      // Открытие на М1 после перезагрузки: запись снова заперта, пока год закрыт.
+      await перезагрузить(q);
+      const r7 = await q.evaluate(ид => { editJournal(ид); const z1 = document.querySelector("#main fieldset.закрполя").disabled;
+        открытьГод("2026"); editJournal(ид); const z2 = document.querySelector("#main fieldset.закрполя").disabled;
+        return { z1, z2, закрыт: годЗакрыт("2026") }; }, ид);
+      да(r7.z1 && !r7.z2 && !r7.закрыт, "после перезагрузки запись снова только для просмотра; «Открыть год» снимает замок", JSON.stringify(r7));
+      await m1.c.close(); await m2.c.close();
     }
 
     раздел("Ошибки на страницах");

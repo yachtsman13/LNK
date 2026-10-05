@@ -191,14 +191,17 @@ function editJournal(id){
       <div id="m_${m}_доп" class="допуск-метода"></div>
       <div id="mset_${m}" class="мет-набор" style="display:none" onchange="обновитьДопуск('${m}')"></div>`;
   }).join("");
+  // Запись закрытого года — только для просмотра, пока правку не разрешили.
+  const заперта=!!z && записьЗакрыта(z) && !_закрРазрешено.has(String(z.id));
   document.getElementById("main").innerHTML=`
-    <div class="head"><h2>${z?"Правка записи":"Новая запись"}</h2>
+    <div class="head"><h2>${z?(заперта?"Запись закрытого года":"Правка записи"):"Новая запись"}</h2>
       ${z&&актКлюч(z)?кнопкаАктаЗаписи(z):`<span class="sub">${z?"без акта":"журнал"}</span>`}
       ${z?листаниеЗаписи(z.id):""}</div>
     <datalist id="objlist">${objlist}</datalist>
     <datalist id="splist">${splist}</datalist>
     <div class="card" style="padding:20px" data-id="${z?esc(z.id):""}">
-      <div class="form">
+      ${заперта?плашкаЗакрытойЗаписи(z):""}
+      <div class="form"><fieldset class="закрполя"${заперта?" disabled":""}>
         <div class="sect" style="margin-top:0">Основное</div>
         <div class="grid">
           <label>Статус<select id="e_статус">${opts(STATUSES,z?z.статус:"Черновик")}</select></label>
@@ -228,12 +231,13 @@ function editJournal(id){
         </div>
         <div class="sect">Примечание</div>
         <div class="grid"><label class="wide"><textarea id="e_примечание">${val(z&&z.примечание)}</textarea></label></div>
+        </fieldset>
         <div class="formbtns">
-          <button class="btn primary" onclick="saveJournalRec('${z?esc(z.id):""}')">✓ Сохранить</button>
-          <button class="btn" onclick="switchView('journal')">Отмена</button>
+          ${заперта?"":`<button class="btn primary" onclick="saveJournalRec('${z?esc(z.id):""}')">✓ Сохранить</button>`}
+          <button class="btn" onclick="switchView('journal')">${заперта?"← К журналу":"Отмена"}</button>
           ${z?`<button class="btn" onclick="размножитьОткрыть('${esc(z.id)}')"
             title="Создать такие же записи по другим объектам">⧉ Повторить по объектам</button>`:""}
-          ${z?`<button class="btn danger" style="margin-left:auto" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>`:""}
+          ${z&&!заперта?`<button class="btn danger" style="margin-left:auto" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>`:""}
         </div>
         ${z?блокИстории(STORE_KEY,z.id):""}
       </div>
@@ -466,6 +470,7 @@ function размножитьСоздать(){
   if(!ид.length){ toast("Не отмечен ни один объект"); return; }
   const объекты=ид.map(k=>найтиПоИд(live(O),k)).filter(Boolean);
   if(!объекты.length){ toast("Отмеченные объекты не нашлись"); return; }
+  if(!разрешитьЗакрытые(объекты.map(()=>({дата:z.дата})), "Повтор записи по объектам")) return;
   if(!confirm("Создать "+объекты.length+" "+числослово(объекты.length,["запись","записи","записей"])+
     " по образцу?\n\nНе переносятся: номера протоколов (выдадите их в журнале), "+
     "имена файлов протоколов и заключение — они у каждого объекта свои.")) return;
@@ -527,6 +532,9 @@ function saveJournalRec(id){
   const {имя:имяОб, зав:завОб, рег:регОб}=разобратьСтрокуОбъекта(объект);
   const spr=карточкаПоСтроке(объект) || {};
   const дата=v("e_дата");
+  // Запись закрытого года или дата, перенесённая в закрытый год.
+  const прежняя=id?J.find(x=>String(x.id)===String(id)):null;
+  if(!разрешитьЗакрытые([прежняя, {id:id||"", дата:дата}], id?"Сохранение записи":"Новая запись")) return;
   const rec={
     статус:v("e_статус"), акт:v("e_акт"), дата:дата, год:дата?дата.slice(0,4):"",
     подразделение:v("e_подразделение"), объект:объект,
@@ -545,6 +553,7 @@ function saveJournalRec(id){
 }
 function delJournal(id){
   const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
+  if(!разрешитьЗакрытые([z], "Удаление записи")) return;
   if(!confirm("Удалить запись?\n\nАкт № "+(z.акт||"—")+" · "+(z.объект||"")+
      "\n\nУдаление перенесётся на другие места при обмене.")) return;
   // Мягкое удаление: запись остаётся надгробием (скрыта), чтобы удаление

@@ -787,6 +787,7 @@ function выдатьНомера(id){
   const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
   const г=годЗаписи(z);
   if(!г){ toast("У записи не заполнена дата — год берётся из неё"); return; }
+  if(!разрешитьЗакрытые([z], "Выдача номера")) return;
   const нет=методыБезНомера(z);
   if(!нет.length){ toast("У всех методов записи номера уже есть"); return; }
   const выдано=[];
@@ -806,6 +807,7 @@ function выдатьАкт(id){
   const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
   const г=годЗаписи(z);
   if(!г){ toast("У записи не заполнена дата — год берётся из неё"); return; }
+  if(!разрешитьЗакрытые([z], "Выдача номера")) return;
   if(String(z.акт||"").trim()){ toast("У записи уже есть номер акта"); return; }
   const мет=methodsOf(z);
   const толькоТКВД = мет.length>0 && мет.every(м=>м==="ТК"||м==="ВД");

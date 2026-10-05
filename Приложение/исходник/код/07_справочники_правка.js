@@ -808,7 +808,11 @@ function вставитьСимвол(id, с){
 function рядСимволов(id){
   return `<span class="симряд">${СИМВОЛЫ_ПОЛЯ.map(с=>
     `<button type="button" class="симкн" title="вставить ${с}" `+
-    `onclick="вставитьСимвол('${id}','${с}')">${с}</button>`).join("")}</span>`;
+    `onclick="вставитьСимвол('${id}','${с}')">${с}</button>`).join("")}`+
+    `<button type="button" class="симкн" title="жёсткий пробел (в поле — «^_», в документе — неразрывный пробел); Ctrl+Shift+Пробел" `+
+    `onclick="вставитьСимвол('${id}','^_')">⍽</button>`+
+    `<button type="button" class="симкн" title="с новой строки (в поле — «^/»); Shift+Enter" `+
+    `onclick="вставитьСимвол('${id}','^/')">↵</button></span>`;
 }
 function блокДопусков(z){
   const поля=REGS.ppl.fields.filter(f=>f.допуск);

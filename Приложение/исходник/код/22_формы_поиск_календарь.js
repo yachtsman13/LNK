@@ -289,6 +289,30 @@ document.addEventListener("keydown",e=>{
   if(document.activeElement && document.activeElement.blur) document.activeElement.blur();   // дописанное поле — в его значение
   кн.click();
 });
+// Ручная разметка в любом поле ввода (указание заказчика): Ctrl+Shift+
+// Пробел — жёсткий пробел «^_» (то же сочетание, что в Word), Shift+Enter
+// в однострочном поле — «с новой строки» «^/» (в многострочном Enter и так
+// переводит строку). Вставляется видимой разметкой, а не невидимым знаком —
+// так видно, где она стоит; в документ уходит неразрывный пробел и перевод
+// строки (разметкаВвода). Работает и в редактируемом тексте акта.
+function вставитьРазметку(эл, с){
+  if(!эл) return false;
+  if(эл.isContentEditable){ document.execCommand("insertText", false, с); return true; }
+  if(!(эл.tagName==="TEXTAREA" || (эл.tagName==="INPUT" && /^(text|search|)$/.test(эл.type||"")))) return false;
+  const a=эл.selectionStart==null?эл.value.length:эл.selectionStart, b=эл.selectionEnd==null?a:эл.selectionEnd;
+  эл.value=эл.value.slice(0,a)+с+эл.value.slice(b);
+  try{ эл.selectionStart=эл.selectionEnd=a+с.length; }catch(e){}
+  эл.dispatchEvent(new Event("input",{bubbles:true}));
+  return true;
+}
+document.addEventListener("keydown",e=>{
+  const эл=document.activeElement;
+  if(e.code==="Space" && (e.ctrlKey||e.metaKey) && e.shiftKey && !e.altKey){
+    if(вставитьРазметку(эл,"^_")) e.preventDefault();
+  } else if(e.key==="Enter" && e.shiftKey && !e.ctrlKey && !e.altKey && эл && эл.tagName==="INPUT"){
+    if(вставитьРазметку(эл,"^/")) e.preventDefault();
+  }
+});
 // Alt+← / Alt+→ в форме записи журнала и карточки справочника — соседняя
 // запись списка (те же кнопки «◀ ▶» в шапке формы). В других видах сочетание
 // остаётся браузеру.

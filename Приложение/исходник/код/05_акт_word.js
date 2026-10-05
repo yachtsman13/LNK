@@ -63,12 +63,16 @@ function dlBlob(имя, blob){
 const X = s => String(s==null?"":s)
   .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
   .replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+// Перевод строки в тексте документа — разрыв строки Word (w:br) внутри
+// того же абзаца: и введённый в многострочном поле, и записанный знаком
+// «^/» (см. разметкаВвода).
+const XT = s => X(s).replace(/\n/g,'</w:t><w:br/><w:t xml:space="preserve">');
 const ФОНТ='<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>';
 const КЕГЛЬ='<w:sz w:val="28"/><w:szCs w:val="28"/>';
 function rPr(жирный){ return '<w:rPr>'+ФОНТ+(жирный?'<w:b/>':'')+КЕГЛЬ+'</w:rPr>'; }
 const ШР=ФОНТ+КЕГЛЬ;
 function wRun(t,жирный){
-  return '<w:r>'+rPr(жирный)+'<w:t xml:space="preserve">'+X(t)+'</w:t></w:r>';
+  return '<w:r>'+rPr(жирный)+'<w:t xml:space="preserve">'+XT(t)+'</w:t></w:r>';
 }
 function wP(t,вид){
   вид=вид||{};
@@ -107,7 +111,7 @@ function rPrПолный(вид){
   return '<w:rPr>'+ФОНТ+(вид.жирный?'<w:b/>':'')+(вид.курсив?'<w:i/>':'')+кг+'</w:rPr>';
 }
 function wRunВид(t,вид){
-  return '<w:r>'+rPrПолный(вид)+'<w:t xml:space="preserve">'+X(t)+'</w:t></w:r>';
+  return '<w:r>'+rPrПолный(вид)+'<w:t xml:space="preserve">'+XT(t)+'</w:t></w:r>';
 }
 // Номер протокола «121-2026-ВИК» Word разорвал бы по дефисам. Неразрывный
 // дефис (w:noBreakHyphen) — штатный для этого элемент, не подделка
@@ -430,8 +434,20 @@ function пробелПередЕдиницей(t){
   const ре=new RegExp("(\\d)("+ЕДИНИЦЫ+")(?![А-Яа-яA-Za-z0-9])","g");
   return String(t==null?"":t).replace(ре,"$1 $2");
 }
+// Ручная разметка во всех полях, из которых собираются документы
+// (указание заказчика): «^_» — жёсткий (неразрывный) пробел, «^/» — с
+// новой строки. Тем же знаком «^», что степень и градус: в поле ввода
+// разметку видно, она переживает выгрузку в Excel и обратно, а сам знак
+// в документ не печатается. Настоящий неразрывный пробел (Alt+0160) и
+// перевод строки в многострочном поле тоже работают как есть.
+function разметкаВвода(t){
+  return String(t==null?"":t).replace(/\^_/g,"\u00a0").replace(/[ \t]*\^\/[ \t]*/g,"\n");
+}
+// Цифры в наименовании должности не отрываются от следующего за ними
+// слова (указание заказчика): «инженер 2 категории».
+function связатьЧисла(t){ return String(t==null?"":t).replace(/(\d)[ \t]+(?=[^\s\d])/g,"$1\u00a0"); }
 function типографика(t){
-  t=пробелПередЕдиницей(знакГрадуса(t));
+  t=пробелПередЕдиницей(знакГрадуса(разметкаВвода(t)));
   let s=String(t==null?"":t);
   const набор=ВИСЯЧИЕ.concat(ВИСЯЧИЕ_ДЛИННЫЕ)
     .map(w=>w.replace(/[-]/g,"\\-")).join("|");
@@ -496,14 +512,16 @@ function разбитьСтепени(t){
 // он заведомо ничего не даст (списки на сотни строк).
 function естьСтепени(t){ return new RegExp(ЕДИНИЦЫ_СО_СТЕПЕНЬЮ+"|"+СТЕПЕНЬ_ЯВНО).test(String(t||"")); }
 function степениВHTML(t){
-  return разбитьСтепени(t).map(ч=>ч.степень?("<sup>"+esc(ч.т)+"</sup>"):esc(ч.т)).join("");
+  return разбитьСтепени(t).map(ч=>ч.степень?("<sup>"+esc(ч.т)+"</sup>"):esc(ч.т)).join("").replace(/\n/g,"<br>");
 }
+// Текст документа на экране: типографика, степени, переводы строк.
+function тHTML(t){ return степениВHTML(типографика(t)); }
 function wТекстСоСтепенями(t){
   return разбитьСтепени(t).map(ч=>{
     if(!ч.степень) return wRun(ч.т);
     // По схеме CT_RPr надстрочность идёт ПОСЛЕ кегля: rFonts → sz → szCs → vertAlign
     return '<w:r><w:rPr>'+ФОНТ+КЕГЛЬ+'<w:vertAlign w:val="superscript"/></w:rPr>'+
-           '<w:t xml:space="preserve">'+X(ч.т)+'</w:t></w:r>';
+           '<w:t xml:space="preserve">'+XT(ч.т)+'</w:t></w:r>';
   }).join("");
 }
 
@@ -652,7 +670,7 @@ function renderAkt(ключ){
     const последний=(i===группыАкта.length-1);
     const шапка=имя
       ? `<span class="fld" contenteditable="true" data-ph="название документов"
-           oninput="saveИмяДок('${g.м}',this.innerText,${один})">${e(типографика(имя))}</span>`
+           oninput="saveИмяДок('${g.м}',this.innerText,${один})">${тHTML(имя)}</span>`
       : `<span class="fld" contenteditable="true" data-ph="как называ${один?"ется документ":"ются документы"} по методу ${g.м} — впишите"
            oninput="saveИмяДок('${g.м}',this.innerText,${один})"></span>`;
     return `<p class="aktp вис${последний?" последний":""}"><span class="нр">${i+1}.</span>${шапка} <span class="nbr">${один?"№":"№№"}</span>&nbsp;${
@@ -736,7 +754,7 @@ function renderAkt(ключ){
       пишется «на баллонах…», а из справочника приходит «Баллон…». Склонение я не подставляю.</div>
 
     <div class="sheet">
-      <div class="labcert">${e(типографика(шапкаЛаборатории(датаРаботАкта(ключ))))}</div>
+      <div class="labcert">${тHTML(шапкаЛаборатории(датаРаботАкта(ключ)))}</div>
       <h1 class="akt">АКТ № ${e(номерАкта(ключ))}</h1>
       <div class="aktsub">о проведении работ</div>
 
@@ -750,7 +768,7 @@ function renderAkt(ключ){
       <div class="fldhint">${своя?"Фраза об объектах правлена вами.":"Фраза об объектах — черновик из "+zs.length+" записей журнала."}</div>
       ${своя?"":блокПадежей(zs,ключ)}
 
-      <p class="aktp noind">${e(типографика("Результаты работ отражены в следующих документах."))}</p>
+      <p class="aktp noind">${тHTML("Результаты работ отражены в следующих документах.")}</p>
       ${абзацы}
 
       <table class="signtbl">

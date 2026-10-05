@@ -37,6 +37,7 @@
 //  22. полное наименование должности в паспорте, стаж по НК датой.
 //  23. паспорт, раздел II: 6 столбцов бланка, аттестация по удостоверениям.
 //  24. паспорт, раздел II: столбец 4 по бланку (должность, функции, уровни и объекты).
+//  29. паспорт: подписи один раз, повторяются только номера столбцов; ФИО по строкам; разметка «^_» и «^/».
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
@@ -1176,8 +1177,8 @@ async function главное(){
         saveReg(REG_PPL, P);
         const строки = строкиАттестацииПаспорта(p);
         switchView("passport");
-        const таблица = [...document.querySelectorAll("#main .sheet table.doctbl")].find(t => /Основание для привлечения/.test(t.textContent));
-        const шапка = таблица ? [...таблица.querySelectorAll("thead tr:first-child th")].map(x => x.textContent.trim()) : [];
+        const таблица = [...document.querySelectorAll("#main .sheet .тблскролл")].find(t => /Основание для привлечения/.test(t.textContent));
+        const шапка = таблица ? [...таблица.querySelectorAll("table:first-child tr:first-child th")].map(x => x.textContent.trim()) : [];
         const лист = таблица ? таблица.textContent.replace(/\u00a0/g, " ") : "";
         editReg("ppl", String(p.id));
         const поле = !!document.getElementById("rf_основание");
@@ -1193,10 +1194,11 @@ async function главное(){
       await q.evaluate(() => паспортВWord());
       const ф = await собратьФайлы(q); const п = ф.find(x => /docx$/.test(x));
       const xml = require("child_process").execSync(`unzip -p "${п}" word/document.xml`, { maxBuffer: 1 << 26 }).toString();
-      const табл = xml.split("<w:tbl>").find(t => t.includes("Основание для привлечения") && t.includes("0001-111")) || "";
+      const тт = xml.split("<w:tbl>"), иТ = тт.findIndex(t => t.includes("0001-111"));
+      const табл = иТ > 0 && тт[иТ - 1].includes("Основание для привлечения") ? тт[иТ] : "";
       const кол = (табл.match(/<w:gridCol /g) || []).length;
       const абз = (табл.match(/0001-111|ВИК.{1,8}II.{1,8}уровень.{1,8}от.{1,8}01\.03\.2024;|ПБ-55/g) || []).length;
-      да(кол === 6 && абз >= 3 && табл.includes(">1.<") && табл.includes(">6.<"), "в Word таблица специалиста — 6 столбцов, строка номеров, столбец 6 по строкам", "колонок " + кол + ", совпадений " + абз);
+      да(кол === 6 && абз >= 3 && табл.includes(">1<") && табл.includes(">6<") && табл.includes(">3.<"), "в Word таблица специалиста — 6 столбцов, строка номеров, столбец 6 по строкам", "колонок " + кол + ", совпадений " + абз);
       const rr = spawnSync("python3", ["scripts/проверка_docx.py", п], { encoding: "utf-8" });
       да(rr.status === 0, "паспорт проходит проверка_docx.py", (rr.stdout || rr.stderr).trim().split("\n").slice(0, 3).join(" / "));
       // Номер редакции: спрашивается до выгрузки, на титуле, редакция записана.
@@ -1236,7 +1238,7 @@ async function главное(){
         saveReg(REG_PPL, P);
         const строки = строкиДолжностиПаспорта(p).map(x => x === ПАС_ПУСТО ? "" : x);
         switchView("passport");
-        const таблица = [...document.querySelectorAll("#main .sheet table.doctbl")].find(t => /Основание для привлечения/.test(t.textContent));
+        const таблица = [...document.querySelectorAll("#main .sheet .тблскролл")].find(t => /Основание для привлечения/.test(t.textContent));
         const ячейки = таблица ? [...таблица.querySelectorAll("td.пасдолж")] : [];
         const я = ячейки.find(x => /ВИК, АЭ/.test(x.textContent));
         const дивы = я ? [...я.querySelectorAll("div")].map(d => d.textContent.replace(/\u00a0/g, " ").trim()) : [];
@@ -1253,7 +1255,7 @@ async function главное(){
       await q.evaluate(() => паспортВWord(""));
       const ф = await собратьФайлы(q); const п = ф.find(x => /docx$/.test(x));
       const xml = require("child_process").execSync(`unzip -p "${п}" word/document.xml`, { maxBuffer: 1 << 26 }).toString();
-      const табл = xml.split("<w:tbl>").find(t => t.includes("Основание для привлечения") && t.includes("ВИК, АЭ")) || "";
+      const табл = xml.split("<w:tbl>").find(t => t.includes("ВИК, АЭ")) || "";
       const яч = (табл.split("<w:tc>").find(x => x.includes("ВИК, АЭ")) || "");
       const абз = (яч.match(/<w:p>/g) || []).length;
       да(абз === ожид.length && /объекты контроля № 1, 6/.test(яч.replace(/\u00a0/g, " ")), "в Word столбец 4 — абзац на строку, пустые строки сохранены", "абзацев " + абз);
@@ -1291,7 +1293,7 @@ async function главное(){
         const doch = getComputedStyle(лист.querySelector(".doch")).fontSize;
         const верт = лист.querySelectorAll("th.верт").length;
         const подч = [...лист.querySelectorAll(".пасобл p.подч")].map(x => x.textContent.replace(/ /g, " "));
-        const озн = [...лист.querySelectorAll("table.листозн tbody tr")].length;
+        const озн = [...лист.querySelectorAll("table.листозн tbody tr:not(.листознш)")].length;
         const нужноОзн = live(P).length + 4;
         return { об, мт, пов, кал, безИ, тип, сохр, doch, верт, подч, озн, нужноОзн, текст: лист.textContent.replace(/ /g, " ") };
       });
@@ -1327,10 +1329,11 @@ async function главное(){
         "Word, IX: подписи отдельной таблицей, номера колонок 1–5 повторяемой шапкой второй");
       const пом = таблицы.find(x => x.includes("Идентификация помещения")) || "";
       да((пом.match(/<w:gridCol /g) || []).length === 6 && пом.includes("Место нахождения, основание"), "Word, X: 6 столбцов бланка с номерами");
-      const перед = таблицы.find(x => x.includes("Идентификационные сведения")) || "";
+      const передИ = таблицы.findIndex(x => x.includes("Идентификационные сведения"));
+      const перед = передИ > 0 ? таблицы[передИ] + таблицы[передИ + 1] : "";
       да((перед.match(/btLr/g) || []).length === 9 && перед.includes('w:trHeight w:val="2268"') && (перед.match(/>-</g) || []).length === 8,
         "Word, XI: таблица бланка — 9 вертикальных подписей, строка номеров, прочерки");
-      const озн = таблицы.find(x => x.includes("Фамилия, Имя, Отчество ознакомленного")) || "";
+      const озн = таблицы.find(x => x.includes(">ознакомленного<")) || "";
       да((озн.match(/w:trHeight w:val="1134"/g) || []).length === r.нужноОзн && (озн.match(/<w:gridCol /g) || []).length === 4,
         "Word, лист ознакомления: 4 столбца бланка, строки по 2 см, 4 пустые строки");
       да(xml.includes("сертификат о калибровке"), "Word, столбец 7: у прибора с галочкой «Калибровка» — «сертификат о калибровке»");
@@ -1355,7 +1358,7 @@ async function главное(){
         const вСвой = ряд(г + 1, "ВИК"), вСлед = ряд(г + 2, "ВИК"), вТретий = ряд(г + 3, "ВИК");
         const укСтарый = прогнозАттестации(г + 2).filter(з => з.специалист === p1 && з.метод === "УК").map(з => з.до);
         switchView("passport");
-        const озн = [...document.querySelectorAll("table.листозн tbody tr")].map(tr => tr.children[1].textContent.trim());
+        const озн = [...document.querySelectorAll("table.листозн tbody tr:not(.листознш)")].map(tr => tr.children[1].textContent.trim());
         document.documentElement.dataset.theme = "ph";
         const полоса = getComputedStyle(document.querySelectorAll(".sheet .doctbl tbody tr")[1]).backgroundColor;
         switchView("people");
@@ -1516,6 +1519,65 @@ wb.save(sys.argv[2])`, фж, правл], { encoding: "utf-8" });
         return { z1, z2, закрыт: годЗакрыт("2026") }; }, ид);
       да(r7.z1 && !r7.z2 && !r7.закрыт, "после перезагрузки запись снова только для просмотра; «Открыть год» снимает замок", JSON.stringify(r7));
       await m1.c.close(); await m2.c.close();
+    }
+
+    раздел("29. Паспорт: повторяются только номера столбцов, ФИО по строкам, жёсткий пробел и новая строка");
+    {
+      const m = await место(b, "М1"); все.push(m.p); const q = m.p;
+      const r = await q.evaluate(() => {
+        const сп = live(P).find(p => /Денисов/.test(p.фио));
+        сп.должность_полно = "Инженер 2 категории"; сп.должность = "Инженер 2 категории"; saveReg(REG_PPL, P);
+        const п = live(S)[0]; п.характеристики = "до^_100 мм^/второй ряд"; saveReg(REG_SI, S);
+        switchView("passport");
+        const лист = document.querySelector("#main .sheet");
+        const тбл = [...лист.querySelectorAll("table.doctbl")];
+        const спИ = тбл.findIndex(t => /Ф\.И\.О\./.test(t.textContent));
+        const спД = тбл[спИ + 1];
+        const номера = спД ? [...спД.querySelectorAll("thead th")].map(x => x.textContent) : [];
+        const перваяЯч = спД ? спД.querySelector("tbody td").textContent : "";
+        // thead (повторяется при печати) только из чисел
+        const thead = тбл.flatMap(t => [...t.querySelectorAll("thead th")].map(x => x.textContent.trim()));
+        const озн = лист.querySelector("table.листозн");
+        const фио = озн ? [...озн.querySelectorAll("tbody tr")].map(tr => tr.children[2] ? tr.children[2].querySelectorAll("div").length : 0) : [];
+        const бр = /до 100 мм<br>второй ряд/.test(лист.innerHTML.replace(/&nbsp;| /g, " "));
+        const нбсп = лист.textContent.includes("до 100");
+        return { номера, перваяЯч, thead, ознThead: озн ? озн.querySelectorAll("thead").length : -1, фио, бр, нбсп,
+          акт: должностьВАкте("Инженер 1 категории"), разм: разметкаВвода("а^_б ^/ в") };
+      });
+      да(JSON.stringify(r.номера) === JSON.stringify(["1", "2", "3", "4", "5", "6"]) && r.перваяЯч === "1.",
+        "раздел II на экране: номера столбцов без точки, номер строки с точкой", JSON.stringify([r.номера, r.перваяЯч]));
+      да(r.thead.length > 0 && r.thead.every(x => /^\d+$/.test(x)) && r.ознThead === 0,
+        "экран: при печати повторяются только номера столбцов (в thead одни цифры), у листа ознакомления шапка не повторяется", JSON.stringify(r.thead.filter(x => !/^\d+$/.test(x))));
+      да(r.фио[0] === 3 && r.фио[1] === 3, "лист ознакомления: шапка «Фамилия, Имя, / Отчество / ознакомленного», ФИО — фамилия, имя, отчество на разных строках", JSON.stringify(r.фио));
+      да(r.бр && r.нбсп && r.разм === "а б\nв", "«^_» — жёсткий пробел, «^/» — с новой строки (на экране паспорта)", JSON.stringify([r.бр, r.нбсп, r.разм]));
+      да(r.акт === "Инженер 1 категории", "должность в акте: цифра связана со следующим словом", JSON.stringify(r.акт));
+      await q.evaluate(() => паспортВWord(""));
+      const ф = await собратьФайлы(q); const п = ф.find(x => /docx$/.test(x));
+      const xml = require("child_process").execSync(`unzip -p "${п}" word/document.xml`, { maxBuffer: 1 << 26 }).toString();
+      const повт = (xml.match(/<w:tr><w:trPr>(?:<w:cantSplit\/>)?(?:<w:trHeight[^>]*\/>)?<w:tblHeader\/><\/w:trPr>.*?<\/w:tr>/g) || []);
+      const тексты = повт.map(tr => (tr.match(/<w:t xml:space="preserve">([^<]*)<\/w:t>/g) || []).map(x => x.replace(/<[^>]+>/g, "")));
+      да(повт.length >= 6 && тексты.every(т => т.length && т.every(x => /^\d+$/.test(x))),
+        "Word: повторяемая строка (tblHeader) во всех таблицах паспорта — только номера столбцов", повт.length + " строк; " + JSON.stringify(тексты.filter(т => !т.every(x => /^\d+$/.test(x))).slice(0, 2)));
+      const таблицы = xml.split("<w:tbl>");
+      const спИ = таблицы.findIndex(x => x.includes(">Ф.И.О.<"));
+      const спД = таблицы[спИ + 1] || "";
+      да(спИ > 0 && !таблицы[спИ].includes("tblHeader") && />1<\/w:t>.*>6<\/w:t>/.test(спД) && !/>1\.<\/w:t><\/w:r><\/w:p><\/w:tc><w:tc><w:tcPr><w:tcW[^>]*\/>(?:<w:shd[^>]*\/>)?<w:tcMar>.*>2\.</.test(спД) && спД.includes(">1.</w:t>"),
+        "Word, раздел II: подписи один раз, номера столбцов без точки повторяются, номер строки «1.»");
+      const озн = таблицы.find(x => x.includes(">ознакомленного<")) || "";
+      да(/>Денисов<\/w:t>/.test(озн) && />Сергей<\/w:t>/.test(озн) && />Валерьевич<\/w:t>/.test(озн) && />Фамилия, Имя,<\/w:t>/.test(озн) && !озн.includes("tblHeader"),
+        "Word, лист ознакомления: ФИО и подписи по строкам, шапка не повторяется");
+      да(xml.includes("Инженер 2 категории"), "Word: в наименовании должности цифра связана со следующим словом");
+      да(xml.includes("до 100") && /второй ряд/.test(xml) && /<w:br\/><w:t xml:space="preserve">второй ряд/.test(xml), "Word: «^_» — неразрывный пробел, «^/» — разрыв строки w:br");
+      const rr = spawnSync("python3", ["scripts/проверка_docx.py", п], { encoding: "utf-8" });
+      да(rr.status === 0, "паспорт проходит проверка_docx.py", (rr.stdout || rr.stderr).trim().split("\n").slice(0, 3).join(" / "));
+      // Клавиши: Ctrl+Shift+Пробел и Shift+Enter в поле формы
+      await q.evaluate(() => editReg("si", String(live(S)[1].id)));
+      const поле = q.locator("#rf_тип");
+      await поле.click(); await q.keyboard.press("End");
+      await q.keyboard.press("Control+Shift+Space"); await q.keyboard.type("x"); await q.keyboard.press("Shift+Enter"); await q.keyboard.type("y");
+      const знач = await поле.inputValue();
+      да(/\^_x\^\/y$/.test(знач), "в поле формы Ctrl+Shift+Пробел пишет «^_», Shift+Enter — «^/»", JSON.stringify(знач));
+      await m.c.close();
     }
 
     раздел("Ошибки на страницах");

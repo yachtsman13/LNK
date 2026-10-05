@@ -245,6 +245,10 @@
   .form .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
   .form label.wide{grid-column:1/-1}
+  /* Флажок (калибровка вместо поверки): галочка и подпись в строку —
+     «.form label» (0,1,1) иначе поставил бы их столбиком. */
+  .form label.флажокполе{flex-direction:row;align-items:center;gap:8px;font-size:13px;color:var(--ink)}
+  .form label.флажокполе input{width:auto;margin:0}
   .form input,.form select,.form textarea{padding:8px 10px;border:1px solid var(--line);
     border-radius:var(--radius);font:inherit;color:var(--ink);background:var(--input-bg)}
   .form textarea{resize:vertical;min-height:52px}
@@ -278,7 +282,25 @@
   .sheet h1{text-align:center;font-size:20px;letter-spacing:1px;margin:16px 0 2px}
   .sheet .docsub{text-align:center;font-size:14px;margin-bottom:4px}
   .sheet .docmeta{text-align:center;color:#333;margin-bottom:18px}
-  .sheet .doch{font-weight:700;margin:12pt 0;text-align:center}
+  .sheet .doch{font-weight:700;margin:12pt 0;text-align:center;font-size:16pt}
+  .sheet .doch.листознзаг{font-size:14pt}
+  /* Паспорт, разделы III–IV — абзацами, как в бланке «Редакция № 6». */
+  .пасобл p{margin:0;text-indent:1.25cm;line-height:18pt;font-size:14pt}
+  .пасобл p.подч{text-decoration:underline}
+  .пасобл p.жир{font-weight:700}
+  .пасобл p.перед{margin-top:6pt}
+  .пасобл p.вступ{margin-bottom:6pt;text-align:justify}
+  .пасобл p.под{text-indent:2.5cm}
+  .пасобл.обл3 p.под{text-indent:1.25cm}
+  /* Строка таблицы паспорта не разрывается между страницами. */
+  .sheet .doctbl tr{break-inside:avoid;page-break-inside:avoid}
+  /* XI: подписи столбцов вертикально, как в бланке. */
+  .doctbl th.верт{height:4cm;padding:4px 2px}
+  .doctbl th.верт div{writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto;max-height:3.8cm;white-space:normal}
+  /* Лист ознакомления: место для подписи. */
+  .doctbl.листозн tbody td{height:2cm}
+  /* Узкий первый столбец «№ п/п» — без широких полей, иначе «п/п» рвётся. */
+  .doctbl.узк1 th:first-child,.doctbl.узк1 td:first-child{padding-left:2px;padding-right:2px}
   .doctbl{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed}
   .doctbl td,.doctbl th{border:1px solid #8a8a8a;padding:6px 10px;font-size:13.5px;text-align:center;vertical-align:middle}
   /* Шапка таблицы документа — не как шапка списков программы: общий стиль

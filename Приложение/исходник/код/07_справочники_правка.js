@@ -158,6 +158,10 @@ const REGS={
          "поправить, если у него всё же есть свои части."},
       {k:"метод",l:"Метод контроля",type:"select",options:METHODS},
       {k:"назначение",l:"Назначение",wide:1,символы:1},
+      // Калибровка вместо поверки: в Форме 2 паспорта тогда пишется
+      // «сертификат о калибровке», а не «свидетельство о поверке»
+      // (указание заказчика). По умолчанию — поверка (флажок снят).
+      {k:"калибровка",l:"Калибровка, а не поверка (сертификат о калибровке)",type:"флажок"},
       {k:"поверка_дата",l:"Дата поверки/калибровки/аттестации",type:"date"},
       {k:"исправен",l:"Отметка «И» — исправен (по итогам поверки)",type:"select",options:["Исправен"]},
       // Поверка в сокращённом объёме (со слов заказчика: бывает, что прибор
@@ -742,7 +746,9 @@ function editReg(kind,id,изИд){
             return `<span class="месгод"><b>${г}</b><select id="rf_${f.k}_${г}">
             <option value="">${расч?("— расчёт: "+расч.toLowerCase()+" —"):"— нет —"}</option>${МЕСЯЦЫ.map(м=>
               `<option ${String((v&&v[г])||"")===м?"selected":""}>${м}</option>`).join("")}</select></span>`; }).join("")}</span>`
+      : f.type==="флажок" ? `<input id="rf_${f.k}" type="checkbox" ${v?"checked":""}>`
       : `<input id="rf_${f.k}" ${f.type==="date"?"type=date":""} value="${val(v)}">`;
+    if(f.type==="флажок") return `<label class="флажокполе${f.wide?" wide":""}">${body}${f.l}</label>`;
     return `<label class="${f.wide?"wide":""}">${f.l}${
       f.файлДок&&ЕСТЬ_ПАПКИ?`<span class="файлобёртка">${body}${кнопкаФайлаДок("rf_"+f.k)}</span>`:body}${
       f.символы?рядСимволов("rf_"+f.k):""}${
@@ -1179,7 +1185,8 @@ function saveRegRec(kind,id){
           const м=el?el.value.trim():""; if(м) из[String(г)]=м; });
       rec[f.k]=из; return;
     }
-    const el=document.getElementById("rf_"+f.k); rec[f.k]=el?el.value.trim():"";
+    const el=document.getElementById("rf_"+f.k);
+    rec[f.k]=!el?"":(el.type==="checkbox"?(el.checked?"Да":""):el.value.trim());
   });
   if(!rec[C.name]){ toast("Заполните: "+C.fields.find(f=>f.k===C.name).l); return; }
   rec.изменено=new Date().toISOString(); rec.место=getWS().код;

@@ -549,6 +549,9 @@ function backupOpen(){
       const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
       rd.onload=()=>{ try{
         const d=JSON.parse(rd.result);
+        // Файл переезда места (с другого компьютера) — своя обработка:
+        // кроме данных он несёт код места, роли и право выдачи номеров.
+        if(d && d.тип===ТИП_ПЕРЕЕЗДА){ переездПринять(d); e.target.value=""; return; }
         const jarr=Array.isArray(d)?d:d.записи;                 // старая копия — только журнал
         const полная=d && (d.объекты||d.приборы||d.специалисты||d.акты);
         if(!Array.isArray(jarr) && !полная) throw new Error("не файл копии");

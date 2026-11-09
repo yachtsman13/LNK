@@ -172,6 +172,7 @@ function работыВЖурнал(м){
   setJF("год",String(годРабот)); setJF("метод",м);
 }
 function renderDash(){
+  догнатьПовторы();
   const L=liveJ();
   const year=new Date().getFullYear();
   const заГод=L.filter(z=>(z.дата||"").slice(0,4)===String(year)).length;
@@ -226,6 +227,7 @@ function renderDash(){
     : (дн>=3 ? `<b>Резервной копии не было ${дн} дн.</b> Это единственная страховка от очистки памяти браузера.` : "");
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>Пульт</h2><span class="sub">на ${ru(new Date().toISOString().slice(0,10))}</span></div>
+    ${плашкаПереезда()}
     ${тревога?`<div class="draftnote" style="cursor:pointer" onclick="switchView('exchange')">
       ◆ ${тревога} Нажмите — открою «Обмен», там одна кнопка.</div>`:""}
     ${(()=>{ const п=предупрежденияОбмена(); return п.length?`<div class="draftnote" style="cursor:pointer"

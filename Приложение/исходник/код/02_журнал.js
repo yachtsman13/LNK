@@ -52,7 +52,7 @@ function setChrome(){
   document.getElementById("cSi").textContent=live(S).length;
   document.getElementById("cPeople").textContent=live(P).length;
   const cd=document.getElementById("cDocs");
-  if(cd) cd.textContent=liveJ().filter(ждётНомеров).length;
+  if(cd) cd.textContent=списокАктов().length;
   document.getElementById("fRows").textContent=liveJ().length;
   document.getElementById("fBuilt").textContent=ru(DB.собрано)||DB.собрано||"—";
   document.getElementById("verTag").textContent="v"+(DB.версия||"?")+" • реальные данные";
@@ -63,7 +63,14 @@ function setChrome(){
 // Фильтры намеренно НЕ запоминаются между открытиями: иначе можно
 // открыть журнал, увидеть 12 записей вместо 315 и решить, что данные
 // пропали. Сортировка запоминается — она ничего не прячет.
-let jf={год:"",метод:"",статус:"",исп:"",с:"",по:""};
+let jf={год:"",метод:"",статус:"",исп:"",с:"",по:"",докум:""};
+// Отбор «Документ» (с 3.74 — здесь, а не вкладками раздела «Акты и
+// протоколы»): ждут номера — у метода записи нет номера протокола; без
+// заключения — номера есть, заключение не вписано; готовы — и то и другое.
+// Те же признаки, что раньше (ждётНомеров, оформлен).
+const ЖУРНАЛ_ДОКУМ=[["без","ждут номера"],["нужно","без заключения"],["готовые","готовы"]];
+function состояниеДокумента(z){ return ждётНомеров(z)?"без":оформлен(z)?"готовые":"нужно"; }
+function журналОтбор(k,v){ switchView("journal"); resetJF(); setJF(k,v); }
 let jsort=(function(){ try{ const r=ХР.getItem("lnk_jsort");
   if(r){ const o=JSON.parse(r); if(o&&o.c) return {c:o.c,d:o.d===1?1:-1}; } }catch(e){}
   return {c:"дата", d:-1}; })();   // по умолчанию — свежие сверху
@@ -82,7 +89,7 @@ function датаВвод(el, fn, ушёл){
   // после перерисовки — фокус обратно в то же поле (по id)
   if(!ушёл && id){ const н=document.getElementById(id); if(н && н!==document.activeElement) н.focus(); }
 }
-function resetJF(){ jf={год:"",метод:"",статус:"",исп:"",с:"",по:""}; query=""; renderJournal(); }
+function resetJF(){ jf={год:"",метод:"",статус:"",исп:"",с:"",по:"",докум:""}; query=""; renderJournal(); }
 function sortJournal(c){
   if(jsort.c===c) jsort.d=-jsort.d; else { jsort.c=c; jsort.d=(c==="дата")?-1:1; }
   jsortSave(); renderJournal();
@@ -110,6 +117,7 @@ function journalRows(){
     if(jf.год && (z.дата||"").slice(0,4)!==jf.год) return false;
     if(jf.метод && !(z.методы&&z.методы[jf.метод])) return false;
     if(jf.статус && (z.статус||"")!==jf.статус) return false;
+    if(jf.докум && (methodsOf(z).length?состояниеДокумента(z):"")!==jf.докум) return false;
     // Исполнитель — хотя бы по одному методу записи, так, как вписан в журнал.
     if(jf.исп && !methodsOf(z).some(м=>String(((z.методы||{})[м]||{}).исп||"").trim()===jf.исп)) return false;
     // Период — по дате контроля; запись без даты при заданном периоде не
@@ -146,7 +154,9 @@ function renderJournal(){
   const статусы=[...new Set(liveJ().map(z=>z.статус).filter(Boolean))].sort();
   const методыЕсть=METHODS.filter(m=>liveJ().some(z=>z.методы&&z.методы[m]));
   const исполнители=исполнителиЖурнала();
-  const естьФильтр=jf.год||jf.метод||jf.статус||jf.исп||jf.с||jf.по||query;
+  const естьФильтр=jf.год||jf.метод||jf.статус||jf.исп||jf.с||jf.по||jf.докум||query;
+  const сМет=liveJ().filter(z=>methodsOf(z).length);
+  const докСчёт=k=>сМет.filter(z=>состояниеДокумента(z)===k).length;
   const opt=(cur,arr,пусто)=>`<option value="">${пусто}</option>`+
     arr.map(v=>`<option value="${esc(v)}"${v===cur?" selected":""}>${esc(v)}</option>`).join("");
   const стрелка=c=>jsort.c===c?(jsort.d===1?" ▲":" ▼"):"";
@@ -167,12 +177,13 @@ function renderJournal(){
           бланк?` onclick="event.stopPropagation();открытьПротокол('${esc(z.id)}','${m}')"`:""}>${m}${н?" "+esc(н):""}</span>`;
         }).join("")||"<span class='muted'>—</span>"}</td>
       <td class="жисп">${исполнителиЗаписи(z).map(и=>`<div>${esc(и)}</div>`).join("")||"<span class='muted'>—</span>"}</td>
-      <td><span class="st ${statusClass(z.статус)}">${esc(z.статус)||"—"}</span>${ждётНомеров(z)?`<div class="muted" style="font-size:11px">ждёт номера</div>`:""}</td>
+      <td><span class="st ${statusClass(z.статус)}">${esc(z.статус)||"—"}</span>${ждётНомеров(z)?`<div class="muted" style="font-size:11px">ждёт номера</div>`
+        :jf.докум&&methodsOf(z).length?`<div class="muted" style="font-size:11px">${состояниеДокумента(z)==="готовые"?"готов":"нет заключения"}</div>`:""}</td>
     </tr>`).join(""):`<tr><td colspan="8" class="empty">Ничего не найдено.</td></tr>`;
   const всеПоказаны=rows.length && rows.every(z=>жОтм.has(String(z.id)));
   // Что именно отобрано — попадёт в подзаголовок распечатки.
   const отбор=[jf.год?("год "+jf.год):"", jf.метод?("метод "+jf.метод):"",
-    jf.статус?("статус: "+jf.статус):"", jf.исп?("исполнитель: "+jf.исп):"",
+    jf.статус?("статус: "+jf.статус):"", jf.докум?("документ: "+(ЖУРНАЛ_ДОКУМ.find(x=>x[0]===jf.докум)||["",""])[1]):"", jf.исп?("исполнитель: "+jf.исп):"",
     (jf.с||jf.по)?("дата контроля "+(jf.с?"с "+ru(jf.с):"")+(jf.с&&jf.по?" ":"")+(jf.по?"по "+ru(jf.по):"")):"",
     query?("поиск: «"+query+"»"):""].filter(Boolean).join(", ");
   document.getElementById("main").innerHTML=`
@@ -196,6 +207,8 @@ function renderJournal(){
       ${блокЗакрытияГода(jf.год)}
       <label>Метод <select onchange="setJF('метод',this.value)">${opt(jf.метод,методыЕсть,"любой")}</select></label>
       <label>Статус <select onchange="setJF('статус',this.value)">${opt(jf.статус,статусы,"любой")}</select></label>
+      <label title="По номерам протоколов и заключению записи">Документ <select onchange="setJF('докум',this.value)"><option value="">любой</option>
+        ${ЖУРНАЛ_ДОКУМ.map(([k,t])=>`<option value="${k}"${jf.докум===k?" selected":""}>${t} (${докСчёт(k)})</option>`).join("")}</select></label>
       <label>Исполнитель <select onchange="setJF('исп',this.value)">${opt(jf.исп,исполнители,"любой")}</select></label>
       <label>Дата с <input id="jf_с" type="date" value="${esc(jf.с)}" onchange="датаВвод(this,v=>setJF('с',v))" onblur="датаВвод(this,v=>setJF('с',v),1)"></label>
       <label>по <input id="jf_по" type="date" value="${esc(jf.по)}" onchange="датаВвод(this,v=>setJF('по',v))" onblur="датаВвод(this,v=>setJF('по',v),1)"></label>

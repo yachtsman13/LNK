@@ -268,7 +268,6 @@ function exportXlsx(){
   else if(curView==="objects") лист=листОбъектов();
   else if(curView==="si")      лист=листПриборов();
   else if(curView==="people")  лист=листСпециалистов();
-  else if(curView==="docs")    лист=листЖурнала(docsRows());
   else if(curView==="nd")      лист=листНд();
   else if(curView==="premises") лист=листПомещений();
   else if(curView==="podr")    лист=листПодразделений();

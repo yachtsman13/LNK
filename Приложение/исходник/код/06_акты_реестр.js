@@ -1,20 +1,10 @@
 // ── Акты и протоколы ──────────────────────────────────────
-// Раздел отвечает на один рабочий вопрос: по каким записям документ уже
-// оформлен, а по каким ещё нет. «Оформлен» = в документе вписано
-// заключение (оно и хранится в записи).
-let df="акты";                          // акты | без | нужно | готовые | все
-function setDF(v){ df=v; renderDocs(); }
+// С 3.74 раздел — только акты: документ акта, готовность к выдаче, пачка,
+// реестр, акты за период. Отборы записей «ждут номера / без заключения /
+// готовы» перенесены в фильтр «Документ» журнала (jf.докум) — это тот же
+// список записей, двух мест для него не нужно. «Оформлен» = в записи
+// вписано заключение.
 function оформлен(z){ return !!String(z.заключение||"").trim(); }
-function docsRows(){
-  const q=(query||"").toLowerCase();
-  return liveJ().filter(z=>{
-    if(df==="без" && !ждётНомеров(z)) return false;
-    if(df==="готовые" && !(оформлен(z) && !ждётНомеров(z))) return false;
-    if(df==="нужно" && (оформлен(z) || ждётНомеров(z))) return false;
-    if(q && !((z.объект||"")+(z.акт||"")+(z.заключение||"")).toLowerCase().includes(q)) return false;
-    return true;
-  }).sort((a,b)=>String(b.дата||"").localeCompare(String(a.дата||"")));
-}
 // ── Реестр актов ───────────────────────────────────────────
 // Список актов с тем, что по ним известно из журнала: даты, подразделение,
 // объекты, протоколы по методам, записи без номера и итог «Готовности к
@@ -110,13 +100,8 @@ async function актыВПапку(){
     (сбой.length?"\n\nНе записались: "+сбой.join(", "):""));
 }
 function renderDocs(){
-  const rows=docsRows();
-  const всего=liveJ().length;
-  const гот=liveJ().filter(z=>оформлен(z)&&!ждётНомеров(z)).length;
-  const безном=liveJ().filter(ждётНомеров).length;
-  const seg=(v,l,n)=>`<button class="btn ${df===v?"on":""}" onclick="setDF('${v}')">${l} <b>${n}</b></button>`;
-  const акты=списокАктов();
-  const актыП=актыПоказанные();
+  const актыП=актыПоказанные(), всех=списокАктов().length;
+  const бн=liveJ().filter(ждётНомеров).length, бз=liveJ().filter(z=>methodsOf(z).length&&состояниеДокумента(z)==="нужно").length;
   const bodyА=актыП.length?актыП.map(g=>{
     const zs=g.записи, дата=zs.map(z=>z.дата).filter(Boolean).sort();
     const мет=спискиАкта(zs);
@@ -131,43 +116,25 @@ function renderDocs(){
         ${(()=>{ const ош=готовностьАкта(g.ключ).filter(x=>x.ур==="ошибка").length;
           return ош?`<span class="st bad" style="margin-left:6px" title="откройте акт — список в блоке «Готовность к выдаче»">ошибок ${ош}</span>`:""; })()}</td>
     </tr>`;}).join(""):`<tr><td colspan="5" class="empty">Актов не найдено.</td></tr>`;
-  const body=rows.length?rows.map(z=>`
-    <tr onclick="открытьДокумент('${esc(z.id)}')">
-      <td class="num">${esc(z.акт)||"—"}</td>
-      <td class="num">${ru(z.дата)}</td>
-      <td class="obj">${esc(z.объект)}</td>
-      <td>${methodsOf(z).map(m=>`<span class="pill">${m}</span>`).join("")||"<span class='muted'>—</span>"}</td>
-      <td>${ждётНомеров(z) ? `<span class="st work">ждёт номера</span>`
-        : оформлен(z) ? `<span class="st ok">готов</span>`
-        : `<span class="st new">нет заключения</span>`}</td>
-      <td class="obj muted" style="font-size:12px">${esc(String(z.заключение||"").slice(0,90))}${String(z.заключение||"").length>90?"…":""}</td>
-    </tr>`).join(""):`<tr><td colspan="6" class="empty">Ничего не найдено.</td></tr>`;
   document.getElementById("main").innerHTML=`
-    ${printHead("Акты и протоколы", df==="акты"?("актов "+актыП.length)
-      : (df==="без"?"ждут номера":df==="готовые"?"готовые":df==="нужно"?"без заключения":"все")+" · записей "+rows.length)}
+    ${printHead("Акты и протоколы", "актов "+актыП.length)}
     <div class="head">
-      <h2>Акты и протоколы</h2><span class="sub">${df==="акты"?(актыП.length+" актов"):(rows.length+" из "+всего)}</span>
-      <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: объект, № акта, текст заключения…" value="${esc(query)}"></div>
+      <h2>Акты и протоколы</h2><span class="sub">${актыП.length===всех?всех+" актов":актыП.length+" из "+всех+" актов"}</span>
+      <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: № акта, объект…" value="${esc(query)}"></div>
       <div class="spring"></div>
-      ${df==="акты"?`<button class="btn" onclick="exportРеестрАктов()" title="Показанные акты в Excel: даты, подразделение, объекты, протоколы по методам, готовность">▤ Реестр актов в Excel</button>
-        <select onchange="периодАктов=this.value" title="Период по дате работ акта">${ПЕРИОДЫ_АКТОВ.map(([k,t])=>`<option value="${k}"${k===периодАктов?" selected":""}>${t}</option>`).join("")}</select>
-        <button class="btn" onclick="актыВПапку()" title="Каждый акт периода — своим файлом Word в папку с документами; акты с ошибками готовности пропускаются и называются">⤓ Акты за период в папку</button>`:""}
+      <button class="btn" onclick="exportРеестрАктов()" title="Показанные акты в Excel: даты, подразделение, объекты, протоколы по методам, готовность">▤ Реестр актов в Excel</button>
+      <select onchange="периодАктов=this.value" title="Период по дате работ акта">${ПЕРИОДЫ_АКТОВ.map(([k,t])=>`<option value="${k}"${k===периодАктов?" selected":""}>${t}</option>`).join("")}</select>
+      <button class="btn" onclick="актыВПапку()" title="Каждый акт периода — своим файлом Word в папку с документами; акты с ошибками готовности пропускаются и называются">⤓ Акты за период в папку</button>
       <button class="btn" onclick="window.print()">⎙ PDF</button>
     </div>
-    <div class="filters noprint seg">
-      ${seg("акты","Акты",акты.length)}
-      ${seg("без","Ждут номера",безном)}
-      ${seg("нужно","Без заключения",всего-гот-безном)}
-      ${seg("готовые","Готовы",гот)}
-      ${seg("все","Все",всего)}
-      <span class="fnote">клик по строке — открыть документ</span>
+    <div class="filters noprint">
+      <span class="fnote">клик по строке — открыть акт. Записи по документу — в журнале:</span>
+      <button class="btn small" onclick="журналОтбор('докум','без')">ждут номера <b>${бн}</b></button>
+      <button class="btn small" onclick="журналОтбор('докум','нужно')">без заключения <b>${бз}</b></button>
     </div>
     <div class="card"><div class="tblwrap"><table>
-      ${df==="акты"
-        ? `<thead><tr><th style="width:90px">№ акта</th><th style="width:110px">Дата</th><th style="width:70px">Объектов</th><th>Объект контроля</th><th>Документы</th></tr></thead>
-           <tbody>${bodyА}</tbody>`
-        : `<thead><tr><th>№ акта</th><th>Дата</th><th>Объект контроля</th><th>Методы</th><th>Документ</th><th>Заключение</th></tr></thead>
-           <tbody>${body}</tbody>`}
+      <thead><tr><th style="width:90px">№ акта</th><th style="width:110px">Дата</th><th style="width:70px">Объектов</th><th>Объект контроля</th><th>Документы</th></tr></thead>
+      <tbody>${bodyА}</tbody>
     </table></div></div>`;
   wireSearch(renderDocs);
 }

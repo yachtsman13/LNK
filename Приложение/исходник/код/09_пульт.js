@@ -194,7 +194,7 @@ function renderDash(){
   // последние записи по дате
   const last=L.slice().filter(z=>z.дата).sort((a,b)=>b.дата.localeCompare(a.дата)).slice(0,6);
 
-  const tile=(n,l,cls,view)=>`<div class="tile ${cls||""} ${view?"click":""}"${view?` onclick="switchView('${view}')"`:""}>
+  const tile=(n,l,cls,view,докум)=>`<div class="tile ${cls||""} ${view?"click":""}"${view?` onclick="${докум?`журналОтбор('докум','${докум}')`:`switchView('${view}')`}"`:""}>
     <div class="n">${n}</div><div class="l">${l}</div></div>`;
 
   let поверкаHTML;
@@ -243,7 +243,7 @@ function renderDash(){
       ${tile(live(S).length,"приборов (СИ)","","si")}
       ${tile(live(P).length,"специалистов","","people")}
       ${tile(L.filter(ждётНомеров).length,"ждут номера",
-        L.filter(ждётНомеров).length?"warn":"ok","docs")}
+        L.filter(ждётНомеров).length?"warn":"ok","journal","без")}
       ${плиткаВибрации()}
       ${(()=>{ const м=пгМесяца(), пр=пгПросрочено(); if(!м.всего && !пр) return "";
         return tile(пр||м.осталось, пр?"планы-графики: прошедший месяц без отметки":"планы-графики: осталось в этом месяце",

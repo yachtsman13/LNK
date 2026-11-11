@@ -12,7 +12,7 @@
   /* ── Стили оформления (переключаются в шапке) ─────────── */
   /* Тёмный с оранжевым акцентом */
   :root[data-theme="ph"]{
-    --bg:#0f0f0f; --panel:#1c1c1c; --ink:#f3f3f3; --muted:#9a9a9a; --faint:#6a6a6a;
+    --bg:#0f0f0f; --panel:#1c1c1c; --ink:#f3f3f3; --muted:#9a9a9a; --faint:#858585;
     --line:#2e2e2e; --brand:#ff9000; --brand-d:#ffa733; --brand-soft:#2a1f00; --row:#171717;
     --ok:#5cd08a; --okbg:#123320; --warn:#e0a300; --warnbg:#332608; --danger:#ff6b60; --dangerbg:#3a1512;
     --shadow:0 1px 3px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.45);
@@ -187,7 +187,7 @@
   .filters select{font:inherit;font-size:13px;color:var(--ink);background:var(--input-bg);
     border:1px solid var(--line);border-radius:var(--radius);padding:5px 8px;cursor:pointer}
   .filters .btn{padding:5px 10px;box-shadow:none}
-  .filters .fnote{font-size:12px;color:var(--faint);margin-left:auto}
+  .filters .fnote{font-size:12px;color:var(--muted);margin-left:auto}
   /* Выбранная кнопка в «сегменте» (годы плана, периоды задач, год поверки).
      Раньше правило требовало ОБА класса — .filters.seg; панель «Документы по
      поверке» стоит в шапке карточки, а не в полосе фильтров, и у неё был
@@ -252,7 +252,7 @@
   .form{max-width:780px}
   .form .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
-  .form label.wide{grid-column:1/-1}
+  .form label.wide,.form .grid > .wide{grid-column:1/-1}
   /* Флажок (калибровка вместо поверки): галочка и подпись в строку —
      «.form label» (0,1,1) иначе поставил бы их столбиком. */
   .form label.флажокполе{flex-direction:row;align-items:center;gap:8px;font-size:13px;color:var(--ink)}
@@ -405,7 +405,7 @@
   td.mets{font-size:12px;color:var(--muted)}
   /* План ППР: месяц — узкая ячейка-кнопка */
   .плантбл th.мес,.плантбл td.мес{width:40px;text-align:center;padding:4px 2px;font-size:12px}
-  .плантбл th.мес.тек{color:var(--accent);font-weight:700}
+  .плантбл th.мес.тек{color:var(--brand);font-weight:700}
   .плантбл td.мес.план{background:var(--chip);cursor:pointer}
   .плантбл td.мес.сделано{background:#d8f0dd;color:#17692c;font-weight:700;cursor:pointer}
   .плантбл td.мес.просрочено{background:#fadcdc;color:#a11;font-weight:700;cursor:pointer}
@@ -423,6 +423,23 @@
   .кал .сб{font-size:11px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     border-left:3px solid var(--brand);padding-left:3px;margin-top:2px}
   .кал .сб.прос{border-color:var(--danger);color:var(--danger)} .кал .сб.сдел{border-color:var(--ok);opacity:.6}
+  .кал .дн.нед{min-height:220px} .кал .дн.нед .сб{white-space:normal}
+  .кал .сб.выс{font-weight:700}
+  .минимесяцы{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  .минимесяцы.год{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .мини{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--panel)}
+  .минишап{font-weight:600;font-size:13px;cursor:pointer;display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 6px;margin-bottom:4px;white-space:nowrap}
+  .минишап .muted{font-size:11.5px;font-weight:400}
+  .минишап:hover{color:var(--brand)}
+  .минисетка{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:11.5px;text-align:center}
+  .минисетка .шап{font-size:10px;color:var(--muted);text-transform:uppercase}
+  .минисетка .мд{padding:2px 0;border-radius:3px;color:var(--muted)}
+  .минисетка .мд.есть{color:var(--ink);font-weight:700;background:var(--brand-soft);cursor:pointer}
+  .минисетка .мд.прос{color:var(--danger)}
+  .минисетка .мд.сег{box-shadow:inset 0 0 0 1px var(--brand)}
+  .минисетка .мд.выб{background:var(--brand);color:#fff}
+  .калдата{font-weight:700;font-size:12.5px;margin:10px 0 2px;color:var(--muted);cursor:pointer}
+  .калдата:first-child{margin-top:0}
   .form.жмасс label{min-width:150px}
   /* Тепловая карта «метод × месяц» на пульте: один синий тон, светлее —
      меньше (правило для величины: одна краска, от светлого к тёмному). В
@@ -453,9 +470,9 @@
   .готовн li{margin:3px 0}
   .form.жмасс .жмочист{border-color:var(--danger);background:var(--dangerbg)}
   .пп li.пссылка{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
-  .пп li.пссылка:hover{color:var(--accent)}
+  .пп li.пссылка:hover{color:var(--brand)}
   .поручено{margin-left:8px;font-size:12px;color:var(--ok);cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
-  .поручено:hover{color:var(--accent)}
+  .поручено:hover{color:var(--brand)}
   .листание{display:inline-flex;align-items:center}
   .недавние{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0 4px}
   .ппрформа th,.ппрформа td{padding:3px 2px;text-align:center;vertical-align:middle}
@@ -476,6 +493,10 @@
   .празд-стр select{width:170px}
   .астрока{display:flex;gap:7px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
   .астрока input{flex:1;min-width:120px}
+  /* файл удостоверения — своей строкой под записью, на всю ширину, кнопка
+     выбора файла сразу за полем в той же строке (просьба заказчика) */
+  .астрока .астрфайл{flex:1 0 100%;display:flex;gap:7px;align-items:center;font-size:13px}
+  .астрока .астрфайл input{flex:1;min-width:200px}
   .астрока .ro{padding:6px 4px;color:var(--faint);font-size:13px;white-space:nowrap}
   .допблок{margin-top:6px;display:flex;flex-direction:column;gap:8px}
   /* .form label{display:flex;flex-direction:column} (специфичность 0,1,1)
@@ -557,6 +578,21 @@
   :root[data-theme="ph"] .плантбл td.мес.план{background:#262626}
   :root[data-theme="ph"] tr.отм td{background:#2a1f00}
   :root[data-theme="ph"] .top .styleSel select option{color:var(--ink);background:var(--panel)}
+  /* Лист документа (акт, паспорт) и в тёмном стиле белый, как бумага, — внутри
+     него светлая палитра. Иначе подсказки, падежи и пояснения, окрашенные
+     цветами тёмного стиля (светло-серый, тёмные заливки), на белом листе
+     не читались (замечание заказчика по актам). */
+  :root[data-theme="ph"] .sheet{--ink:#1b2430;--muted:#5b6675;--faint:#7a8492;--line:#d6dbe3;
+    --brand:#1f5c8f;--brand-d:#164668;--brand-soft:#e7f0f8;--ok:#1c7a4a;--okbg:#e3f3ea;
+    --warn:#b26a00;--warnbg:#fff2dc;--danger:#b3261e;--dangerbg:#fbe6e4;--row:#f6f8fb;
+    --head-bg:#f2f5f9;--input-bg:#fff;--panel:#fff;--chip:#eef1f5;color-scheme:light}
+  /* Кнопки с оранжевой (и красной) заливкой: белый текст на них не читается
+     (контраст 2,3 при норме 4,5) — тёмный текст. */
+  :root[data-theme="ph"] .btn.primary,:root[data-theme="ph"] .btn.on,
+  :root[data-theme="ph"] .seg .btn.on,:root[data-theme="ph"] .btn.danger{color:#111}
+  /* Жёлтые подсказки к полям акта вне листа — на тёмном фоне светлее */
+  :root[data-theme="ph"] .fldhint{color:#e8b400}
+  :root[data-theme="ph"] .sheet .fldhint{color:#7a5c00}
 
   @media print{
     .app{display:block;height:auto}
@@ -598,3 +634,8 @@
   .print-sign .sl{display:inline-block;width:220px;border-bottom:1px solid #333;margin:0 8px}
   .pnum{display:none}
   .noprint{}
+
+/* Название норм. документа, открывающее его файл (ссылкаНД) */
+.ндссылка{color:var(--brand);text-decoration:underline;text-decoration-style:dotted;cursor:pointer}
+.ндссылка:hover{text-decoration-style:solid}
+@media print{ .ндссылка{color:inherit;text-decoration:none} }

@@ -41,6 +41,8 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  35. поверка в карточке прибора (дата окончания считается), файл удостоверения своей строкой,
+//      файлы норм. документов, календарь на день/неделю/квартал/год с приоритетами, тёмный стиль.
 //  34. вёрстка актов по готовому PDF (scripts/проверка_печати.py).
 //  33. повторяющиеся задачи появляются по расписанию.
 //  32. переезд места на другой компьютер одним файлом.
@@ -1808,6 +1810,178 @@ d.save(sys.argv[1])`, синт], { encoding: "utf-8" });
       да(мк.status === 0 && рс.status !== 0 && найдено.length === 1 && /«в»/.test(найдено[0]),
         "проверка не слепая: висящее «в» в конце строки находит, слова растянутой строки висящими не считает",
         (мк.stderr || "") + JSON.stringify(найдено));
+      await m.c.close();
+    }
+
+    // ── 35. Поверка, файлы НД, календарь, приоритет, тёмный стиль ──
+    раздел("35. Поверка в карточке прибора, файлы норм. документов, календарь с приоритетами, тёмный стиль");
+    {
+      const m = await место(b, "М1"); все.push(m.p); const q = m.p;
+      await q.evaluate(() => { saveWS({ код: "М1", мастер: false, начальник: true }); });
+      const r = await q.evaluate(() => {
+        const o = {};
+        o.расч = [поверкаДоРасчёт("2026-09-03", 12), поверкаДоРасчёт("2028-02-29", 12), поверкаДоРасчёт("2026-01-31", 1),
+          поверкаДоРасчёт("2026-01-01", "24"), поверкаДоРасчёт("0002-09-03", 12), поверкаДоРасчёт("2026-09-03", "")];
+        const a = live(S).find(x => x.поверка_дата && x.поверка_до && !x.основной_ид && !x.периодичность);
+        editReg("si", a.id);
+        o.порядок = [...document.querySelectorAll(".допблок .допстрк span")].map(x => x.textContent);
+        const top = id => document.getElementById(id).getBoundingClientRect().top;
+        o.столбик = top("rf_свидетельство") < top("rf_поверка_дата") && top("rf_поверка_дата") < top("rf_периодичность") &&
+          top("rf_периодичность") < top("rf_поверка_до");
+        const д = document.getElementById("rf_поверка_дата"), п = document.getElementById("rf_периодичность"), до = document.getElementById("rf_поверка_до");
+        o.подсказка = п.placeholder;
+        д.value = "2026-09-03"; д.dispatchEvent(new Event("change")); o.поПрежним = до.value;
+        п.value = "24"; п.dispatchEvent(new Event("input")); o.с24 = до.value;
+        до.value = "2028-08-01"; saveRegRec("si", a.id);
+        const a2 = live(S).find(x => String(x.id) === String(a.id));
+        o.сохр = [a2.поверка_дата, a2.периодичность, a2.поверка_до];
+        editReg("si", a.id); o.ручноеЦело = document.getElementById("rf_поверка_до").value;
+        формаСохранена();
+        // файл удостоверения — своей строкой, широкое поле, кнопка рядом
+        const сп = live(P)[0]; editReg("ppl", сп.id);
+        _аттестации = [{ метод: "ВИК", уровень: "II", дата: "2024-01-01", файл: "Уд.pdf" }];
+        document.getElementById("аттестации").innerHTML = строкиАттестаций();
+        const ф = document.getElementById("аттФайл0"), кн = ф.parentElement.querySelector(".файлкн"),
+          стр = ф.closest(".астрока"), перв = стр.querySelector("select");
+        o.файлУд = { ширина: Math.round(ф.getBoundingClientRect().width), строкаНиже: ф.getBoundingClientRect().top > перв.getBoundingClientRect().bottom,
+          кнопкаРядом: !!кн && Math.abs(кн.getBoundingClientRect().top + кн.getBoundingClientRect().height / 2 - (ф.getBoundingClientRect().top + ф.getBoundingClientRect().height / 2)) < 4 &&
+            кн.getBoundingClientRect().left >= ф.getBoundingClientRect().right };
+        формаСохранена();
+        return o;
+      });
+      да(JSON.stringify(r.расч) === JSON.stringify(["2027-09-02", "2029-02-28", "2026-02-28", "2027-12-31", "", ""]),
+        "дата окончания поверки: дата + МПИ − 1 день (пример заказчика 03.09.2026 + 12 → 02.09.2027), конец месяца, неполная дата не считается", JSON.stringify(r.расч));
+      да(JSON.stringify(r.порядок) === JSON.stringify(["№ свидетельства", "Дата поверки/калибровки/аттестации", "Межповерочный интервал, мес.", "Действительно до"]) && r.столбик,
+        "в карточке прибора одно под другим: № свидетельства, дата поверки, межповерочный интервал, дата окончания", JSON.stringify(r.порядок));
+      да(/по прежним датам: \d+/.test(r.подсказка) && r.поПрежним === "2027-09-02" && r.с24 === "2028-09-02",
+        "новая дата поверки пересчитывает «до»; без вписанного интервала — по прежней паре дат; смена интервала — тоже", JSON.stringify([r.подсказка, r.поПрежним, r.с24]));
+      да(JSON.stringify(r.сохр) === JSON.stringify(["2026-09-03", "24", "2028-08-01"]) && r.ручноеЦело === "2028-08-01",
+        "поправленное руками «до» сохраняется и при повторном открытии не пересчитывается", JSON.stringify([r.сохр, r.ручноеЦело]));
+      да(r.файлУд.строкаНиже && r.файлУд.ширина > 400 && r.файлУд.кнопкаРядом,
+        "файл удостоверения — ниже, своей строкой, широким полем, кнопка выбора сразу за полем", JSON.stringify(r.файлУд));
+
+      // Файл норм. документа: поле в карточке, название открывает файл
+      const нд = await q.evaluate(async () => {
+        const o = {};
+        const д = live(НД)[0];
+        editReg("nd", д.id);
+        o.поле = !!document.getElementById("rf_файл") && !!document.querySelector("#rf_файл + .файлкн, .файлобёртка .файлкн");
+        формаСохранена();
+        д.файл = "НД/Документ.pdf"; saveReg(REG_НД, НД);
+        query = ""; ндФильтрМетод = ""; switchView("nd");
+        o.ссылкаВСписке = document.querySelectorAll("#main .ндссылка").length === 1;
+        const NF = () => new DOMException("нет", "NotFoundError");
+        const файл = { kind: "file", name: "Документ.pdf", async getFile(){ return new Blob(["%PDF-1.4 тест"], { type: "application/pdf" }); } };
+        const нд_ = { kind: "directory", name: "НД", async getFileHandle(n){ if(n === "Документ.pdf") return файл; throw NF(); },
+          async getDirectoryHandle(){ throw NF(); } };
+        _папкаДок = { kind: "directory", name: "Док", async getDirectoryHandle(n){ if(n === "НД") return нд_; throw NF(); },
+          async getFileHandle(){ throw NF(); }, async queryPermission(){ return "granted"; }, async requestPermission(){ return "granted"; } };
+        // паспорт на экране: название — ссылка; печать — без оформления ссылки
+        switchView("passport");
+        o.вПаспорте = [...document.querySelectorAll(".sheet .ндссылка")].length === 1;
+        o.проверкаФайлов = ссылкиНаФайлыДок().some(x => x.файл === "НД/Документ.pdf");
+        return o;
+      });
+      // щелчок по названию в списке открывает файл в новой вкладке
+      await q.evaluate(() => switchView("nd"));
+      const [вкладка] = await Promise.all([q.context().waitForEvent("page", { timeout: 5000 }).catch(() => null),
+        q.click("#main .ндссылка")]);
+      if(вкладка) await вкладка.waitForURL(/^blob:/, { timeout: 5000 }).catch(() => {});
+      const адрес = вкладка ? вкладка.url() : "";
+      const видЛист = await q.evaluate(() => curView);
+      да(нд.поле, "у норм. документа поле «Файл с текстом документа» с кнопкой «📎»");
+      да(нд.ссылкаВСписке && нд.вПаспорте && нд.проверкаФайлов, "название документа с файлом — ссылка в справочнике и в паспорте на экране, файл входит в «Проверить файлы»", JSON.stringify(нд));
+      да(/^blob:/.test(адрес) && видЛист === "nd", "щелчок по названию открывает файл в новой вкладке, а не карточку документа", адрес + " " + видЛист);
+      if(вкладка) await вкладка.close();
+      const печ = await q.evaluate(() => { switchView("passport"); return true; });
+      await q.emulateMedia({ media: "print" });
+      const печСтиль = await q.evaluate(() => { const x = document.querySelector(".sheet .ндссылка"); const cs = getComputedStyle(x);
+        return { подч: cs.textDecorationLine, цвет: cs.color, текст: getComputedStyle(x.closest("td")).color }; });
+      await q.emulateMedia({ media: "screen" });
+      да(печ && печСтиль.подч === "none" && печСтиль.цвет === печСтиль.текст, "в печати название документа — обычный текст", JSON.stringify(печСтиль));
+      const docx = await q.evaluate(() => { паспортВWord("7"); return true; });
+      const фп = (await собратьФайлы(q)).filter(f => /\.docx$/.test(f));
+      const xml = фп.length ? execSync(`unzip -p "${фп[0]}" word/document.xml`, { maxBuffer: 1 << 26 }).toString() : "";
+      да(docx && фп.length === 1 && !/hyperlink/.test(xml) && !/Документ\.pdf/.test(xml), "в выгрузке паспорта в Word документ — текстом, без ссылок и имени файла");
+
+      // Календарь: виды, порядок дел на дату, приоритет задач, ТО без «Обслуживание»
+      const к = await q.evaluate(() => {
+        const o = {};
+        ЗАД.push({ id: "ЗД-К-1", что: "Низкая", срок: "2026-09-30", статус: "назначена", горизонт: "неделя", приоритет: "низкий",
+          создано: new Date().toISOString(), изменено: new Date().toISOString() });
+        ЗАД.push({ id: "ЗД-К-2", что: "Высокая", срок: "2026-09-30", статус: "назначена", горизонт: "неделя", приоритет: "высокий",
+          создано: new Date().toISOString(), изменено: new Date().toISOString() });
+        ЗАД.push({ id: "ЗД-К-3", что: "Старая без приоритета", срок: "2026-09-30", статус: "назначена", горизонт: "неделя",
+          создано: new Date().toISOString(), изменено: new Date().toISOString() });
+        saveReg(REG_ЗАД, ЗАД);
+        const дела = календарьДела("2026-09-30", "день");
+        o.порядок = дела.map(x => x.источник === "Задачи" ? x.что : x.источник);
+        o.ппр = дела.filter(x => x.источник === "ППР").map(x => x.что);
+        o.виды = {};
+        кал.база = "2026-09-30";
+        for(const v of ["день", "неделя", "месяц", "квартал", "год"]){ калВид(v);
+          o.виды[v] = { дел: document.querySelectorAll("#main .pr").length, вкл: (document.querySelector("#main .head .btn.on") || {}).textContent,
+            мини: document.querySelectorAll("#main .мини").length, клеток: document.querySelectorAll("#main .кал .дн").length }; }
+        калВид("неделя"); калСдвиг(1); o.сдвигНед = кал.база;
+        калВид("месяц"); кал.база = "2026-09-30"; renderКалендарь();
+        // форма задачи: приоритет
+        editTask("");
+        o.выбор = [...document.querySelectorAll("#t_приоритет option")].map(x => x.textContent);
+        o.поУмолч = document.getElementById("t_приоритет").value;
+        document.getElementById("t_что").value = "Задача с приоритетом"; document.getElementById("t_приоритет").value = "высокий";
+        saveTask("");
+        const з = ЗАД.find(x => x.что === "Задача с приоритетом");
+        o.сохр = з && з.приоритет;
+        зф.период = "месяц"; зф.база = з.срок; switchView("tasks");
+        o.значок = /▲ высокий/.test(document.getElementById("main").textContent);
+        o.вПравке = ЗАДАЧИ_ПОЛЯ.some(f => f.k === "приоритет");
+        кал.вид = "месяц"; кал.база = "2026-09-30"; кал.источник = "";
+        return o;
+      });
+      да(JSON.stringify(к.порядок.slice(0, 3)) === JSON.stringify(["Высокая", "Старая без приоритета", "Низкая"]) && к.порядок[к.порядок.length - 1] === "ППР",
+        "дела на одну дату: задачи по приоритету (высокий, обычный, низкий) первыми, обслуживание по ППР — в конце", JSON.stringify(к.порядок));
+      да(к.ппр.length > 0 && к.ппр.every(т => /^ТО-\d: /.test(т)), "работы ППР названы видом ТО, без слова «Обслуживание»", JSON.stringify(к.ппр.slice(0, 2)));
+      да(к.виды.день.дел === к.порядок.length && к.виды.неделя.клеток === 7 && к.виды.месяц.клеток >= 28 &&
+         к.виды.квартал.мини === 3 && к.виды.год.мини === 12 && к.виды.год.дел >= к.виды.квартал.дел && к.виды.квартал.дел >= к.виды.месяц.дел,
+        "календарь: день, неделя (7 дней), месяц, квартал (3 месяца), год (12 месяцев)", JSON.stringify(к.виды));
+      да(к.сдвигНед === "2026-10-07", "листание недели — на 7 дней", к.сдвигНед);
+      да(JSON.stringify(к.выбор) === JSON.stringify(["Высокий", "Обычный", "Низкий"]) && к.поУмолч === "обычный" && к.сохр === "высокий" && к.значок && к.вПравке,
+        "приоритет задачи: выбор в форме, по умолчанию «обычный», сохраняется, виден в списке, идёт в Excel для правки", JSON.stringify(к));
+      await q.evaluate(() => { кал.вид = "месяц"; кал.база = "2026-09-01"; exportКалендарь("год"); });
+      const фк = (await собратьФайлы(q)).filter(f => /Календарь/.test(f));
+      const пк = фк.length ? spawnSync("python3", ["scripts/проверка_xlsx.py", фк[0]], { encoding: "utf-8" }) : { status: 1 };
+      да(фк.length === 1 && пк.status === 0, "календарь за год в Excel (с колонкой «Приоритет») проходит проверку", (пк.stdout || "") + (пк.stderr || ""));
+
+      // Тёмный стиль: контраст текста на листе акта и паспорта и на кнопках
+      const контраст = await q.evaluate(() => {
+        applyTheme("ph");
+        const rgb = s => { const m = s.match(/[\d.]+/g); return m ? m.map(Number) : [0, 0, 0, 0]; };
+        const lum = ([r, g, b]) => { [r, g, b] = [r, g, b].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+        const фон = el => { const сл = []; while(el && el.nodeType === 1){ const c = rgb(getComputedStyle(el).backgroundColor); if(c[3] === undefined) c[3] = 1;
+          if(c[3] > 0){ сл.push(c); if(c[3] >= 1) break; } el = el.parentElement; }
+          let б = [255, 255, 255]; for(let i = сл.length - 1; i >= 0; i--){ const [r, g, bb, a] = сл[i]; б = [r * a + б[0] * (1 - a), g * a + б[1] * (1 - a), bb * a + б[2] * (1 - a)]; } return б; };
+        const плохие = (корень, порог) => { const из = [];
+          корень.querySelectorAll("*").forEach(el => { if(!el.offsetParent) return;
+            const т = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join("").trim(); if(!т) return;
+            const cs = getComputedStyle(el); if(+cs.opacity < 0.5) return;
+            const f = rgb(cs.color), a = f[3] === undefined ? 1 : f[3], б = фон(el);
+            const ц = [f[0] * a + б[0] * (1 - a), f[1] * a + б[1] * (1 - a), f[2] * a + б[2] * (1 - a)];
+            const L1 = lum(ц), L2 = lum(б), k = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+            if(k < порог) из.push(т.slice(0, 30) + " (" + k.toFixed(2) + ")"); }); return из; };
+        const o = {};
+        const з = liveJ().find(x => x.акт); renderAkt(актКлюч(з));
+        o.акт = плохие(document.getElementById("main"), 4.5);
+        switchView("passport"); o.паспорт = плохие(document.querySelector(".sheet"), 4.5);
+        const все = [];
+        for(const v of ["dash", "journal", "si", "people", "tasks", "calendar", "check", "exchange", "plan", "docs", "lab"]){ switchView(v);
+          все.push(...плохие(document.getElementById("main"), 3).map(x => v + ": " + x)); }
+        o.разделы = все;
+        applyTheme("default");
+        return o;
+      });
+      да(!контраст.акт.length, "тёмный стиль: на странице акта весь текст читается (контраст не ниже 4,5)", контраст.акт.slice(0, 5).join(" | "));
+      да(!контраст.паспорт.length, "тёмный стиль: на листе паспорта весь текст читается (контраст не ниже 4,5)", контраст.паспорт.slice(0, 5).join(" | "));
+      да(!контраст.разделы.length, "тёмный стиль: кнопки и подписи во всех разделах читаются (контраст не ниже 3)", контраст.разделы.slice(0, 5).join(" | "));
       await m.c.close();
     }
 

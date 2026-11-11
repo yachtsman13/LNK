@@ -238,7 +238,8 @@ function импортПрименить(kind, строки){
   Object.keys(шапка).forEach(буква=>{
     const текст=String(шапка[буква]||"").trim().toLowerCase();
     if(текст===КОЛ_КОД.toLowerCase()){ колКода=буква; return; }
-    const поле=C.fields.find(f=>f.l.trim().toLowerCase()===текст);
+    const поле=C.fields.find(f=>f.l.trim().toLowerCase()===текст)||
+      C.fields.find(f=>(f.прежние||[]).some(л=>л.trim().toLowerCase()===текст));
     if(поле) сопост[буква]=поле.k;
   });
   if(!Object.values(сопост).includes(C.name)){

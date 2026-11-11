@@ -61,7 +61,7 @@ function панельМетодНабор(m){
     <div class="grp" style="padding-left:0;margin-top:8px">Нормативные документы — ${esc(m)}</div>
     <input placeholder="Фильтр…" oninput="фильтрСписка(this,'mset_${m}_нд')" style="margin-bottom:4px">
     <div id="mset_${m}_нд" class="сд-список" style="max-height:180px">
-      ${списокМетодЧекбоксы(nd, н.нд, "мчб_нд_"+m, x=>esc(x.наименование)+(x.обозначение?(" · "+esc(x.обозначение)):"")+
+      ${списокМетодЧекбоксы(nd, н.нд, "мчб_нд_"+m, x=>ссылкаНД(x,esc(x.наименование))+(x.обозначение?(" · "+esc(x.обозначение)):"")+
         (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
     </div>
     <button class="btn small" type="button" onclick="сохранитьСтандартМетода('${m}')" style="margin-top:6px">

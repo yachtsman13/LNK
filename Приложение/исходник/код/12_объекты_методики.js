@@ -153,7 +153,7 @@ function renderNd(){
   const rows=рядыНд();
   const body=rows.length?rows.map(x=>{const[c,l]=ндСтатус(x);return`
     <tr onclick="editReg('nd','${esc(x.id)}')">
-      <td class="obj">${esc(x.наименование)}
+      <td class="obj">${ссылкаНД(x,esc(x.наименование))}${x.файл?` <span class="muted" title="файл: ${esc(x.файл)}">📄</span>`:""}
         ${x.метод?`<div class="muted" style="font-size:11.5px">${esc(x.метод)}</div>`:""}</td>
       <td class="num">${esc(x.обозначение)||"—"}</td>
       <td>${esc(x.издатель)||"<span class='muted'>—</span>"}</td>
@@ -329,7 +329,7 @@ function editMetodika(м){
       <div class="grp" style="padding-left:0;margin-top:14px">Нормативные документы</div>
       <input placeholder="Фильтр по наименованию или обозначению…" oninput="фильтрСписка(this,'метСпис_нд')" style="margin-bottom:6px">
       <div id="метСпис_нд" class="сд-список">
-        ${списокМетодЧекбоксы(nd, н.нд, "мчб_нд", x=>esc(x.наименование)+(x.обозначение?(" · "+esc(x.обозначение)):"")+
+        ${списокМетодЧекбоксы(nd, н.нд, "мчб_нд", x=>ссылкаНД(x,esc(x.наименование))+(x.обозначение?(" · "+esc(x.обозначение)):"")+
           (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
       </div>
 

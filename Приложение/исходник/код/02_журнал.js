@@ -33,6 +33,8 @@ function setChrome(){
   const пд=document.getElementById("cPodr"); if(пд) пд.textContent=live(ПОДР).length;
   const цНд=document.getElementById("cНд"); if(цНд) цНд.textContent=live(НД).length;
   const цПом=document.getElementById("cПом"); if(цПом) цПом.textContent=live(ПОМ).length;
+  const цПг=document.getElementById("cPg");
+  if(цПг){ const м=пгМесяца(); цПг.textContent=м.осталось; цПг.title="работ по планам-графикам в этом месяце осталось"; }
   const цВиб=document.getElementById("cVibro");
   if(цВиб){ const к=ВИБК||[]; цВиб.textContent=live(к).length;
     цВиб.classList.toggle("warn", (ВИБИ||[]).length>0 && live(к).some(x=>состояниеКарты(x).ур==="прев")); }

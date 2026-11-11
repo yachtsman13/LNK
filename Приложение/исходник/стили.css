@@ -410,6 +410,14 @@
   .плантбл td.мес.сделано{background:#d8f0dd;color:#17692c;font-weight:700;cursor:pointer}
   .плантбл td.мес.просрочено{background:#fadcdc;color:#a11;font-weight:700;cursor:pointer}
   .плантбл td.мес.пусто{background:transparent}
+  .пгтбл td.мес{vertical-align:middle;font-size:13px}
+  .пгтбл td.мес.план{font-weight:700}
+  .пгтбл td.мес.тек{outline:2px solid var(--brand);outline-offset:-2px}
+  .пгтбл td.мес.пгпов{color:var(--warn,#a06000);font-weight:700}
+  .пгмесяцы{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 12px;margin:6px 0}
+  .form label.пгмес{display:flex;flex-direction:column;gap:3px;border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+  .form label.пгмес span{display:flex;align-items:center;gap:6px;font-weight:600}
+  .form label.пгмес input[type=checkbox]{width:auto;margin:0}
   th.жчб,td.жчб{width:26px;padding-left:8px;padding-right:0;text-align:center}
   tr.отм td{background:var(--chip)}
   .кал{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}

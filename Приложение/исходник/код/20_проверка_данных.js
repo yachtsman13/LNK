@@ -18,6 +18,7 @@ const КЛЮЧИ_ДАННЫХ={ "lnk_obj":"объекты", "lnk_si":"прибо
   "lnk_akts":"акты", "lnk_ppr":"ппр", "lnk_ppr_plan":"планппр", "lnk_conflicts":"конфликты", "lnk_history":"история", "lnk_podr":"подразделения", "lnk_padezh":"падежи",
   "lnk_tasks":"задачи", "lnk_nd":"нормдокументы", "lnk_pom":"помещения", "lnk_pasp_red":"редакции", "lnk_closed_years":"закрытыегоды",
   "lnk_vibro":"вибрация", "lnk_vibro_izm":"вибрзамеры", "lnk_vibro_norm":"вибрнормы",
+  "lnk_pg":"планыграфики", "lnk_pg_pos":"пгпозиции", "lnk_pg_otm":"пготметки",
   "lnk_lab":"лаборатория", "lnk_metodiki":"методики", "lnk_docnames":"названия" };
 const КЛЮЧИ_НАСТРОЕК=["lnk_ws","lnk_setup","lnk_theme","lnk_jsort","lnk_psort","lnk_tsort","lnk_progsort",
   "lnk_last_backup","lnk_last_export","lnk_last_import","lnk_grant","lnk_fs",
@@ -854,6 +855,7 @@ function проверки(){
   }
   // Карточки учёта вибрации — превышения, прогноз, нормы (12а_вибрация.js)
   проверкиВибрации(доб, сс);
+  проверкиПГ(доб, сс);
   return из;
 }
 function числоПроблем(){
@@ -970,6 +972,7 @@ function открытьИзПроверки(вид,ид){
   } else if(вид==="plan"){ editППР(ид); }
   else if(вид==="vibrocard"){ if(!найтиПоИд(live(ВИБК),ид)){ toast("Карточка уже удалена"); return; } открытьКартуВибрации(ид); return; }
   else if(вид==="metod"){ editMetodika(ид); }
+  else if(вид==="pgpos"){ if(!найтиПоИд(live(ПГП),ид)){ toast("Позиция уже удалена"); return; } editПГП(ид); }
   else { switchView(вид); return; }
   _возвратВПроверку=true;
 }
@@ -1069,6 +1072,11 @@ const РАЗДЕЛЫ_ИЗМЕНЕНИЙ=[
    п:x=>{ const к=(ВИБК||[]).find(y=>String(y.id)===String(x.карта)); return [x.дата?ru(x.дата):"", к?"карточка № "+(к.номер||""):""].filter(Boolean).join(" · "); }},
   {н:"Нормы вибрации", вид:"vibronorm", ключ:()=>REG_ВИБН, arr:()=>ВИБН, п:x=>текстНормы(x)},
   {н:"План ППР", вид:"plan", ключ:()=>REG_ППР_ПЛАН, arr:()=>ППР_ПОЗ, п:x=>x.наименование||""},
+  {н:"Планы-графики", вид:"pg", ключ:()=>REG_ПГ, arr:()=>ПГ, п:x=>краткоПГ(x)},
+  {н:"Позиции планов-графиков", вид:"pg", ключ:()=>REG_ПГП, arr:()=>ПГП,
+   п:x=>{ const г=найтиПоИд(ПГ||[],x.пг); return (г?краткоПГ(г)+" · ":"")+"№ "+(x.нп||"")+" "+(x.наименование||""); }},
+  {н:"Отметки планов-графиков", вид:"pg", ключ:()=>REG_ПГО, arr:()=>ПГО,
+   п:x=>{ const п=(ПГП||[]).find(y=>String(y.id)===String(x.поз)); return [п?(п.наименование||"№ "+п.нп):"", x.мес?ymИмя(x.мес):"", x.выполнено?"выполнено "+ru(x.выполнено):""].filter(Boolean).join(" · "); }},
   {н:"Отметки плана ППР", вид:"plan", ключ:()=>REG_ППР, arr:()=>ОТМ,
    п:x=>{ const п=(ППР_ПОЗ||[]).find(y=>String(y.id)===String(x.поз));
      return [п?п.наименование:x.поз, x.мес?МЕСЯЦЫ[x.мес-1].toLowerCase():"", x.год].filter(Boolean).join(" · "); }}
@@ -1143,6 +1151,8 @@ function открытьПравку(ключ,ид){
   else if(ключ===REG_ППР_ПЛАН) editППР(x.id);
   else if(ключ===REG_ВИБК) открытьКартуВибрации(x.id);
   else if(ключ===REG_ВИБИ) открытьКартуВибрации(x.карта);
+  else if(ключ===REG_ПГП) editПГП(x.id);
+  else if(ключ===REG_ПГ){ пгСост.граф=x.id; switchView("pg"); }
   else switchView(р.вид);
 }
 function блокПоследнихПравок(){

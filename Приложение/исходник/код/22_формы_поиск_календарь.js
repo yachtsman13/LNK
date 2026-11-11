@@ -8,7 +8,7 @@
 // перерисовывают свой блок, не теряя полей. Выбор файла в «Обмене» —
 // тоже change, но импорт там происходит сразу, поэтому раздел в список
 // не входит: иначе после каждого импорта выскакивал бы ложный вопрос.
-const ВИДЫ_С_ФОРМОЙ=["edit","regedit","taskedit","lab","metod","planedit","partsedit","vibroizm"];
+const ВИДЫ_С_ФОРМОЙ=["edit","regedit","taskedit","lab","metod","planedit","partsedit","vibroizm","pgedit"];
 let _несохранено=false;
 function формаСохранена(){ _несохранено=false; }
 function уходСФормы(){
@@ -65,6 +65,9 @@ const ПОИСК_РАЗДЕЛЫ=[
   {н:"Карточки учёта вибрации", arr:()=>live(ВИБК), вид:"vibro",
    поля:x=>[x.номер,x.группа,x.вид,x.наименование,x.зав,x.двигатель,x.двигатель_зав,x.место_установки,x.примечание],
    п:x=>"№ "+(x.номер||"")+" "+заголовокКарты(x), открыть:x=>"открытьКартуВибрации('"+esc(String(x.id))+"')"},
+  {н:"Планы-графики", arr:()=>live(ПГП).filter(п=>графикПозиции(п)), вид:"pg",
+   поля:x=>[x.наименование,x.методы,x.примечание,подрПГ(x)],
+   п:x=>краткоПГ(графикПозиции(x))+" · № "+(x.нп||"")+" "+имяПозицииПГ(x), открыть:x=>"editПГП('"+esc(String(x.id))+"')"},
   {н:"Задачи", arr:()=>live(ЗАД), вид:"tasks",
    поля:x=>[x.что,x.кому,x.объект,x.заметки&&x.заметки.map?x.заметки.map(з=>з.текст).join(" "):"",x.источник],
    п:x=>[x.срок?ru(x.срок):"", x.что, x.кому].filter(Boolean).join(" · ")}
@@ -164,6 +167,7 @@ function открытьДелоКалендаря(ид){
   if(["ИНСТР","ОГРПР","ЭЛБЕЗ","ПОЖБЕЗ","ПБ","КЛАСС","АТТ","А1"].includes(ч[0]) && найтиПоИд(live(P),ч[1])){ editReg("ppl",ч[1]); return; }
   if(ч[0]==="ППР"){ const п=найтиПоИд(live(ППР_ПОЗ),ч[1]); if(п) план.год=+ч[2]; switchView("plan"); return; }
   if(ч[0]==="ЛАБ"){ switchView("lab"); return; }
+  if(ч[0]==="ПГ"){ const п=найтиПоИд(live(ПГП),ч[1]); if(п){ пгСост.граф=п.пг; пгСост.подр=""; } switchView("pg"); return; }
   toast("Карточка не найдена");
 }
 const калISO=d=>new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())).toISOString().slice(0,10);
@@ -413,7 +417,7 @@ function switchView(v){
   if(_возвратВПроверку && ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) v=typeof _возвратВПроверку==="string"?_возвратВПроверку:"check";
   curView=v;query=""; _актИзЗаписи=null;
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,
+  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,pg:renderПГ,pgedit:renderПГ,
     vibrocard:()=>открытьКартуВибрации(_картаВибр),vibroizm:()=>открытьКартуВибрации(_картаВибр),
     vibroprint:()=>печатьКартВибрации(_печатьВибр)}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",

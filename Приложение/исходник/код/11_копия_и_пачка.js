@@ -461,8 +461,8 @@ function имяКопии(){
 // Копий держим несколько поколений: одна-единственная копия бесполезна,
 // если испортили данные и записали поверх. Старые сверх ДЕРЖАТЬ удаляются.
 const ДЕРЖАТЬ_КОПИЙ=14;
-async function чиститьСтарые(){
-  const h=await папкаКопий(); if(!h) return 0;
+async function чиститьСтарые(папка){
+  const h=папка||await папкаКопий(); if(!h) return 0;
   try{
     const свои=[];
     for await (const [имя,ручка] of h.entries())
@@ -473,19 +473,8 @@ async function чиститьСтарые(){
     return лишние.length;
   }catch(e){ return 0; }
 }
-async function копияВПапку(тихо){
-  const h=await папкаКопий(); if(!h) return false;
-  if(await правоНаПапку(!тихо)!=="есть") return false;
-  try{
-    const ф=await h.getFileHandle(имяКопии(),{create:true});
-    const w=await ф.createWritable();
-    await w.write(данныеКопии()); await w.close();
-    try{ ХР.setItem("lnk_last_backup", new Date().toISOString()); }catch(e){}
-    await чиститьСтарые();
-    if(!тихо) toast("Копия записана в папку");
-    return true;
-  }catch(e){ if(!тихо) toast("Не удалось записать копию: "+e.name); return false; }
-}
+// С 3.77 копия пишется во все выбранные папки (до трёх) — 23б_защита_обмен.js.
+async function копияВПапку(тихо){ return копииВоВсеПапки(тихо); }
 // Копия делается сама, но не после каждой правки: раз в 10 минут работы
 // достаточно, а чаще — только мешает диску и глазу.
 let _когдаКопия=0;
@@ -493,7 +482,7 @@ function копияПоСлучаю(){
   const т=Date.now();
   if(т-_когдаКопия < 10*60*1000) return;
   _когдаКопия=т;
-  папкаКопий().then(h=>{ if(h) копияВПапку(true); });
+  копииВоВсеПапки(true);
 }
 function когдаКопия(){
   try{ return ХР.getItem("lnk_last_backup")||""; }catch(e){ return ""; }
@@ -516,6 +505,8 @@ function всеДанные(){
            планыграфики:ПГ, пгпозиции:ПГП, пготметки:ПГО, протоколы:ПРОТ,
            // верные версии файлов документов (имя, размер, отпечаток) — 11а
            файлы:ФАЙЛЫ,
+           // ПИН-код на настройки (отпечаток, не сам ПИН) — 23б
+           пин:пин(),
            лаборатория:getЛаб(), методики:getМетодики(), названия:имена(),
            // отброшенные версии — сведения ЭТОГО места: в копию идут, а при
            // обмене не сливаются (у другого места свои)
@@ -548,6 +539,7 @@ function применитьДанные(d, заменить){
     if(спис(d.пготметки)){ ПГО=d.пготметки; saveReg(REG_ПГО,ПГО); }
     if(спис(d.протоколы)){ ПРОТ=d.протоколы; saveReg(REG_ПРОТ,ПРОТ); }
     if(спис(d.файлы)){ ФАЙЛЫ=d.файлы; сохранитьФайлы(); }
+    if(d.пин && typeof d.пин==="object") сохранитьПин(JSON.parse(JSON.stringify(d.пин)), true);
     if(спис(d.редакции)){ РЕД=d.редакции; сохранитьРедакции(); }
     if(спис(d.закрытыегоды)){ ЗАКР=d.закрытыегоды; сохранитьЗакрытые(); }
     if(спис(d.конфликты)){ КОНФЛ=d.конфликты; saveReg(REG_КОНФЛ,КОНФЛ); }
@@ -583,6 +575,7 @@ function применитьДанные(d, заменить){
   mergeInto(ПГО,REG_ПГО,d.пготметки);
   mergeInto(ПРОТ,REG_ПРОТ,d.протоколы);
   if(Array.isArray(d.файлы)) слитьФайлы(d.файлы);
+  принятьПин(d.пин);
   if(Array.isArray(d.редакции)) слитьРедакции(d.редакции);
   if(Array.isArray(d.закрытыегоды)) слитьЗакрытые(d.закрытыегоды);
   if(r.o.added||r.o.updated) rebuildObjIndex();
@@ -597,19 +590,12 @@ function backupSave(){
   toast("Копия всей базы: журнал "+liveJ().length+", объекты "+live(O).length+
         ", СИ "+live(S).length+", спец. "+live(P).length);
 }
-let _fileIn;
-function backupOpen(){
-  if(!_fileIn){ _fileIn=document.createElement("input"); _fileIn.type="file"; _fileIn.accept=".json"; _fileIn.style.display="none"; document.body.appendChild(_fileIn);
-    _fileIn.addEventListener("change",e=>{
-      const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
-      rd.onload=()=>{ try{
-        const d=JSON.parse(rd.result);
-        // Файл переезда места (с другого компьютера) — своя обработка:
-        // кроме данных он несёт код места, роли и право выдачи номеров.
-        if(d && d.тип===ТИП_ПЕРЕЕЗДА){ переездПринять(d); e.target.value=""; return; }
+// Восстановление из резервной копии (замена базы) — отдельной функцией:
+// её зовут и «Восстановить из копии», и «Принять файл…» (тип узнаётся сам).
+function восстановитьИзДанных(d){
         const jarr=Array.isArray(d)?d:d.записи;                 // старая копия — только журнал
         const полная=d && (d.объекты||d.приборы||d.специалисты||d.акты);
-        if(!Array.isArray(jarr) && !полная) throw new Error("не файл копии");
+        if(!Array.isArray(jarr) && !полная) { toast("Это не файл резервной копии"); return; };
         const было="журнал "+liveJ().length+", объекты "+live(O).length+", СИ "+live(S).length+
                    ", спец. "+live(P).length+", норм. док. "+live(НД).length;
         const станет=(Array.isArray(jarr)?("журнал "+jarr.filter(z=>!z.удалено).length):"журнал без изменений")
@@ -627,6 +613,18 @@ function backupOpen(){
         if(полная) применитьДанные(d, true);
         setChrome(); if(curView==="setup") renderМастер(); else switchView("dash");
         toast("Восстановлено из копии");
+}
+let _fileIn;
+function backupOpen(){
+  if(!_fileIn){ _fileIn=document.createElement("input"); _fileIn.type="file"; _fileIn.accept=".json"; _fileIn.style.display="none"; document.body.appendChild(_fileIn);
+    _fileIn.addEventListener("change",e=>{
+      const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
+      rd.onload=()=>{ try{
+        const d=JSON.parse(rd.result);
+        // Файл переезда места (с другого компьютера) — своя обработка:
+        // кроме данных он несёт код места, роли и право выдачи номеров.
+        if(d && d.тип===ТИП_ПЕРЕЕЗДА){ переездПринять(d); e.target.value=""; return; }
+        восстановитьИзДанных(d);
       }catch(err){ toast("Не удалось прочитать файл: "+err.message); } e.target.value=""; };
       rd.readAsText(f);
     });

@@ -228,6 +228,7 @@ function renderDash(){
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>Пульт</h2><span class="sub">на ${ru(new Date().toISOString().slice(0,10))}</span></div>
     ${плашкаПереезда()}
+    ${плашкаПапкиОбмена(true)}
     ${тревога?`<div class="draftnote" style="cursor:pointer" onclick="switchView('exchange')">
       ◆ ${тревога} Нажмите — открою «Обмен», там одна кнопка.</div>`:""}
     ${(()=>{ const п=предупрежденияОбмена(); return п.length?`<div class="draftnote" style="cursor:pointer"

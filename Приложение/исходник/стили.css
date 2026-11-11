@@ -361,6 +361,9 @@
   .sheet .aktsub{text-align:center;font-size:15px;margin-bottom:20px}
   .sheet .aktp{text-align:justify;margin:0 0 11px;text-indent:1.25cm}
   .sheet .aktp.noind{text-indent:0}
+  /* Акт по дополнительной заявке (образец «00-2026»): одинарный интервал, отступ над заголовком */
+  .sheet.актзаявка .aktp{line-height:1.15}
+  .sheet.актзаявка h1.akt{margin-top:2.4em}
   /* Номер раздела: висячий отступ, текст всех разделов от 2 см — как
      табуляция в Word, чтобы нумерация выглядела одинаково */
   /* Раздел не разрывается между страницами — то же, что keepLines в Word */

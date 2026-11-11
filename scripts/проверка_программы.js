@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  38. акт по дополнительной заявке по форме «00-2026», основание — контракт.
 //  37. планы-графики ВД, ТК, НК: из присланных книг, отметки, уточнение дня, ППР и поверка, выписки, Excel, обмен.
 //  36. карточки учёта вибрации: опоры × В/Г/О, нормы из файла, превышение с причиной, прогноз, печать, Excel, обмен.
 //  35. поверка в карточке прибора (дата окончания считается), файл удостоверения своей строкой,
@@ -2197,6 +2198,47 @@ d.save(sys.argv[1])`, синт], { encoding: "utf-8" });
       await перезагрузить(q);
       да(await q.evaluate(() => live(ПГ).length === 4 && live(ПГО).length === 1), "после перезагрузки всё на месте");
       await m1.c.close(); await m2.c.close();
+    }
+
+    раздел("38. Акт по дополнительной заявке: форма «00-2026», основание — контракт");
+    {
+      const m = await место(b, "М1"); все.push(m.p); const q = m.p;
+      const к = await q.evaluate(() => {
+        ПОДР.push({ id: "ПД-ЗАЯ", наименование: "Цех № 5", предложный: "цехе № 5", тип_контракта: "муниципальным",
+          контракты: [{ год: "2026", номер: "К-77", дата: "2026-01-15" }] }); saveReg(REG_ПОДР, ПОДР);
+        const к = списокАктов()[0].ключ; saveАкт(к, "подр", "ПД-ЗАЯ"); return к; });
+      const выгрузить = async () => { await q.evaluate(к => актВWord(к, false), к);
+        const ф = (await собратьФайлы(q)).filter(f => f.endsWith(".docx")); return ф[ф.length - 1]; };
+      const разбор = ф => spawnSync("python3", ["-I", "-c", `
+import docx, sys, json
+from docx.oxml.ns import qn
+d = docx.Document(sys.argv[1]); ab = []
+for el in d.element.body.iterchildren():
+    if el.tag == qn("w:p"):
+        sp = el.find(".//" + qn("w:spacing")); ab.append([sp.get(qn("w:line")) if sp is not None else "", "".join(x.text or "" for x in el.iter(qn("w:t")))])
+s = d.sections[0]
+print(json.dumps({"ab": ab, "верх": round(s.top_margin.cm, 2), "низ": round(s.bottom_margin.cm, 2)}, ensure_ascii=False))`, ф], { encoding: "utf-8" });
+      const осн = JSON.parse(разбор(await выгрузить()).stdout);
+      await q.evaluate(к => saveАктИПеререрисовать(к, "вид", "заявка"), к);
+      const экран = await q.evaluate(() => ({ лист: !!document.querySelector(".sheet.актзаявка"), текст: document.querySelector(".sheet .aktp").textContent.replace(/\s+/g, " ") }));
+      const фз = await выгрузить();
+      const зая = JSON.parse(разбор(фз).stdout);
+      const ин = зая.ab.findIndex(x => /^АКТ №/.test(x[1])), вводн = зая.ab.find(x => /^В.соответствии/.test(x[1]))[1].replace(/ /g, " ");
+      да(зая.ab.every(x => x[0] === "240") && зая.верх === 2.5 && зая.низ === 2 && ин === 2 && зая.ab[ин + 2][1] === "" && /^В/.test(зая.ab[ин + 3][1]),
+        "Word: одинарный интервал, поля 2,5 и 2 см, два пустых абзаца над заголовком и один под ним — как в образце", JSON.stringify([зая.верх, зая.низ, ин, зая.ab.slice(0, 6)]));
+      да(/^В соответствии с контрактом от 15\.01\.2026 № К-77 проведены работы в цехе № 5 по неразрушающему контролю/.test(вводн),
+        "основание — контракт подразделения (без слова-типа, как в образце), реквизиты из карточки", вводн);
+      да(осн.ab.every(x => x[0] === "360") && осн.верх === 2 && /муниципальным контрактом/.test(осн.ab.map(x => x[1]).join(" ").replace(/ /g, " ")),
+        "основная форма акта не изменилась: 18 пт, поля 2 см, тип контракта на месте", JSON.stringify([осн.верх, осн.низ]));
+      const пр = spawnSync("python3", [path.join(КОРЕНЬ, "scripts", "проверка_docx.py"), фз], { encoding: "utf8" });
+      да(пр.status === 0, "Word: акт по заявке проходит проверка_docx.py", (пр.stdout || "") + (пр.stderr || ""));
+      да(экран.лист && /^В соответствии с контрактом от/.test(экран.текст.trim()), "на экране — форма заявки, без поля типа контракта", экран.текст.slice(0, 80));
+      await q.emulateMedia({ media: "print" });
+      const пдф = path.join(ВЫХОД, "akt-zayavka.pdf"); await q.pdf({ path: пдф, format: "A4", printBackground: true });
+      await q.emulateMedia({ media: "screen" });
+      const пп = spawnSync("python3", ["scripts/проверка_печати.py", пдф], { encoding: "utf-8" });
+      да(пп.status === 0, "печать акта по заявке — без нарушений вёрстки (scripts/проверка_печати.py)", (пп.stdout.match(/✗.*/g) || [пп.stderr]).join("; "));
+      await m.c.close();
     }
 
     раздел("Ошибки на страницах");

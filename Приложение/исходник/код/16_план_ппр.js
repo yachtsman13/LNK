@@ -139,7 +139,7 @@ function renderPlan(){
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="plan"));
   if(!позицииППР().length){
     document.getElementById("main").innerHTML=
-      `<div class="head"><h2>План работ</h2></div>
+      `<div class="head"><h2>ППР</h2></div>
        <div class="placeholder"><div><div class="big">◷</div>
        В плане ППР нет ни одной позиции.<br><br>
        <button class="btn primary" onclick="editППР(null)">+ Позиция</button></div></div>`;
@@ -190,7 +190,7 @@ function renderPlan(){
   document.getElementById("main").innerHTML=`
     ${printHead("План-график ППР", год+" г. · работ "+и.работ+", трудозатрат "+и.часы)}
     <div class="head">
-      <h2>План работ</h2><span class="sub">планово-предупредительные осмотры, ${год} г.</span>
+      <h2>ППР</h2><span class="sub">планово-предупредительные осмотры, ${год} г.</span>
       <div class="spring"></div>
       <button class="btn primary" onclick="editППР(null)">+ Позиция</button>
       <button class="btn" onclick="exportПланXlsx()">▤ Excel</button>

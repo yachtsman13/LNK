@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  40. бланк протокола на экране из журнала: правка, сохранение, Word, обмен; раздел ППР.
 //  39. протоколы и заключения по методам — заготовки в Word по образцам.
 //  38. акт по дополнительной заявке по форме «00-2026», основание — контракт.
 //  37. планы-графики ВД, ТК, НК: из присланных книг, отметки, уточнение дня, ППР и поверка, выписки, Excel, обмен.
@@ -2290,8 +2291,64 @@ print(json.dumps({"ab": ab, "верх": round(s.top_margin.cm, 2), "низ": rou
       const фа = (await собратьФайлы(q)).filter(f => /\.docx$/.test(f));
       да(фа.length >= 8 && !q.диалоги.some(x => /родительном/.test(x)), "из акта — заготовки по всем его записям, падеж больше не спрашивается", фа.length + "");
       await q.evaluate(id => editJournal(id), r.зид);
-      да(await q.evaluate(() => document.querySelectorAll(".mrow .мкнопки button").length > 8), "в записи журнала у методов кнопка «⤓ Word»");
+      да(await q.evaluate(() => [...document.querySelectorAll(".mrow .мкнопки button")].filter(b => /Бланк/.test(b.textContent)).length >= 7), "в записи журнала у методов кнопка «📄 Бланк»");
       await m.c.close();
+    }
+
+    раздел("40. Бланк протокола на экране: из журнала, правка, сохранение, Word; ППР");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p); const q = m1.p;
+      const m2 = await место(b, "М2"); все.push(m2.p); const q2 = m2.p;
+      const ид = await q.evaluate(() => liveJ().find(z => /38/.test(z.акт || "") && methodsOf(z).includes("УЗТ")).id);
+      const r = await q.evaluate(ид => {
+        const o = {};
+        switchView("journal");
+        const tr = [...document.querySelectorAll("tbody tr")].find(tr => (tr.getAttribute("onclick") || "").includes(ид));
+        o.плашек = document.querySelectorAll(".pill.пбланк").length;
+        [...tr.querySelectorAll(".pill.пбланк")].find(x => /^УЗТ/.test(x.textContent)).click();
+        o.вид = curView; o.номер = document.querySelector(".head h2").textContent;
+        o.полей = document.querySelectorAll(".протлист [data-к]").length;
+        // сохранить, ничего не правя — правок нет
+        сохранитьПротокол(); o.безПравок = JSON.stringify((ПРОТ.find(x => x.id === ид + "|УЗТ") || {}).зн);
+        document.querySelector('.протлист [data-к="объект"]').innerText = "ресивера РВ-1, зав. № 777.";
+        document.querySelector('.протлист [data-к="схема"]').innerText = "см. эскиз";
+        const t = document.querySelector('.протлист table[data-к="измерения"]'); t.tBodies[0].rows[0].cells[1].innerText = "5,2";
+        протСтрока(t.nextElementSibling.querySelector("button"), 1);
+        o.грязно = _несохранено;
+        return o; }, ид);
+      await q.keyboard.press("Control+s"); await q.waitForTimeout(300);
+      const зн = await q.evaluate(ид => (ПРОТ.find(x => x.id === ид + "|УЗТ") || {}).зн, ид);
+      да(r.плашек > 100 && r.вид === "prot" && /Протокол УЗТ № \d+-2026-УЗТ/.test(r.номер) && r.полей > 8,
+        "щелчок по методу с номером в журнале открывает бланк документа по образцу", JSON.stringify(r));
+      да(r.безПравок === "{}" && r.грязно && зн && Object.keys(зн).sort().join() === "измерения,объект,схема" && зн.измерения.length === 4 && зн.измерения[0][1] === "5,2",
+        "сохраняются только правки (нетронутое не записывается), Ctrl+S, строка таблицы добавляется", JSON.stringify([r.безПравок, зн]));
+      await перезагрузить(q);
+      const после = await q.evaluate(async ид => { открытьПротокол(ид, "УЗТ"); let f; window.dlBlob = (и, b) => { f = { и, b }; }; выгрузитьПротокол();
+        return { об: document.querySelector('.протлист [data-к="объект"]').innerText, строк: document.querySelector('.протлист table[data-к="измерения"]').tBodies[0].rows.length,
+          имя: f && f.и, b: Array.from(new Uint8Array(await f.b.arrayBuffer())) }; }, ид);
+      const фд = path.join(ВЫХОД, "blank-uzt.docx"); fs.writeFileSync(фд, Buffer.from(после.b));
+      const тд = spawnSync("python3", ["-I", "-c", "import docx,sys;d=docx.Document(sys.argv[1]);print(' | '.join(p.text for p in d.paragraphs).replace(chr(160),' '));print(d.tables[0].rows[3].cells[1].text, len(d.tables[0].rows))", фд], { encoding: "utf8" }).stdout;
+      const пд = spawnSync("python3", [path.join(КОРЕНЬ, "scripts", "проверка_docx.py"), фд], { encoding: "utf8" });
+      да(после.об === "ресивера РВ-1, зав. № 777." && после.строк === 4 && /РВ-1, зав. № 777/.test(тд) && /см\. эскиз/.test(тд) && /^5,2 7$/m.test(тд) && пд.status === 0,
+        "после перезагрузки правки на месте и уходят в Word; файл проходит проверка_docx.py", тд.slice(0, 200));
+      // обмен: правки бланка доходят на другое место
+      const ф1 = await скачать(q, () => exchangeExport(), "obmen-40-M1.json");
+      await подать(q2, () => exchangeImport(), ф1);
+      да(await q2.evaluate(ид => { const п = live(ПРОТ).find(x => x.id === ид + "|УЗТ"); return !!п && п.зн.схема === "см. эскиз"; }, ид),
+        "правки бланка уходят в обмен на другое место");
+      // заполнить заново
+      const сброс = await q.evaluate(ид => { открытьПротокол(ид, "УЗТ"); сброситьПротокол(); return { правок: Object.keys(правкиПрот(ид, "УЗТ")).length,
+        мимо: реестрыМимоКопии().length, копия: Array.isArray(всеДанные().протоколы) }; }, ид).catch(e => ({ ош: e.message }));
+      да(сброс.правок === 0 && сброс.мимо === 0 && сброс.копия, "«Заполнить заново» убирает правки; бланки в резервной копии и обмене", JSON.stringify(сброс));
+      // АЭ: две формы в одном бланке
+      const аэ = await q.evaluate(() => { const z = liveJ().find(z => methodsOf(z).includes("АЭ")); открытьПротокол(z.id, "АЭ");
+        const кн = [...document.querySelectorAll(".head .btn")].map(b => b.textContent);
+        return кн.includes("Заключение АЭ") && кн.includes("Протокол АЭ"); });
+      да(аэ, "у АЭ в бланке переключатель «Заключение АЭ» / «Протокол АЭ»");
+      // ППР вместо «План работ»
+      const ппр = await q.evaluate(() => { switchView("plan"); return [document.querySelector(".head h2").textContent, document.querySelector('.nav[data-view="plan"]').textContent.trim()]; });
+      да(ппр[0] === "ППР" && /ППР$/.test(ппр[1]), "раздел «План работ» называется «ППР»", ппр.join(" | "));
+      await m1.c.close(); await m2.c.close();
     }
 
     раздел("Ошибки на страницах");

@@ -279,7 +279,7 @@ function renderПГ(){
       <tbody>${строки||`<tr><td colspan="${колДо+мес.length+(нк?1:0)}" class="empty">${позицииГрафика(г.id).length?"По отбору позиций нет.":"Позиций нет — «＋ Позиция»."}</td></tr>`}</tbody>
       <tfoot>
         <tr><td colspan="${колДо}" class="num"><b>Работ по плану-графику</b></td>${итогРабот}${нк?"<td></td>":""}</tr>
-        <tr class="noprint"><td colspan="${колДо}" class="num muted">Работ ППР (план работ)</td>${итогППР}${нк?"<td></td>":""}</tr>
+        <tr class="noprint"><td colspan="${колДо}" class="num muted">Работ ППР</td>${итогППР}${нк?"<td></td>":""}</tr>
         <tr class="noprint"><td colspan="${колДо}" class="num muted">Приборов ${esc([...методы].join(", "))} на поверку</td>${итогПов}${нк?"<td></td>":""}</tr>
       </tfoot>
     </table></div></div>

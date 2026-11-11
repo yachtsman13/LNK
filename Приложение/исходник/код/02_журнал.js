@@ -162,7 +162,9 @@ function renderJournal(){
       <td class="num">${ru(z.дата)}${записьЗакрыта(z)?` <span title="год закрыт — правка с подтверждением">🔒</span>`:""}</td>
       <td class="obj">${esc(z.объект)}${z.зав?`<div class="muted" style="font-size:11.5px">зав. № ${esc(z.зав)}${z.рег?` · рег. ${esc(z.рег)}`:""}</div>`:""}</td>
       <td>${methodsOf(z).map(m=>{const н=номерМетода(z,m);
-        return `<span class="pill${н?"":" nonum"}" title="${н?"протокол "+esc(обозначениеПротокола(z,m)):"номер не выдан"}">${m}${н?" "+esc(н):""}</span>`;
+        const бланк=естьФормаПротокола(m);
+        return `<span class="pill${н?"":" nonum"}${бланк?" пбланк":""}" title="${бланк?"Открыть бланк документа · ":""}${н?"протокол "+esc(обозначениеПротокола(z,m)):"номер не выдан"}"${
+          бланк?` onclick="event.stopPropagation();открытьПротокол('${esc(z.id)}','${m}')"`:""}>${m}${н?" "+esc(н):""}</span>`;
         }).join("")||"<span class='muted'>—</span>"}</td>
       <td class="жисп">${исполнителиЗаписи(z).map(и=>`<div>${esc(и)}</div>`).join("")||"<span class='muted'>—</span>"}</td>
       <td><span class="st ${statusClass(z.статус)}">${esc(z.статус)||"—"}</span>${ждётНомеров(z)?`<div class="muted" style="font-size:11px">ждёт номера</div>`:""}</td>
@@ -327,7 +329,8 @@ function жПрименить(){
 function showJournal(id){
   const z=J.find(x=>String(x.id)===String(id)); if(!z) return;
   const mrows=methodsOf(z).map(m=>{const об=обозначениеПротокола(z,m);
-    return `<tr><td>${m}</td><td>${об?esc(об):"<span class='muted'>номер не выдан</span>"}</td><td>${esc(z.методы[m].исп)||"—"}</td></tr>`;
+    const бланк=естьФормаПротокола(m);
+    return `<tr${бланк?` style="cursor:pointer" title="Открыть бланк документа" onclick="closeDrawer();открытьПротокол('${esc(z.id)}','${m}')"`:""}><td>${m}</td><td>${об?(бланк?`<u>${esc(об)}</u>`:esc(об)):"<span class='muted'>номер не выдан</span>"}</td><td>${esc(z.методы[m].исп)||"—"}</td></tr>`;
     }).join("")||`<tr><td colspan="3" class="muted">методы не указаны</td></tr>`;
   const F=(k,v)=>v?`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`:"";
   openDrawer("Акт № "+(z.акт||"—")+" от "+ru(z.дата), `

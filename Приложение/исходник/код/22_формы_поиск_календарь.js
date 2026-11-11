@@ -8,7 +8,7 @@
 // перерисовывают свой блок, не теряя полей. Выбор файла в «Обмене» —
 // тоже change, но импорт там происходит сразу, поэтому раздел в список
 // не входит: иначе после каждого импорта выскакивал бы ложный вопрос.
-const ВИДЫ_С_ФОРМОЙ=["edit","regedit","taskedit","lab","metod","planedit","partsedit","vibroizm","pgedit"];
+const ВИДЫ_С_ФОРМОЙ=["edit","regedit","taskedit","lab","metod","planedit","partsedit","vibroizm","pgedit","prot"];
 let _несохранено=false;
 function формаСохранена(){ _несохранено=false; }
 function уходСФормы(){
@@ -417,10 +417,10 @@ function switchView(v){
   if(_возвратВПроверку && ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) v=typeof _возвратВПроверку==="string"?_возвратВПроверку:"check";
   curView=v;query=""; _актИзЗаписи=null;
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,pg:renderПГ,pgedit:renderПГ,
+  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,pg:renderПГ,pgedit:renderПГ,prot:()=>_прот?открытьПротокол(_прот.zid,_прот.м,_прот.ф):renderJournal(),
     vibrocard:()=>открытьКартуВибрации(_картаВибр),vibroizm:()=>открытьКартуВибрации(_картаВибр),
     vibroprint:()=>печатьКартВибрации(_печатьВибр)}[v]
-    ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"План работ",
+    ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"ППР",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b){ _возвратВПроверку=false; switchView(b.dataset.view); }});
 

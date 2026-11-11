@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  36. карточки учёта вибрации: опоры × В/Г/О, нормы из файла, превышение с причиной, прогноз, печать, Excel, обмен.
 //  35. поверка в карточке прибора (дата окончания считается), файл удостоверения своей строкой,
 //      файлы норм. документов, календарь на день/неделю/квартал/год с приоритетами, тёмный стиль.
 //  34. вёрстка актов по готовому PDF (scripts/проверка_печати.py).
@@ -71,7 +72,7 @@ const ВЫХОД = fs.mkdtempSync(path.join(os.tmpdir(), "lnk-check-"));
 const ИЗВЕСТНЫЕ_ОШИБКИ = [/приборов с просроченной поверкой/];
 // Разделы программы (switchView).
 const РАЗДЕЛЫ = ["dash","find","journal","objects","si","people","docs","exchange","plan",
-  "check","podr","nd","premises","lab","tasks","passport","metod","calendar"];
+  "check","podr","nd","premises","lab","tasks","passport","metod","calendar","vibro","vibronorm"];
 
 function playwright(){
   if(process.env.PW_PATH) return require(process.env.PW_PATH);
@@ -1983,6 +1984,93 @@ d.save(sys.argv[1])`, синт], { encoding: "utf-8" });
       да(!контраст.паспорт.length, "тёмный стиль: на листе паспорта весь текст читается (контраст не ниже 4,5)", контраст.паспорт.slice(0, 5).join(" | "));
       да(!контраст.разделы.length, "тёмный стиль: кнопки и подписи во всех разделах читаются (контраст не ниже 3)", контраст.разделы.slice(0, 5).join(" | "));
       await m.c.close();
+    }
+
+    // ── 36. Карточки учёта вибрации ─────────────────────────────
+    раздел("36. Карточки учёта вибрации: нормы, замеры, превышение, прогноз, печать, Excel, обмен");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p); const q = m1.p;
+      const m2 = await место(b, "М2"); все.push(m2.p); const q2 = m2.p;
+      // нормы — файл к проверке из ТЗ (формат шаблона импорта)
+      await подать(q, () => { switchView("vibronorm"); document.getElementById("imp_vn").click(); },
+        path.join(КОРЕНЬ, "ТЗ", "Нормы вибрации к проверке.xlsx"));
+      const н = await q.evaluate(() => ({ всего: live(ВИБН).length, сверено: live(ВИБН).filter(x => x.сверено).length,
+        bv3: live(ВИБН).filter(x => /BV-3/.test(x.оборудование) && x.тип_опоры === "Жёсткая").map(x => [x.предупреждение, x.предел]) }));
+      да(н.всего === 14 && н.сверено === 0 && н.bv3.length === 1, "нормы загружаются из файла «Нормы вибрации к проверке.xlsx», ни одна не отмечена сверенной", JSON.stringify(н));
+      const r = await q.evaluate(() => {
+        const o = {};
+        const норма = live(ВИБН).find(x => /BV-3/.test(x.оборудование) && x.тип_опоры === "Жёсткая");
+        editReg("vk", "");
+        o.поля = ["номер", "вид", "наименование", "двигатель", "двигатель_зав", "подразделение", "опоры", "норма_ид", "предел"].every(k => document.getElementById("rf_" + k));
+        document.getElementById("rf_номер").value = "12"; document.getElementById("rf_группа").value = "Муфтовые";
+        document.getElementById("rf_вид").value = "электровентилятора"; document.getElementById("rf_наименование").value = "ВЦ 14-46";
+        document.getElementById("rf_норма_ид").value = норма.id;
+        saveRegRec("vk", ""); o.вид = curView;
+        const к = live(ВИБК)[0];
+        o.пороги = (() => { const п = порогиКарты(к); return [п.предел && п.предел.v, п.пред && п.пред.v, п.предел && п.предел.ист]; })();
+        const д = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+        const зам = (дата, v, причина) => { editЗамерВибр(к.id, ""); document.getElementById("вб_дата").value = дата;
+          document.getElementById("вб_0В_v").value = String(v).replace(".", ","); document.getElementById("вб_0В_a").value = "31";
+          document.getElementById("вб_1О_v").value = "1,2"; if(причина) document.getElementById("вб_пр0").checked = true;
+          замерОценить(); saveЗамерВибр(); };
+        o.ячеек = (() => { editЗамерВибр(к.id, ""); const n = document.querySelectorAll("input.вбвв").length; формаСохранена(); return n; })();
+        зам(д(-90), 4); зам(д(-60), 5); зам(д(-30), 6);
+        o.ур1 = состояниеКарты(к).ур; o.прогноз = прогнозКарты(к).map(x => x.оп + " " + x.н);
+        const было = live(ВИБИ).length;
+        зам(д(0), 9.5, false); o.безПричины = live(ВИБИ).length === было;
+        o.оценка = document.getElementById("вб_оценка").textContent;
+        document.getElementById("вб_пр0").checked = true; saveЗамерВибр();
+        o.сПричиной = live(ВИБИ).length === было + 1; o.ур2 = состояниеКарты(к).ур;
+        o.клетка = !!document.querySelector(".вбтабл td.вбпрев");
+        o.проверка = проверки().filter(x => x.тема === "Вибрация").map(x => x.ур + ": " + x.текст);
+        setChrome(); o.счёт = document.getElementById("cVibro").textContent;
+        // четыре опоры
+        editReg("vk", ""); document.getElementById("rf_номер").value = "13";
+        document.getElementById("rf_опоры").value = "Двигатель передний\nДвигатель задний\nВентилятор передний\nВентилятор задний";
+        saveRegRec("vk", "");
+        const к4 = live(ВИБК).find(x => x.номер === "13");
+        editЗамерВибр(к4.id, ""); o.ячеек4 = document.querySelectorAll("input.вбвв").length; формаСохранена();
+        o.мимо = реестрыМимоКопии().length;
+        o.кодыКопии = ["вибрация", "вибрзамеры", "вибрнормы"].every(k => Array.isArray(всеДанные()[k]));
+        return o;
+      });
+      да(r.поля && r.вид === "vibrocard", "карточка: поля образца (№, вид, наименование, электродвигатель и его зав. №, опоры, норма, максимальное СКЗ); после сохранения открывается сама карточка", JSON.stringify(r));
+      да(r.пороги[0] === 9 && r.пороги[1] === 7.1 && /норма/.test(r.пороги[2]), "предел и предупреждение берутся из выбранной нормы, если в карточке пусто", JSON.stringify(r.пороги));
+      да(r.ячеек === 12 && r.ячеек4 === 24, "замер: на каждую опору В, Г, О по два значения (мм/с и дБ): 2 опоры — 12 полей, 4 опоры — 24", r.ячеек + "/" + r.ячеек4);
+      да(r.ур1 === "прог" && r.прогноз.length === 1, "рост 4 → 5 → 6 мм/с за два месяца — «возможное превышение» по тренду до предела 9", JSON.stringify([r.ур1, r.прогноз]));
+      да(r.безПричины && /превышение/.test(r.оценка) && r.сПричиной && r.ур2 === "прев" && r.клетка,
+        "превышение: без причины не сохраняется, с причиной — сохранено, клетка подсвечена, состояние «превышение»", JSON.stringify(r));
+      да(r.проверка.some(x => /^внимание: Превышение вибрации/.test(x)) && r.проверка.some(x => /^наблюдение: Нормы вибрации, не сверенные/.test(x)) && r.счёт === "1",
+        "«Проверка данных»: превышение и несверенная норма; счётчик в меню", JSON.stringify([r.проверка, r.счёт]));
+      да(r.мимо === 0 && r.кодыКопии, "карточки, замеры и нормы — в резервной копии и обмене, мимо копии ничего");
+      // печать: по листу на карточку, альбомный
+      await q.evaluate(() => печатьКартВибрации(live(ВИБК).map(к => к.id)));
+      await q.emulateMedia({ media: "print" });
+      const пдф = path.join(ВЫХОД, "vibro.pdf"); await q.pdf({ path: пдф, preferCSSPageSize: true, printBackground: true });
+      await q.emulateMedia({ media: "screen" });
+      const стр = spawnSync("python3", ["-I", "-c", "import pymupdf,sys;d=pymupdf.open(sys.argv[1]);print(len(d), all(p.rect.width>p.rect.height for p in d), ' | '.join(p.get_text()[:40].replace('\\n',' ') for p in d))", пдф], { encoding: "utf-8" });
+      да(/^2 True/.test(стр.stdout) && /№ 12/.test(стр.stdout) && /№ 13/.test(стр.stdout), "печать карточек: каждая на своём альбомном листе", стр.stdout + стр.stderr);
+      await q.evaluate(() => exportКартыВибрации(live(ВИБК).map(к => к.id)));
+      const xf = (await собратьФайлы(q)).filter(f => /вибрации/.test(f));
+      const px = xf.length ? spawnSync("python3", ["scripts/проверка_xlsx.py", xf[0]], { encoding: "utf-8" }) : { status: 1 };
+      const листы = xf.length ? spawnSync("python3", ["-I", "-c", "import openpyxl,sys;w=openpyxl.load_workbook(sys.argv[1]);print(len(w.sheetnames), w.worksheets[0].max_row, w.worksheets[0].cell(2,3).value)", xf[0]], { encoding: "utf-8" }).stdout : "";
+      да(xf.length === 1 && px.status === 0 && /^2 /.test(листы), "карточки в Excel: лист на карточку, файл проходит проверку", листы + (px.stdout || ""));
+      // обмен: оба места пишут замер в одну карточку — оба замера сохраняются
+      const ф1 = await скачать(q, () => exchangeExport(), "obmen-36-M1.json");
+      await подать(q2, () => exchangeImport(), ф1);
+      const на2 = await q2.evaluate(() => ({ карт: live(ВИБК).length, зам: live(ВИБИ).length, норм: live(ВИБН).length }));
+      await q2.evaluate(() => { const к = live(ВИБК).find(x => x.номер === "12"); ВИБИ.push({ id: newId("ВИ"), карта: к.id, дата: "2026-11-01",
+        з: { "0Г": { v: "3" } }, изменено: new Date().toISOString(), место: "М2" }); saveReg(REG_ВИБИ, ВИБИ); });
+      await q.evaluate(() => { const к = live(ВИБК).find(x => x.номер === "12"); ВИБИ.push({ id: newId("ВИ"), карта: к.id, дата: "2026-11-02",
+        з: { "1В": { v: "2" } }, изменено: new Date().toISOString(), место: "М1" }); saveReg(REG_ВИБИ, ВИБИ); });
+      const ф2 = await скачать(q2, () => exchangeExport(), "obmen-36-M2.json");
+      await подать(q, () => exchangeImport(), ф2);
+      const на1 = await q.evaluate(() => live(ВИБИ).filter(з => тотЖеИд(з.карта, live(ВИБК).find(x => x.номер === "12").id)).length);
+      да(на2.карт === 2 && на2.зам === 4 && на2.норм === 14 && на1 === 6, "обмен: карточки, замеры и нормы доходят; замеры двух мест в одну карточку не перетирают друг друга",
+        JSON.stringify([на2, на1]));
+      await перезагрузить(q);
+      да(await q.evaluate(() => live(ВИБК).length === 2 && live(ВИБИ).length === 6), "после перезагрузки всё на месте");
+      await m1.c.close(); await m2.c.close();
     }
 
     раздел("Ошибки на страницах");

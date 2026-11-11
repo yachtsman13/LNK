@@ -639,3 +639,34 @@
 .ндссылка{color:var(--brand);text-decoration:underline;text-decoration-style:dotted;cursor:pointer}
 .ндссылка:hover{text-decoration-style:solid}
 @media print{ .ндссылка{color:inherit;text-decoration:none} }
+
+/* ── Карточки учёта вибрации (12а_вибрация.js) ── */
+.вбпары{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 18px;font-size:13px}
+.вбпар .muted{display:inline-block;min-width:150px}
+.sheet.вблист{max-width:none;padding:24px 28px;margin-bottom:16px;font-size:13px;line-height:1.3;page:вибр}
+.вблист .вбзаг{text-align:center;font-size:17px;font-weight:700;margin-bottom:8px}
+.вблист .вбшапка{display:flex;justify-content:space-between;gap:20px;font-size:14px;border-bottom:1px solid #999;padding-bottom:2px}
+.вблист .вбшапка2{margin-top:4px}
+.вбтабл{width:100%;border-collapse:collapse;margin-top:10px;table-layout:auto}
+.вбтабл th,.вбтабл td{border:1px solid #333;padding:3px 4px;text-align:center;vertical-align:middle;font-size:12px;
+  background:transparent;color:#111;white-space:normal;text-transform:none;letter-spacing:normal;position:static}
+.вбтабл thead th{font-weight:400}
+.вбтабл td.вбуск{color:#555}
+.вбтабл td.вбприч{text-align:left;min-width:120px}
+.вбтабл .вбмелко{font-size:11px}
+.вбтабл tr.вбстрока{cursor:pointer}
+.вбтабл tr.вбстрока:hover td{background:#eef4fb}
+.вбтабл tr.вбпуст td{height:24px}
+.вбтабл td.вбпрев,input.вбпрев{background:#fadcdc!important;color:#a11!important;font-weight:700}
+.вбтабл td.вбпред,input.вбпред{background:#fff2c2!important;color:#7a5200!important}
+.вблист .вбсокр{margin-top:6px;font-size:12px}
+.вбввод{border-collapse:collapse;margin-top:4px}
+.вбввод th,.вбввод td{border:1px solid var(--line);padding:5px 8px;text-align:center;font-size:13px}
+.вбввод td:first-child{text-align:left}
+.вбввод input.вбвв{width:74px;margin:0 2px}
+@page вибр{size:A4 landscape;margin:10mm}
+@media print{
+  .sheet.вблист{break-after:page;border:0;box-shadow:none;padding:0;margin:0}
+  .sheet.вблист:last-of-type{break-after:auto}
+  .вбтабл tr.вбстрока:hover td{background:transparent}
+}

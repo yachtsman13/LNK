@@ -17,6 +17,7 @@
 const КЛЮЧИ_ДАННЫХ={ "lnk_obj":"объекты", "lnk_si":"приборы", "lnk_ppl":"специалисты",
   "lnk_akts":"акты", "lnk_ppr":"ппр", "lnk_ppr_plan":"планппр", "lnk_conflicts":"конфликты", "lnk_history":"история", "lnk_podr":"подразделения", "lnk_padezh":"падежи",
   "lnk_tasks":"задачи", "lnk_nd":"нормдокументы", "lnk_pom":"помещения", "lnk_pasp_red":"редакции", "lnk_closed_years":"закрытыегоды",
+  "lnk_vibro":"вибрация", "lnk_vibro_izm":"вибрзамеры", "lnk_vibro_norm":"вибрнормы",
   "lnk_lab":"лаборатория", "lnk_metodiki":"методики", "lnk_docnames":"названия" };
 const КЛЮЧИ_НАСТРОЕК=["lnk_ws","lnk_setup","lnk_theme","lnk_jsort","lnk_psort","lnk_tsort","lnk_progsort",
   "lnk_last_backup","lnk_last_export","lnk_last_import","lnk_grant","lnk_fs",
@@ -28,6 +29,8 @@ const КЛЮЧИ_НАСТРОЕК=["lnk_ws","lnk_setup","lnk_theme","lnk_jsort",
   "lnk_check_ok",
   // недавние запросы «Поиска по базе» — удобство этого места
   "lnk_find_recent",
+  // горизонт прогноза вибрации — настройка этого места
+  "lnk_vibro_prog",
   // отметки о переезде места с этого компьютера и на этот компьютер
   "lnk_moved_out","lnk_moved_in"];
 // Правки старой версии программы. После переноса в IndexedDB localStorage
@@ -849,6 +852,8 @@ function проверки(){
       доб("наблюдение","План ППР","Разметка плана не сходится с периодичностью: "+замечанияППР().length,
           замечанияППР(), {вид:"plan"});
   }
+  // Карточки учёта вибрации — превышения, прогноз, нормы (12а_вибрация.js)
+  проверкиВибрации(доб, сс);
   return из;
 }
 function числоПроблем(){
@@ -950,7 +955,7 @@ function поручитьИзПроверки(отп){
 // список своего раздела: разбирают обычно подряд несколько пунктов.
 // Выбор раздела в меню этот возврат снимает — там человек ушёл сам.
 let _возвратВПроверку=false;
-const ВИДЫ_КАРТОЧЕК={obj:1,si:1,ppl:1,podr:1,nd:1,pom:1};
+const ВИДЫ_КАРТОЧЕК={obj:1,si:1,ppl:1,podr:1,nd:1,pom:1,vk:1,vn:1};
 function открытьИзПроверки(вид,ид){
   if(вид==="найти"){ _поиск=String(ид||""); switchView("find"); return; }
   if(!ид){ switchView(вид); return; }
@@ -963,6 +968,7 @@ function открытьИзПроверки(вид,ид){
     if(!J.some(z=>String(z.id)===String(ид)&&!z.удалено)){ toast("Запись уже удалена"); return; }
     editJournal(ид);
   } else if(вид==="plan"){ editППР(ид); }
+  else if(вид==="vibrocard"){ if(!найтиПоИд(live(ВИБК),ид)){ toast("Карточка уже удалена"); return; } открытьКартуВибрации(ид); return; }
   else if(вид==="metod"){ editMetodika(ид); }
   else { switchView(вид); return; }
   _возвратВПроверку=true;
@@ -1058,6 +1064,10 @@ const РАЗДЕЛЫ_ИЗМЕНЕНИЙ=[
    п:x=>[x.обозначение, x.наименование].filter(Boolean).join(" — ")},
   {н:"Помещения", вид:"premises", ключ:()=>REG_ПОМ, arr:()=>ПОМ, п:x=>x.идентификация||""},
   {н:"Задачи", вид:"tasks", ключ:()=>REG_ЗАД, arr:()=>ЗАД, п:x=>x.что||""},
+  {н:"Карточки учёта вибрации", вид:"vibro", ключ:()=>REG_ВИБК, arr:()=>ВИБК, п:x=>"№ "+(x.номер||"")+" "+заголовокКарты(x)},
+  {н:"Замеры вибрации", вид:"vibro", ключ:()=>REG_ВИБИ, arr:()=>ВИБИ,
+   п:x=>{ const к=(ВИБК||[]).find(y=>String(y.id)===String(x.карта)); return [x.дата?ru(x.дата):"", к?"карточка № "+(к.номер||""):""].filter(Boolean).join(" · "); }},
+  {н:"Нормы вибрации", вид:"vibronorm", ключ:()=>REG_ВИБН, arr:()=>ВИБН, п:x=>текстНормы(x)},
   {н:"План ППР", вид:"plan", ключ:()=>REG_ППР_ПЛАН, arr:()=>ППР_ПОЗ, п:x=>x.наименование||""},
   {н:"Отметки плана ППР", вид:"plan", ключ:()=>REG_ППР, arr:()=>ОТМ,
    п:x=>{ const п=(ППР_ПОЗ||[]).find(y=>String(y.id)===String(x.поз));
@@ -1120,7 +1130,7 @@ function когдаКоротко(iso){
   if(день(д)===день(в)) return "вчера "+чм;
   return ru(д.getFullYear()+"-"+String(д.getMonth()+1).padStart(2,"0")+"-"+String(д.getDate()).padStart(2,"0"));
 }
-const КАРТОЧКА_ПО_КЛЮЧУ=()=>({[REG_OBJ]:"obj",[REG_SI]:"si",[REG_PPL]:"ppl",[REG_ПОДР]:"podr",[REG_НД]:"nd",[REG_ПОМ]:"pom"});
+const КАРТОЧКА_ПО_КЛЮЧУ=()=>({[REG_OBJ]:"obj",[REG_SI]:"si",[REG_PPL]:"ppl",[REG_ПОДР]:"podr",[REG_НД]:"nd",[REG_ПОМ]:"pom",[REG_ВИБН]:"vn"});
 function открытьПравку(ключ,ид){
   if(ОДИНОЧНЫЕ[ключ]){ switchView(ОДИНОЧНЫЕ[ключ].вид); return; }
   const р=РАЗДЕЛЫ_ИЗМЕНЕНИЙ.find(x=>x.ключ()===ключ); if(!р) return;
@@ -1131,6 +1141,8 @@ function открытьПравку(ключ,ид){
   else if(ключ===STORE_KEY) editJournal(ид);
   else if(ключ===REG_ЗАД) editTask(x.id);
   else if(ключ===REG_ППР_ПЛАН) editППР(x.id);
+  else if(ключ===REG_ВИБК) открытьКартуВибрации(x.id);
+  else if(ключ===REG_ВИБИ) открытьКартуВибрации(x.карта);
   else switchView(р.вид);
 }
 function блокПоследнихПравок(){
@@ -1208,7 +1220,7 @@ function setПорогОбмена(v){ const о=обменМеста(); о.по�
 const днейС=ts=>ts?Math.floor((Date.now()-new Date(ts).getTime())/86400000):null;
 function сведенияОбмена(){
   const я=getWS().код, о=обменМеста(), правки={};
-  [STORE_KEY,REG_OBJ,REG_SI,REG_PPL,REG_AKT,REG_ППР,REG_ППР_ПЛАН,REG_ПОДР,REG_ПАДЕЖ,REG_ЗАД,REG_НД,REG_ПОМ].forEach(k=>
+  РЕЕСТРЫ_СПИСКИ().forEach(k=>
     (реестрПоКлючу(k)||[]).forEach(r=>{ const м=местоПравки(k,r), t=lastTs(r);
       if(м && м!==я && t && (!правки[м] || t>правки[м])) правки[м]=t; }));
   const места=[...new Set(Object.keys(о.места).concat(Object.keys(правки)))].filter(м=>м!==я).sort();

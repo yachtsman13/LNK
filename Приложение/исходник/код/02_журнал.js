@@ -33,6 +33,9 @@ function setChrome(){
   const пд=document.getElementById("cPodr"); if(пд) пд.textContent=live(ПОДР).length;
   const цНд=document.getElementById("cНд"); if(цНд) цНд.textContent=live(НД).length;
   const цПом=document.getElementById("cПом"); if(цПом) цПом.textContent=live(ПОМ).length;
+  const цВиб=document.getElementById("cVibro");
+  if(цВиб){ const к=ВИБК||[]; цВиб.textContent=live(к).length;
+    цВиб.classList.toggle("warn", (ВИБИ||[]).length>0 && live(к).some(x=>состояниеКарты(x).ур==="прев")); }
   const цз=document.getElementById("cTasks");
   // (ЗАД||[]) — счётчики могут обновляться ещё до того, как реестр задач
   // загружен: сохранение из кода начальной загрузки (например, перевод

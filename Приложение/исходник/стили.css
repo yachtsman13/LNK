@@ -265,6 +265,7 @@
      Сетка была на четыре (поле файла добавлено позже) — кнопка уезжала
      на отдельную строку под названием метода. */
   .mrow{display:grid;grid-template-columns:50px minmax(60px,.6fr) minmax(120px,1.3fr) minmax(120px,1.2fr) auto;gap:8px;align-items:center;margin:5px 0}
+  .mrow .мкнопки{display:flex;gap:4px;white-space:nowrap}
   .mrow input{min-width:0}
   .mrow .btn.small{white-space:nowrap}
   .mrow .mname{font-weight:600;color:var(--muted);font-size:13px}

@@ -187,7 +187,9 @@ function editJournal(id){
       <input id="m_${m}_исп" list="splist" placeholder="исполнитель" value="${val(mm.исп)}" oninput="обновитьДопуск('${m}')">
       <span class="файлобёртка"><input id="m_${m}_файл" placeholder="файл протокола (PDF)" value="${val(mm.файл)}" oninput="обновитьДопуск('${m}')"
         title="имя файла в папке с документами — пойдёт в пачку к акту в порядке перечня">${кнопкаФайлаДок("m_"+m+"_файл")}</span>
-      <button class="btn small" type="button" onclick="переключитьМетодСписки('${m}')">⚙ Приборы и НД</button></div>
+      <span class="мкнопки"><button class="btn small" type="button" onclick="переключитьМетодСписки('${m}')">⚙ Приборы и НД</button>${
+        z&&естьФормаПротокола(m)?`<button class="btn small" type="button" title="Заготовка ${m==="АЭ"?"заключения и протокола":"протокола"} по образцу — в Word, из сохранённой записи"
+          onclick="протоколВWord('${esc(z.id)}','${m}')">⤓ Word</button>`:""}</span></div>
       <div id="m_${m}_доп" class="допуск-метода"></div>
       <div id="mset_${m}" class="мет-набор" style="display:none" onchange="обновитьДопуск('${m}')"></div>`;
   }).join("");

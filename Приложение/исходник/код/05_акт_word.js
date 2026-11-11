@@ -723,6 +723,7 @@ function renderAkt(ключ){
       <span class="sub">объектов ${zs.length}</span>
       <div class="spring"></div>
       <button class="btn" onclick="актВWord('${e(ключ)}')">⤓ Word (.docx)</button>
+      <button class="btn" onclick="протоколыАктаВWord('${e(ключ)}')" title="Заготовки протоколов и заключений по всем записям акта — каждый документ своим файлом Word">⤓ Протоколы (Word)</button>
       <button class="btn" onclick="собратьПачку('${e(ключ)}')"
         title="акт, протоколы и приложения PDF — в одну папку, по порядку печати">📁 Пачка на печать</button>
       <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button>

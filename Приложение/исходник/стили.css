@@ -874,3 +874,17 @@ body.входзакрыт .app{visibility:hidden}
 .калденьшап .spring{flex:1}
 .калдейст{white-space:nowrap}
 @media print{ .калдейст{display:none} }
+/* 3.91: пульт — календарь с колонкой справа, «Сводка» */
+.пультряд{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start;margin-bottom:14px}
+@media (max-width:1180px){ .пультряд{grid-template-columns:minmax(0,1fr)} }
+.пульткал{padding:14px}
+.пульткал .card{box-shadow:none;border:0;padding:0!important;margin:10px 0 0;background:transparent}
+.пульткал .калпоясн{display:none}
+.пульткал .кал .дн.нед{min-height:150px}
+.калпанель{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.калпанель h3{margin:0;font-size:15px}
+.калпанель .spring{flex:1}
+.пультправо .panel{margin-bottom:0}
+.сводка{margin:4px 0 14px;border:1px solid var(--line);border-radius:var(--card-radius,10px);background:var(--panel);padding:10px 14px}
+.сводка>summary{cursor:pointer;font-size:14px;padding:4px 0}
+.сводкатело{margin-top:12px}

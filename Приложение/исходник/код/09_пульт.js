@@ -171,7 +171,73 @@ function работыВЖурнал(м){
   if(typeof resetJF==="function") resetJF();
   setJF("год",String(годРабот)); setJF("метод",м);
 }
+// ── Пульт (3.91, этап 4 проработки, п. 5) ──────────────────
+// Сверху вниз: плашки (обмен, переезд, копия, память — только когда есть
+// что сказать); плитки — только те, за которыми есть действие («0» без
+// дела не показывается); календарь (по умолчанию неделя) с колонкой «Мои
+// задачи» и «Заметки без срока»; «Сводка» — свёрнута, открывается
+// щелчком (работы по месяцам, недавно правили, обслуживание приборов,
+// записи по методам, поверка, по статусу, последние записи — список
+// заказчика). Блок «✓ Задачи» убран: то же показывают календарь и «Мои
+// задачи».
+const REG_ПУЛЬТ="lnk_dash";
+function пультНастр(){ try{ const o=JSON.parse(ХР.getItem(REG_ПУЛЬТ)||"{}"); return o&&typeof o==="object"?o:{}; }catch(e){ return {}; } }
+function сводкаОткрыта(откр){ const н=пультНастр(); н.сводка=!!откр; try{ ХР.setItem(REG_ПУЛЬТ, JSON.stringify(н)); }catch(e){} }
+// Дела всех типов: просроченные (срок до сегодня, не сделано) и на неделю
+// вперёд — для двух плиток, слитых из прежних «задач просрочено / на
+// сегодня / горит на этой неделе» (теперь не только задачи, а все типы).
+function делаПульта(){
+  const сег=сегодняМестн(), d=new Date(сег+"T00:00:00");
+  const вчера=new Date(d); вчера.setDate(d.getDate()-1);
+  const через7=new Date(d); через7.setDate(d.getDate()+7);
+  const прос=календарьДела(null, null, ["2000-01-01", калISO(вчера)]).filter(x=>!x.сделано);
+  const неделя=календарьДела(null, null, [сег, калISO(через7)]).filter(x=>!x.сделано);
+  return {прос, неделя};
+}
+// Сроки лаборатории — на пульте, только когда до срока ≤ 90 дней или срок
+// прошёл (в остальное время они в «Лаборатории» и в «Сводке»).
+function срокБлизок(iso){
+  if(!iso) return false;
+  const d=new Date(сегодняМестн()+"T00:00:00"); d.setDate(d.getDate()+90);
+  return String(iso)<=калISO(d);
+}
+function плиткиЛаборатории(толькоБлизкие){
+  const л=getЛаб(), из=[];
+  if(л.свид_до && (!толькоБлизкие || срокБлизок(л.свид_до))){
+    const [к,т]=срокЛаб(л.свид_до);
+    из.push(`<div class="tile ${к} click" onclick="switchView('lab')">
+      <div class="n" style="font-size:19px">${esc(т)}</div><div class="l">аттестация ЛНК</div></div>`);
+  }
+  const г=готовностьПродления();
+  if(!г.областьПуста && (!толькоБлизкие || срокБлизок(л.свид_до))){
+    const гот=г.методы.filter(x=>!x.нет.length).length;
+    из.push(`<div class="tile ${гот===г.методы.length?"ok":"warn"} click" onclick="открытьГотовностьПродления()"
+      title="Сводка в карточке лаборатории: допущенные, приборы с поверкой, документы по каждому методу области аттестации">
+      <div class="n">${гот} из ${г.методы.length}</div><div class="l">методов готово к продлению аттестации</div></div>`);
+  }
+  if((л.проверка || л.проверка_пройдена) && (!толькоБлизкие || (проверкаЛНКОткрыта(л) && срокБлизок(л.проверка)))){
+    const [к,т]=состояниеПроверкиЛНК(л);
+    из.push(`<div class="tile ${к} click" onclick="switchView('lab')">
+      <div class="n" style="font-size:${т.length>24?14:19}px">${esc(т)}</div><div class="l">плановая проверка ЛНК</div></div>`);
+  }
+  return из.join("");
+}
+function новыхКомментариевВсего(){
+  let н=0;
+  (ЗАД||[]).filter(з=>!з.удалено).forEach(з=>{ н+=новыхКомментариев(з.id); });
+  live(ЗАЯВ).forEach(з=>{ н+=новыхКомментариев(з.id); });
+  return н;
+}
+function пультВКалендарь(ранее){
+  калКаленд.вид="месяц"; калКаленд.база=""; калКаленд.день=""; калКаленд.ранее=!!ранее;
+  switchView("calendar");
+}
+function пультПрокрутить(id){ const э=document.getElementById(id); if(э) э.scrollIntoView({behavior:"smooth", block:"start"}); }
 function renderDash(){
+  // вид ставится здесь, а не только в switchView: календарь пульта рисуется
+  // в свой контейнер, только когда открыт пульт (иначе — на всю страницу)
+  curView="dash";
+  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="dash"));
   догнатьПовторы();
   const L=liveJ();
   const year=new Date().getFullYear();
@@ -186,15 +252,11 @@ function renderDash(){
     else if(c==="ok")groups.ok.push(s); else groups.none.push(s); });
   const attn=groups.bad.concat(groups.work)
     .sort((a,b)=>(a.поверка_до||"").localeCompare(b.поверка_до||""));
-
-  // записи по методам
   const mc=METHODS.map(m=>({m,n:L.filter(z=>z.методы&&z.методы[m]).length}));
   const mmax=Math.max(1,...mc.map(x=>x.n));
-
-  // последние записи по дате
   const last=L.slice().filter(z=>z.дата).sort((a,b)=>b.дата.localeCompare(a.дата)).slice(0,6);
 
-  const tile=(n,l,cls,view,докум)=>`<div class="tile ${cls||""} ${view?"click":""}"${view?` onclick="${докум?`журналОтбор('докум','${докум}')`:`switchView('${view}')`}"`:""}>
+  const tile=(n,l,cls,view,докум,клик)=>`<div class="tile ${cls||""} ${view||клик?"click":""}"${клик?` onclick="${клик}"`:view?` onclick="${докум?`журналОтбор('докум','${докум}')`:`switchView('${view}')`}"`:""}>
     <div class="n">${n}</div><div class="l">${l}</div></div>`;
 
   let поверкаHTML;
@@ -210,7 +272,7 @@ function renderDash(){
       </div>`;
     if(attn.length){
       поверкаHTML+=`<div class="plist">`+attn.map(s=>{const[c,l]=siStatus(s);
-        return `<div class="pr" onclick="switchView('si')">
+        return `<div class="pr" onclick="окноПрибора(${esc(JSON.stringify(String(s.id)))})">
           <span class="st ${c}">${l}</span>
           <span class="g">${esc(s.наименование)}${s.зав?` · зав. ${esc(s.зав)}`:""}</span>
           <span class="num">${ru(s.поверка_до)||"—"}</span></div>`;}).join("")+`</div>`;
@@ -220,11 +282,39 @@ function renderDash(){
       поверкаHTML+=`<div class="note">Все поверки в норме.</div>`;
     }
   }
+  const пд=делаПульта();
+  const ждут=L.filter(ждётНомеров).length;
+  const ппрМ=ппрМесяца();
+  const новКом=новыхКомментариевВсего();
+  const заявБезИсп=live(ЗАЯВ).filter(з=>заявкаОткрыта(з) && з.статус!=="зарегистрирована" && !исполнительЗаявки(з)).length;
+  const м=задачиМоегоМеста();
 
   const дн=днейБезКопии(), об=объёмХранилища();
   const тревога = дн===null
     ? `<b>Резервной копии ещё не было.</b> Память браузера могут очистить — и работа пропадёт вся сразу.`
     : (дн>=3 ? `<b>Резервной копии не было ${дн} дн.</b> Это единственная страховка от очистки памяти браузера.` : "");
+  const плитки=[
+    пд.прос.length?tile(пд.прос.length,"просрочено (все типы дел)","bad","",
+      "","пультВКалендарь(true)"):"",
+    пд.неделя.length?tile(пд.неделя.length,"на этой неделе","warn","","","пультПрокрутить('пультКал')"):"",
+    м.всего?tile(м.всего,"мои задачи",м.просрочено||м.вернули?"bad":"warn","","","пультПрокрутить('мои_задачи')"):"",
+    ждут?tile(ждут,"ждут номера","warn","journal","без"):"",
+    (()=>{ const н=наУтверждение().length; return н?tile(н,"проектов задач на утверждение","warn","tasks"):""; })(),
+    (()=>{ const н=заявокНаУтверждение(), п=заявокПросрочено(); if(!н && !п) return "";
+      return tile(п||н, п?"заявок подразделений просрочено":"заявок подразделений на утверждение", п?"bad":"warn","requests"); })(),
+    заявБезИсп?tile(заявБезИсп,"заявок без исполнителя","warn","requests"):"",
+    новКом?tile("💬 "+новКом,"новых комментариев","warn","tasks"):"",
+    (groups.bad.length||groups.work.length)?tile(`${groups.bad.length} <span style="font-size:15px">/ ${groups.work.length}</span>`,
+      "поверка: просрочено / истекает", groups.bad.length?"bad":"warn","si"):"",
+    плиткаВибрации(true),
+    плиткаФайлов(),
+    (()=>{ const мм=пгМесяца(), пр=пгПросрочено(); if(!пр && !мм.осталось) return "";
+      return tile(пр||мм.осталось, пр?"планы-графики: прошедший месяц без отметки":"планы-графики: осталось в этом месяце",
+        пр?"bad":"warn","pg"); })(),
+    позицииППР().length&&ппрМ.осталось?tile(ппрМ.осталось,"ППР в этом месяце","warn","plan"):"",
+    плиткиЛаборатории(true)
+  ].join("");
+  const открыта=!!пультНастр().сводка;
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>Пульт</h2><span class="sub">на ${ru(new Date().toISOString().slice(0,10))}</span></div>
     ${плашкаПереезда()}
@@ -236,116 +326,71 @@ function renderDash(){
     ${об.доля>0.8?`<div class="draftnote" style="cursor:pointer;border-color:var(--danger);color:var(--danger)"
       onclick="switchView('exchange')">▲ Память браузера заполнена на ${(об.доля*100).toFixed(0)}%.
       Скоро правки перестанут сохраняться — откройте «Обмен».</div>`:""}
+    ${плитки?`<div class="tiles пультплитки">${плитки}</div>`:`<div class="note">Сейчас ничего не требует действия.</div>`}
 
-    <div class="tiles">
-      ${tile(L.length,"записей журнала","accent","journal")}
-      ${tile(заГод,"за "+year+" год","")}
-      ${tile(live(O).length,"объектов","","objects")}
-      ${tile(live(S).length,"приборов (СИ)","","si")}
-      ${tile(live(P).length,"специалистов","","people")}
-      ${tile(L.filter(ждётНомеров).length,"ждут номера",
-        L.filter(ждётНомеров).length?"warn":"ok","journal","без")}
-      ${плиткаВибрации()}
-      ${плиткаФайлов()}
-      ${(()=>{ const м=пгМесяца(), пр=пгПросрочено(); if(!м.всего && !пр) return "";
-        return tile(пр||м.осталось, пр?"планы-графики: прошедший месяц без отметки":"планы-графики: осталось в этом месяце",
-          пр?"bad":(м.осталось?"warn":"ok"),"pg"); })()}
-      ${позицииППР().length?tile(ппрМесяца().осталось,"ППР в этом месяце",
-        ппрМесяца().осталось?"warn":"ok","plan"):""}
-      ${(()=>{ const з=задачиНаСегодня();
-        return з.всего||з.просрочено ? tile(з.просрочено||з.всего,
-          з.просрочено?"задач просрочено":"задач на сегодня",
-          з.просрочено?"bad":"warn","tasks") : ""; })()}
-      ${(()=>{ const с=задачиСкоро();
-        return с.всего ? tile(с.всего,"горит на этой неделе","warn","tasks") : ""; })()}
-      ${(()=>{ const н=заявокНаУтверждение(), п=заявокПросрочено(); if(!н && !п) return "";
-        return tile(п||н, п?"заявок подразделений просрочено":"заявок подразделений на утверждение", п?"bad":"warn","requests"); })()}
-      ${(()=>{ const н=наУтверждение().length; if(!н) return "";
-        return tile(н,"проектов задач на утверждение","warn","tasks"); })()}
-      ${(()=>{ const м=задачиМоегоМеста(); if(!м.всего) return "";
-        return `<div class="tile ${м.просрочено||м.вернули?"bad":"warn"} click" onclick="document.getElementById('мои_задачи').scrollIntoView({behavior:'smooth'})">
-          <div class="n">${м.всего}</div><div class="l">мои задачи</div></div>`; })()}
-      ${(()=>{ const л=getЛаб(); if(!л.свид_до) return "";
-        const [к,т]=срокЛаб(л.свид_до);
-        return `<div class="tile ${к} click" onclick="switchView('lab')">
-          <div class="n" style="font-size:19px">${esc(т)}</div>
-          <div class="l">аттестация ЛНК</div></div>`; })()}
-      ${(()=>{ const г=готовностьПродления(); if(г.областьПуста) return "";
-        const гот=г.методы.filter(x=>!x.нет.length).length;
-        return `<div class="tile ${гот===г.методы.length?"ok":"warn"} click" onclick="открытьГотовностьПродления()"
-          title="Сводка в карточке лаборатории: допущенные, приборы с поверкой, документы по каждому методу области аттестации">
-          <div class="n">${гот} из ${г.методы.length}</div><div class="l">методов готово к продлению аттестации</div></div>`; })()}
-      ${(()=>{ const л=getЛаб(); if(!л.проверка && !л.проверка_пройдена) return "";
-        const [к,т]=состояниеПроверкиЛНК(л);
-        return `<div class="tile ${к} click" onclick="switchView('lab')">
-          <div class="n" style="font-size:${т.length>24?14:19}px">${esc(т)}</div>
-          <div class="l">плановая проверка ЛНК</div></div>`; })()}
-    </div>
-    <div id="мои_задачи">${блокМоихЗадач()}</div>
-    ${блокРаботПоМесяцам()}
-    ${блокПоследнихПравок()}
-    ${(()=>{ const з=задачиНаСегодня();
-      if(!з.всего && !з.просрочено) return "";
-      return `<div class="panel" style="margin-bottom:14px">
-        <h3>✓ Задачи</h3>
-        <div class="bar"><span class="g" style="flex:1">Срок сегодня или раньше</span>
-          <b>${з.всего}</b></div>
-        ${з.просрочено?`<div class="bar"><span class="g" style="flex:1">Из них просрочено</span>
-          <b style="color:var(--danger)">${з.просрочено}</b></div>`:""}
-        <div class="plist">${з.список.slice(0,6).map(x=>
-          `<div class="pr" onclick="editTask('${esc(x.id)}')">
-             <span class="st ${состКласс(x)}">${esc(состТекст(x))}</span>
-             <span class="g">${esc(x.что)}</span>
-             <span class="num">${ru(x.срок)}</span></div>`).join("")}
-          ${з.всего>6?`<div class="pr" style="cursor:pointer" onclick="switchView('tasks')">
-             <span class="g">…и ещё ${з.всего-6}</span></div>`:""}</div>
-      </div>`; })()}
-    ${(()=>{ const м=ппрМесяца();
-      if(!позицииППР().length || !м.всего) return "";
-      return `<div class="panel" style="margin-bottom:14px">
-        <h3>◷ Обслуживание приборов в этом месяце</h3>
-        <div class="bar"><span class="g" style="flex:1">По плану ППР на ${esc(м.имя)}</span>
-          <b>${м.всего}</b></div>
-        <div class="bar"><span class="g" style="flex:1">Отмечено выполненными</span><b>${м.сделано}</b></div>
-        <div class="bf"><span style="width:${м.всего?Math.round(м.сделано/м.всего*100):0}%"></span></div>
-        ${м.осталось?`<div class="plist">`+м.список.slice(0,6).map(р=>
-          `<div class="pr" onclick="switchView('plan')">
-             <span class="st work">${р.часы} ч</span>
-             <span class="g">${esc(р.поз.наименование)}</span>
-             <span class="num">${esc(р.поз.вид)}</span></div>`).join("")+
-          (м.осталось>6?`<div class="pr" style="cursor:pointer" onclick="switchView('plan')">
-             <span class="g">…и ещё ${м.осталось-6}</span></div>`:"")+`</div>`
-          :`<div class="note">Всё за месяц отмечено выполненным.</div>`}
-      </div>`; })()}
-
-    <div class="cols">
-      <div class="panel">
-        <h3>⌗ Поверка приборов</h3>
-        ${поверкаHTML}
-      </div>
-      <div class="panel">
-        <h3>▤ Записи по методам <span class="pc">всего ${L.length}</span></h3>
-        ${mc.map(x=>`<div class="bar"><span class="bn">${x.m}</span>
-          <span class="bt"><span class="bf" style="width:${Math.round(x.n/mmax*100)}%"></span></span>
-          <span class="bc">${x.n}</span></div>`).join("")}
+    <div class="пультряд">
+      <div class="пульткал card" id="пультКал"></div>
+      <div class="пультправо">
+        <div id="мои_задачи">${блокМоихЗадач()||`<div class="panel"><h3>☰ Мои задачи</h3><div class="note">Задач нет.</div></div>`}</div>
+        ${блокЗаметокБезСрока()}
       </div>
     </div>
 
-    <div class="cols">
-      <div class="panel">
-        <h3>◷ По статусу</h3>
-        ${[["Зарегистрировано","ok"],["В работе / черновик","work"],["Новые","new"],["Аннулировано","bad"]]
-          .map(([l,c])=>`<div class="bar"><span class="bt" style="max-width:none"><span class="bf ${c}" style="background:var(--${c==='ok'?'ok':c==='work'?'warn':c==='bad'?'danger':'brand'});width:${Math.round(st(c)/Math.max(1,L.length)*100)}%"></span></span><span class="bc">${st(c)}</span></div>`).join("")}
-        <div class="note">Зарегистрировано ${st("ok")}, в работе/черновик ${st("work")}, новых ${st("new")}, аннулировано ${st("bad")}.</div>
+    <details class="сводка" id="сводка" ${открыта?"open":""} ontoggle="сводкаОткрыта(this.open)">
+      <summary><b>Сводка</b> <span class="muted">— ${L.length} записей журнала (за ${year} год — ${заГод}) · ${live(O).length} объектов ·
+        ${live(S).length} приборов · ${live(P).length} специалистов</span></summary>
+      <div class="сводкатело">
+        <div class="tiles">
+          ${tile(L.length,"записей журнала","accent","journal")}
+          ${tile(заГод,"за "+year+" год","")}
+          ${tile(live(O).length,"объектов","","objects")}
+          ${tile(live(S).length,"приборов (СИ)","","si")}
+          ${tile(live(P).length,"специалистов","","people")}
+          ${плиткиЛаборатории(false)}
+        </div>
+        ${блокРаботПоМесяцам()}
+        ${блокПоследнихПравок()}
+        ${(()=>{ if(!позицииППР().length || !ппрМ.всего) return "";
+          return `<div class="panel" style="margin-bottom:14px">
+            <h3>◷ Обслуживание приборов в этом месяце</h3>
+            <div class="bar"><span class="g" style="flex:1">По плану ППР на ${esc(ппрМ.имя)}</span><b>${ппрМ.всего}</b></div>
+            <div class="bar"><span class="g" style="flex:1">Отмечено выполненными</span><b>${ппрМ.сделано}</b></div>
+            <div class="bf"><span style="width:${ппрМ.всего?Math.round(ппрМ.сделано/ппрМ.всего*100):0}%"></span></div>
+            ${ппрМ.осталось?`<div class="plist">`+ппрМ.список.slice(0,6).map(р=>
+              `<div class="pr" onclick="switchView('plan')">
+                 <span class="st work">${р.часы} ч</span>
+                 <span class="g">${esc(р.поз.наименование)}</span>
+                 <span class="num">${esc(р.поз.вид)}</span></div>`).join("")+
+              (ппрМ.осталось>6?`<div class="pr" style="cursor:pointer" onclick="switchView('plan')">
+                 <span class="g">…и ещё ${ппрМ.осталось-6}</span></div>`:"")+`</div>`
+              :`<div class="note">Всё за месяц отмечено выполненным.</div>`}
+          </div>`; })()}
+        <div class="cols">
+          <div class="panel"><h3>⌗ Поверка приборов</h3>${поверкаHTML}</div>
+          <div class="panel">
+            <h3>▤ Записи по методам <span class="pc">всего ${L.length}</span></h3>
+            ${mc.map(x=>`<div class="bar"><span class="bn">${x.m}</span>
+              <span class="bt"><span class="bf" style="width:${Math.round(x.n/mmax*100)}%"></span></span>
+              <span class="bc">${x.n}</span></div>`).join("")}
+          </div>
+        </div>
+        <div class="cols">
+          <div class="panel">
+            <h3>◷ По статусу</h3>
+            ${[["Зарегистрировано","ok"],["В работе / черновик","work"],["Новые","new"],["Аннулировано","bad"]]
+              .map(([l,c])=>`<div class="bar"><span class="bt" style="max-width:none"><span class="bf ${c}" style="background:var(--${c==='ok'?'ok':c==='work'?'warn':c==='bad'?'danger':'brand'});width:${Math.round(st(c)/Math.max(1,L.length)*100)}%"></span></span><span class="bc">${st(c)}</span></div>`).join("")}
+            <div class="note">Зарегистрировано ${st("ok")}, в работе/черновик ${st("work")}, новых ${st("new")}, аннулировано ${st("bad")}.</div>
+          </div>
+          <div class="panel">
+            <h3>◈ Последние записи</h3>
+            <div class="plist">${last.map(z=>`<div class="pr" onclick="showJournal('${esc(z.id)}')">
+              <span class="num">${ru(z.дата)}</span>
+              <span class="g">${esc(z.объект)}</span>
+              <span>${methodsOf(z).map(m=>`<span class="pill">${m}</span>`).join("")}</span></div>`).join("")
+              ||`<div class="note">Записей нет.</div>`}</div>
+          </div>
+        </div>
       </div>
-      <div class="panel">
-        <h3>◈ Последние записи</h3>
-        <div class="plist">${last.map(z=>`<div class="pr" onclick="showJournal('${esc(z.id)}')">
-          <span class="num">${ru(z.дата)}</span>
-          <span class="g">${esc(z.объект)}</span>
-          <span>${methodsOf(z).map(m=>`<span class="pill">${m}</span>`).join("")}</span></div>`).join("")
-          ||`<div class="note">Записей нет.</div>`}</div>
-      </div>
-    </div>`;
+    </details>`;
+  renderКалендарь();
 }
-

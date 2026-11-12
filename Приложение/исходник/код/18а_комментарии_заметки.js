@@ -236,6 +236,19 @@ function блокЗаметокСписок(){
     ${без.length?`<div class="note" style="margin:8px 0 4px">Без срока</div><div class="plist">${без.map(стр).join("")}</div>`:""}
   </div>`;
 }
+// Пульт (3.91): колонка справа от календаря — заметки без срока (со сроком
+// они и так в календаре).
+function блокЗаметокБезСрока(){
+  const сп=видимыеЗаметки().filter(з=>!з.сделано && !з.срок)
+    .sort((a,b)=>String(b.создано||"").localeCompare(String(a.создано||"")));
+  return `<div class="panel" style="margin-top:14px"><h3>✎ Заметки без срока <span class="pc">${сп.length}</span></h3>
+    ${сп.length?`<div class="plist">${сп.slice(0,12).map(з=>`<div class="pr" onclick="_возвратВПроверку='dash';editЗаметка('${esc(з.id)}')" title="Открыть заметку">
+      <span class="g" style="white-space:pre-line">${esc(String(з.текст||"").slice(0,140))}</span>
+      <span class="muted" style="font-size:12px;white-space:nowrap">${з.видимость==="всем"?"всем":"🔒"}</span></div>`).join("")}
+      ${сп.length>12?`<div class="pr" onclick="switchView('tasks')"><span class="g">…и ещё ${сп.length-12}</span></div>`:""}</div>`
+      :`<div class="note">Нет.</div>`}
+    <button class="btn small" style="margin-top:6px" onclick="_возвратВПроверку='dash';editЗаметка('')">＋ Заметка</button></div>`;
+}
 let _заметкаИд=null;
 function editЗаметка(id, срокЗаранее){
   if(!уходСФормы()) return;

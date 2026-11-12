@@ -300,6 +300,7 @@ function renderКалендарь(){
       <select onchange="калИсточник(this.value)"><option value="">Все источники</option>
         ${источники.map(и=>`<option${и===кал.источник?" selected":""}>${esc(и)}</option>`).join("")}</select>
       <button class="btn" onclick="exportКалендарь()" title="Дела открытого периода списком в Excel — с учётом выбранного источника">▤ Excel</button>
+      <button class="btn" onclick="подготовкаИзКалендаря()" title="Что понадобится для работ этого периода: приборы, документы, кто может провести">☑ Подготовка</button>
     </div>
     ${сетка?`<div class="card" style="padding:14px">${сетка}
       <div class="note" style="margin:8px 0 0">Красное — срок прошёл, а дело не сделано; бледное — сделано.
@@ -419,7 +420,7 @@ function switchView(v){
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
   ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,pg:renderПГ,pgedit:renderПГ,prot:()=>_прот?открытьПротокол(_прот.zid,_прот.м,_прот.ф):renderJournal(),
     vibrocard:()=>открытьКартуВибрации(_картаВибр),vibroizm:()=>открытьКартуВибрации(_картаВибр),
-    vibroprint:()=>печатьКартВибрации(_печатьВибр),certsheet:renderЛистУдостоверений}[v]
+    vibroprint:()=>печатьКартВибрации(_печатьВибр),certsheet:renderЛистУдостоверений,prep:renderПодготовка}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"ППР",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b){ _возвратВПроверку=false; switchView(b.dataset.view); }});

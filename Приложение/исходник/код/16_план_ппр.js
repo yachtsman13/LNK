@@ -49,7 +49,7 @@ function ключОтметки(п,год,мес){ return п.id+"|"+год+"|"+�
 function отметка(п,год,мес){
   return live(ОТМ).find(о=>о.id===ключОтметки(п,год,мес))||null;
 }
-function отметить(идПоз,год,мес,кто){
+function отметить(идПоз,год,мес,кто,тихо){
   const п=live(ППР_ПОЗ).find(x=>x.id===идПоз); if(!п) return;
   const к=ключОтметки(п,год,мес);
   const был=ОТМ.find(о=>о.id===к);
@@ -64,7 +64,7 @@ function отметить(идПоз,год,мес,кто){
               место:getWS().код, изменено:new Date().toISOString()});
   }
   saveReg(REG_ППР,ОТМ);
-  renderPlan();
+  if(!тихо) renderPlan();
 }
 
 let план={год:null, толькоНеВыполненные:false};

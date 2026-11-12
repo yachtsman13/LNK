@@ -855,3 +855,22 @@ body.входзакрыт .app{visibility:hidden}
 .зв-методы{display:flex;flex-wrap:wrap;gap:6px 18px}
 .form label.зв-метод{flex-direction:row;align-items:center;gap:6px;font-weight:500}
 .зв-способ{margin-top:12px}
+/* 3.90: типы дел календаря — цвет метки, легенда-отбор, перенос перетаскиванием */
+.т-заметки{--тц:#8e6bbf} .т-мои{--тц:#1f7ae0} .т-общие{--тц:#6f8ba6}
+.т-план{--тц:#2e9e5b} .т-внеплан{--тц:#e07b1f} .т-сроки{--тц:#b8860b}
+.калметка{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--тц,#999);flex:0 0 10px}
+.кал .сб[class*="т-"]{border-left-color:var(--тц)}
+.кал .сб.прос{color:var(--danger)} .кал .сб.сдел{text-decoration:line-through}
+.кал .сб[draggable="true"]{cursor:grab}
+.кал .дн.бросить{outline:2px dashed var(--brand);outline-offset:-2px;background:var(--brand-soft)}
+.калтипы{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:0 0 10px}
+.калтип{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 8px;
+  border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.калтип input{margin:0}
+.калранее{margin:0 0 10px;padding:8px 12px;border-radius:8px;cursor:pointer;
+  background:var(--dangerbg);color:var(--danger);border:1px solid var(--danger)}
+.калдело .калметка{align-self:center}
+.калденьшап{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.калденьшап .spring{flex:1}
+.калдейст{white-space:nowrap}
+@media print{ .калдейст{display:none} }

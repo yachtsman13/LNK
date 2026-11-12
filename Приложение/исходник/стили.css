@@ -71,9 +71,10 @@
     grid-template-areas:"top top" "side main" "side foot";height:100vh}
   .top{grid-area:top;background:var(--top-bg);color:var(--top-ink);display:flex;align-items:center;
     gap:12px;padding:0 16px;box-shadow:var(--shadow);z-index:3}
-  .top .logo{width:26px;height:26px;border-radius:6px;background:var(--logo-bg);color:var(--logo-ink);
-    display:grid;place-items:center;font-weight:800}
-  .top h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
+  .top .logo{width:28px;height:28px;color:var(--top-ink);display:grid;place-items:center;flex:none}
+  .top .logo svg{display:block}
+  .top h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px;display:flex;align-items:center;gap:6px}
+  .top .лнкзн{background:var(--logo-bg);color:var(--logo-ink);border-radius:6px;padding:1px 7px;font-weight:800;letter-spacing:.5px}
   .top .tag{font-size:11px;background:var(--top-tag);padding:2px 8px;border-radius:20px}
   .top .spring{flex:1}
   .top .who{font-size:12px;opacity:.92}
@@ -781,3 +782,34 @@ select.подгисп{max-width:220px}
   /* общее правило печати списков (td 11px, серые рамки) бирку не трогает */
   .бирка td{font-size:inherit!important;border:1px solid #000!important;padding:0 .5mm!important;color:#000!important} }
 @media print{.toast{display:none!important}}
+/* Окно прибора, раскладка файлов (3.85) */
+.опфон{align-items:flex-start;padding:4vh 0;overflow:auto}
+.окнопр{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--card-radius);
+  box-shadow:var(--shadow);padding:16px 20px 18px;width:min(1040px,calc(100vw - 32px));box-sizing:border-box}
+.окнопр .опшапка{display:flex;gap:12px;align-items:flex-start}
+.окнопр .опзаг{flex:1;min-width:0}
+.окнопр .опзаг h2{margin:0;font-size:19px;line-height:1.25}
+.окнопр .опзаг .sub{color:var(--muted);font-size:13px;margin-top:3px}
+.окнопр .опзакр{flex:none}
+.окнопр .dbtns{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 8px}
+.опсетка{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:12px}
+.опблок{border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;min-width:0}
+.опблок h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.опстр{display:grid;grid-template-columns:minmax(120px,38%) 1fr;gap:8px;padding:3px 0;font-size:13.5px;line-height:1.35}
+.опстр .k{color:var(--muted)}
+.опстр .v{word-break:break-word}
+.опфайлы{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.опппр{padding:4px 0 8px;font-size:13.5px}
+.опмес{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.опм{font-size:12px;padding:1px 7px;border-radius:10px;border:1px solid var(--line)}
+.опм.сделано{background:var(--okbg);color:var(--ok);border-color:transparent}
+.опм.просрочено{background:var(--dangerbg);color:var(--danger);border-color:transparent}
+.оптабл{width:100%;border-collapse:collapse;font-size:13px}
+.оптабл th,.оптабл td{text-align:left;padding:3px 6px;border-bottom:1px solid var(--line)}
+.оптабл tbody tr{cursor:pointer}
+.оптабл tbody tr:hover td{background:var(--row)}
+h3.раскз{font-size:14px;margin:14px 0 6px}
+table.раскформ{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}
+table.раскформ th,table.раскформ td{border:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left}
+table.раскформ code{white-space:normal;word-break:break-word}
+@media print{ .опфон{display:none!important} }

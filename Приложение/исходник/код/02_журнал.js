@@ -33,6 +33,9 @@ function setChrome(){
   const пд=document.getElementById("cPodr"); if(пд) пд.textContent=live(ПОДР).length;
   const цНд=document.getElementById("cНд"); if(цНд) цНд.textContent=live(НД).length;
   const цПом=document.getElementById("cПом"); if(цПом) цПом.textContent=live(ПОМ).length;
+  // Документы СМ — число действующих; предложения — новые (не разобранные).
+  const цСмк=document.getElementById("cСмк"); if(цСмк) цСмк.textContent=live(СМК||[]).filter(д=>!смкУтратил(д)).length;
+  const цПр=document.getElementById("cПредл"); if(цПр){ const н=предлНовых(); цПр.textContent=н; цПр.style.display=н?"":"none"; }
   const цПг=document.getElementById("cPg");
   if(цПг){ const м=пгМесяца(); цПг.textContent=м.осталось; цПг.title="работ по планам-графикам в этом месяце осталось"; }
   const цВиб=document.getElementById("cVibro");

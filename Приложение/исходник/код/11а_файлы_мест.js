@@ -173,6 +173,7 @@ async function автоСверкаФайлов(){
     const h=await папкаДок(); if(!h) return;
     if(await правоНаПапкуДок(false)!=="есть") return;
     await сверитьФайлы(h);
+    await автоРаскладка(h);
     if(curView==="dash") renderDash(); else if(curView==="exchange") renderExchange();
     setChrome();
   }catch(e){}

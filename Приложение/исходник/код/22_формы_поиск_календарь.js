@@ -72,6 +72,7 @@ const ПОИСК_РАЗДЕЛЫ=[
    поля:x=>[x.что,x.кому,x.объект,x.заметки&&x.заметки.map?x.заметки.map(з=>з.текст).join(" "):"",x.источник],
    п:x=>[x.срок?ru(x.срок):"", x.что, x.кому].filter(Boolean).join(" · ")}
 ];
+ДОП_РЕЕСТРЫ.forEach(р=>{ if(р.поиск) ПОИСК_РАЗДЕЛЫ.push(Object.assign({н:р.н, arr:()=>live(р.arr()), вид:р.вид, kind:р.kind}, р.поиск)); });
 let _поиск="";
 function найтиПоВсем(q){
   const н=String(q||"").trim().toLowerCase();
@@ -418,7 +419,7 @@ function switchView(v){
   if(_возвратВПроверку && ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) v=typeof _возвратВПроверку==="string"?_возвратВПроверку:"check";
   curView=v;query=""; _актИзЗаписи=null;
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,pg:renderПГ,pgedit:renderПГ,prot:()=>_прот?открытьПротокол(_прот.zid,_прот.м,_прот.ф):renderJournal(),
+  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,smk:renderСМК,ideas:renderПредложения,filesort:renderРаскладка,pg:renderПГ,pgedit:renderПГ,prot:()=>_прот?открытьПротокол(_прот.zid,_прот.м,_прот.ф):renderJournal(),
     vibrocard:()=>открытьКартуВибрации(_картаВибр),vibroizm:()=>открытьКартуВибрации(_картаВибр),
     vibroprint:()=>печатьКартВибрации(_печатьВибр),certsheet:renderЛистУдостоверений,labels:renderБирки,prep:renderПодготовка}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"ППР",

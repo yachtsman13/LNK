@@ -130,6 +130,7 @@ function renderPeople(){
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('ppl',null)">＋ Добавить</button>
       <button class="btn" onclick="exportXlsx()">▤ Excel</button>
+      <button class="btn" onclick="листУдостоверений({})" title="Полоски удостоверений и ПБ на листах A4">🪪 Лист удостоверений</button>
       <button class="btn" onclick="выгрузкаДляПравки('ppl')" title="Выгрузить текущие карточки в Excel, поправить и загрузить обратно тем же импортом">⤓ Выгрузить для правки</button>
       <button class="btn" onclick="шаблонИмпортаXlsx('ppl')">⤓ Шаблон для импорта</button>
       <button class="btn" onclick="document.getElementById('imp_ppl').click()">⬆ Импорт из Excel</button>
@@ -355,6 +356,7 @@ function showPerson(id){
   openDrawer(p.фио,`<div class="dbtns">
       <button class="btn primary" onclick="closeDrawer();editReg('ppl','${esc(p.id)}')">✎ Изменить</button>
       <button class="btn danger" onclick="delReg('ppl','${esc(p.id)}')">✕ Удалить</button>
+      <button class="btn" onclick="листУдостоверений({спец:['${esc(p.id)}']})">🪪 Лист удостоверений</button>
     </div>${F("В документах",p.вдок)}${F("Должность",p.должность)}${p.должность_полно?F("Полное наименование должности",p.должность_полно):""}${F("Функции в ЛНК",p.функции)}${F("Стаж по НК с",ru(p.стаж))}
     ${F("Инструктаж по охране труда",(p.инструктаж_дата?ru(p.инструктаж_дата)+" — ":"")+tи)}
     ${F("Обучение по работе в ограниченных и замкнутых пространствах (группа I)",(p.огр_простр_дата?ru(p.огр_простр_дата)+" — ":"")+tо)}

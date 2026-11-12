@@ -716,3 +716,17 @@ details.ещёобмен{margin:0 0 16px}
 details.ещёобмен>summary{cursor:pointer;padding:4px 0;color:var(--ink)}
 details.ещёобмен[open]>summary{margin-bottom:10px}
 @media print{.пинфон{display:none}}
+/* Лист удостоверений (14а, 3.78): лист A4 книжный, полоски по местам в мм */
+.удллисты{display:flex;flex-direction:column;align-items:center;gap:18px;padding:6px 0 20px}
+.удлист{position:relative;width:210mm;height:296mm;background:#fff;box-shadow:var(--shadow);border:1px solid var(--line);overflow:hidden;page:удл}
+.удлист img{position:absolute;display:block;object-fit:fill}
+.удлподпись{position:absolute;left:4mm;bottom:2mm;font-size:11px;color:#777}
+.удлспец{display:flex;flex-wrap:wrap;gap:4px 16px;margin:6px 0}
+.удлспец label{display:flex;gap:5px;align-items:center;font-size:13.5px}
+details.удлвыбор{margin:0 0 10px}
+@page удл{size:A4 portrait;margin:0}
+@media print{
+  .удллисты{display:block;padding:0}
+  .удлист{box-shadow:none;border:0;break-after:page;margin:0}
+  .удлист:last-child{break-after:auto}
+}

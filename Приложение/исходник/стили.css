@@ -221,6 +221,15 @@
   .pill.nonum{background:transparent;color:var(--muted);border:1px dashed var(--line)}
   th.sortable{cursor:pointer;user-select:none}
   th.sortable:hover{color:var(--brand-d);background:var(--brand-soft)}
+  /* Сортировка по заголовкам и отбор во всех списках (код/21а_отбор_списков.js) */
+  th.отбсорт{cursor:pointer;user-select:none}
+  th.отбсорт:hover{color:var(--brand-d);background:var(--brand-soft)}
+  tr.отбстр td{padding:3px 4px;background:var(--panel);border-bottom:1px solid var(--line)}
+  tr.отбстр input,tr.отбстр select{width:100%;min-width:56px;font-size:12px;padding:3px 5px;box-sizing:border-box;
+    border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--ink)}
+  tbody tr.отбскрыт{display:none}
+  .отбитог{font-size:12.5px;margin:6px 2px;color:var(--ink);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  @media print{ tr.отбстр{display:none} .отбитог .btn{display:none} }
 
   /* Пульт */
   .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:14px;margin-bottom:18px}
@@ -712,6 +721,8 @@
 .пинстр{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;line-height:1.35;color:var(--ink);cursor:pointer}
 .пинстр input{width:auto;margin-top:2px}
 .главобмен .btn.big{font-size:15px;padding:10px 18px}
+.главобмен label.флвсе{display:flex;gap:8px;align-items:center;font-size:13px;margin:8px 0 2px;color:var(--ink);cursor:pointer}
+.главобмен label.флвсе input{width:auto;margin:0}
 details.ещёобмен{margin:0 0 16px}
 details.ещёобмен>summary{cursor:pointer;padding:4px 0;color:var(--ink)}
 details.ещёобмен[open]>summary{margin-bottom:10px}

@@ -16,7 +16,7 @@ function рядыПриборов(){
 function renderSi(){
   const rows=рядыПриборов();
   const body=rows.length?rows.map(s=>{const[c,l]=siStatus(s);return`
-    <tr onclick="showSi('${esc(s.id)}')">
+    <tr data-id="${esc(s.id)}" onclick="showSi('${esc(s.id)}')">
       <td class="obj">${esc(s.наименование)}<div class="muted" style="font-size:11.5px">${
         [s.тип,s.категория].filter(Boolean).join(" · ")}</div></td>
       <td class="num">${esc(s.зав)||"—"}</td>
@@ -37,7 +37,7 @@ function renderSi(){
       <input type="file" id="imp_si" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('si',this)">
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button>
       <button class="btn" onclick="renderВыдачаСИ()" title="Ведётся сам: какие приборы применены в записях журнала и когда">▤ Журнал выдачи СИ</button></div>
-    <div class="card"><div class="tblwrap"><table>
+    <div class="card"><div class="tblwrap"><table data-список="si">
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Метод</th><th>Поверка до</th><th>Статус</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>
     ${панельПоверки()}`;

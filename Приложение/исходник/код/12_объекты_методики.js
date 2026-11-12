@@ -8,7 +8,7 @@ function renderPodr(){
   const rows=рядыПодр();
   const body=rows.length?rows.map(x=>{
     const к=контрактыКарточки(x).slice().sort((a,b)=>String(b.год).localeCompare(String(a.год)));
-    return `<tr onclick="editReg('podr','${esc(x.id)}')">
+    return `<tr data-id="${esc(x.id)}" onclick="editReg('podr','${esc(x.id)}')">
       <td class="obj"><b>${esc(x.наименование)}</b></td>
       <td>${esc(x.тип_контракта)||"<span class='muted'>тип не задан</span>"}</td>
       <td class="obj">${esc(x.эксп_организация)||"<span class='muted'>—</span>"}</td>
@@ -32,7 +32,7 @@ function renderPodr(){
     <div class="note noprint">Карточка нужна акту: из неё берутся тип контракта, реквизиты
       контракта на нужный год и подписант со стороны экспертной организации.
       Контракт свой на каждый год — так у вас и заведено.</div>
-    <div class="card"><div class="tblwrap"><table>
+    <div class="card"><div class="tblwrap"><table data-список="podr">
       <thead><tr><th>Подразделение</th><th style="width:180px">Тип контракта</th>
         <th style="width:220px">Экспертная организация</th><th style="width:150px">Руководитель</th>
         <th style="width:150px">Контракты</th></tr></thead>
@@ -152,7 +152,7 @@ function рядыНд(){
 function renderNd(){
   const rows=рядыНд();
   const body=rows.length?rows.map(x=>{const[c,l]=ндСтатус(x);return`
-    <tr onclick="editReg('nd','${esc(x.id)}')">
+    <tr data-id="${esc(x.id)}" onclick="editReg('nd','${esc(x.id)}')">
       <td class="obj">${ссылкаНД(x,esc(x.наименование))}${x.файл?` <span class="muted" title="файл: ${esc(x.файл)}">📄</span>`:""}
         ${x.метод?`<div class="muted" style="font-size:11.5px">${esc(x.метод)}</div>`:""}</td>
       <td class="num">${esc(x.обозначение)||"—"}</td>
@@ -181,7 +181,7 @@ function renderNd(){
       её нет), она только для внутреннего контроля — раз в год стоит сверять список с действующими
       изданиями. Поле «Метод» — необязательное, для фильтра здесь же: у документов общего
       назначения (законы, ФНП, ГОСТы на термины) метод обычно не проставлен, это не ошибка.</div>
-    <div class="card"><div class="tblwrap"><table>
+    <div class="card"><div class="tblwrap"><table data-список="nd">
       <thead><tr><th>Наименование</th><th style="width:120px">Обозначение</th>
         <th style="width:220px">Издательство / разработчик</th><th style="width:110px">Место, год</th>
         <th style="width:140px">Актуальность</th></tr></thead>
@@ -197,7 +197,7 @@ function рядыПом(){
 function renderPremises(){
   const rows=рядыПом();
   const body=rows.length?rows.map(x=>`
-    <tr onclick="editReg('pom','${esc(x.id)}')">
+    <tr data-id="${esc(x.id)}" onclick="editReg('pom','${esc(x.id)}')">
       <td class="obj">${esc(x.идентификация)}</td>
       <td>${esc(x.назначение)||"<span class='muted'>—</span>"}</td>
       <td class="num">${esc(x.площадь)||"—"}</td>
@@ -216,7 +216,7 @@ function renderPremises(){
       <input type="file" id="imp_pom" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('pom',this)">
       <button class="btn" onclick="window.print()">⎙ PDF</button></div>
     <div class="note noprint">Идёт в раздел 10 паспорта ЛНК.</div>
-    <div class="card"><div class="tblwrap"><table>
+    <div class="card"><div class="tblwrap"><table data-список="pom">
       <thead><tr><th>Идентификация</th><th style="width:220px">Назначение</th>
         <th style="width:90px">Площадь</th><th style="width:220px">Инженерные сети</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
@@ -354,7 +354,7 @@ function рядыОбъектов(){
 function renderObjects(){
   const rows=рядыОбъектов();
   const body=rows.length?rows.map(o=>`
-    <tr onclick="showObject('${esc(o.id)}')">
+    <tr data-id="${esc(o.id)}" onclick="showObject('${esc(o.id)}')">
       <td class="obj">${esc(o.наименование)}</td>
       <td class="num">${esc(o.зав)||"—"}</td>
       <td class="num">${esc(o.рег)||"—"}</td>
@@ -373,7 +373,7 @@ function renderObjects(){
       <button class="btn" onclick="document.getElementById('imp_obj').click()">⬆ Импорт из Excel</button>
       <input type="file" id="imp_obj" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('obj',this)">
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
-    <div class="card"><div class="tblwrap"><table>
+    <div class="card"><div class="tblwrap"><table data-список="obj">
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Рег. / уч. №</th><th>Тип / группа</th><th>Расположение</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
   wireSearch(renderObjects);

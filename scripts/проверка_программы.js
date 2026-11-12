@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  48. сортировка по заголовкам и отбор во всех списках, рабочее место специалиста, обмен всегда с файлами.
 //  47. подготовка работ (п. 7): приборы, документы, допуски и измерения на период, исполнитель работы плана-графика.
 //  46. лист удостоверений из полосок-картинок: специалист целиком на листе, ПБ под удостоверениями.
 //  45. ПИН-код на настройки, «Сохранить на флешку» / «Принять» одной кнопкой, копии
@@ -2635,7 +2636,7 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
         switchView("dash"); const пульт = document.getElementById("main").textContent;
         switchView("exchange"); const обмен = document.getElementById("main").textContent;
         return { доПроверки, реестр: ФАЙЛЫ.length, отп: ФАЙЛЫ.every(x => /^[0-9a-f]{64}$/.test(x.отп)), ок: и.ок.length, нет: и.нет.map(x => x.файл),
-          пр, пульт: /файлов документов нет в папке или не те/.test(пульт), обмен: /Нет в папке \(1\)/.test(обмен) && /Обмен с файлами на флешку/.test(обмен),
+          пр, пульт: /файлов документов нет в папке или не те/.test(пульт), обмен: /Нет в папке \(1\)/.test(обмен) && /Сохранить на флешку/.test(обмен) && !/Обмен с файлами на флешку/.test(обмен),
           мимо: реестрыМимоКопии().length, вКопии: Array.isArray(всеДанные().файлы) && всеДанные().файлы.length };
       });
       да(р1.доПроверки === "не проверен" && р1.реестр === 2 && р1.отп && р1.ок === 2,
@@ -3098,6 +3099,152 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       const xl = ф.find(x => /Подготовка работ/.test(x));
       const r = xl ? spawnSync("python3", [path.join(КОРЕНЬ, "scripts", "проверка_xlsx.py"), xl], { encoding: "utf8" }) : { status: 1, stdout: "нет файла" };
       да(р4.ок && r.status === 0, "из календаря — подготовка того же периода; выгрузка в Excel проходит проверка_xlsx.py", JSON.stringify(р4) + " " + (r.stdout || "").slice(0, 200));
+      await m.c.close();
+    }
+
+    раздел("48. Сортировка по заголовкам и отбор во всех списках; рабочее место специалиста; обмен всегда с файлами");
+    {
+      const m = await место(b, "М1"); все.push(m.p); const q = m.p;
+      // Сортировка: возрастание, убывание, как было; пустые всегда внизу
+      await q.evaluate(() => switchView("objects"));
+      const р1 = await q.evaluate(() => {
+        const t = document.querySelector("table[data-список=obj]");
+        const вид = () => [...t.tBodies[0].rows].filter(r => r.style.display !== "none").map(r => r.cells[1].innerText.trim());
+        const исх = вид();
+        const th = t.tHead.rows[0].cells[1];
+        th.click(); const в = вид();
+        th.click(); const у = вид();
+        th.click(); const к = вид();
+        const пустВниз = a => { const i = a.findIndex(x => x === "—"); return i < 0 || a.slice(i).every(x => x === "—"); };
+        const числа = a => a.filter(x => x !== "—" && /^\d+$/.test(x)).map(Number);
+        const возр = a => a.every((x, i) => !i || a[i - 1] <= x);
+        return { возрОк: возр(числа(в)) && пустВниз(в), убывОк: возр(числа(у).reverse()) && пустВниз(у),
+          какБыло: JSON.stringify(к) === JSON.stringify(исх), стрелка: th.innerText.includes("▲") || th.innerText.includes("▼"), процессов: document.querySelectorAll("#main table[data-отб='1']").length };
+      });
+      да(р1.возрОк && р1.убывОк && р1.какБыло && !р1.стрелка, "объекты: щелчок по заголовку — по возрастанию, ещё раз — по убыванию, третий — как было; пустые всегда внизу", JSON.stringify(р1));
+      // Порядок помнится после перезагрузки
+      await q.evaluate(() => { document.querySelector("table[data-список=obj]").tHead.rows[0].cells[0].click(); });
+      await перезагрузить(q);
+      await q.evaluate(() => switchView("objects"));
+      const р2 = await q.evaluate(() => { const t = document.querySelector("table[data-список=obj]");
+        const имена = [...t.tBodies[0].rows].map(r => r.cells[0].innerText.trim().toLowerCase());
+        return { стрелка: t.tHead.rows[0].cells[0].innerText.includes("▲"), сорт: имена.every((x, i) => !i || имена[i - 1].localeCompare(x, "ru", { numeric: true }) <= 0),
+          хранится: !!JSON.parse(ХР.getItem("lnk_list_sort") || "{}").obj, вНастройках: КЛЮЧИ_НАСТРОЕК.includes("lnk_list_sort") && НАСТРОЙКИ_ПЕРЕЕЗДА.includes("lnk_list_sort") }; });
+      да(р2.стрелка && р2.сорт && р2.хранится && р2.вНастройках, "порядок сортировки помнится после перезагрузки (настройка места, едет при переезде)", JSON.stringify(р2));
+      // Отбор: поле «содержит» → Excel, листание и итог над таблицей
+      await q.evaluate(() => { const inp = document.querySelector("table[data-список=obj] .отбстр input[data-i='0']"); inp.value = "теплообменник 273"; inp.dispatchEvent(new Event("input")); });
+      const р3 = await q.evaluate(() => {
+        const t = document.querySelector("table[data-список=obj]");
+        const видно = [...t.tBodies[0].rows].filter(r => r.style.display !== "none" && r.dataset.id).length;
+        const ждём = рядыОбъектов().filter(o => нижеОтб(o.наименование).includes("теплообменник 273")).length;
+        const первая = [...t.tBodies[0].rows].find(r => r.style.display !== "none").dataset.id;
+        const сос = соседиКарточки("obj", первая);
+        const итог = document.querySelector(".отбитог").innerText;
+        return { видно, ждём, листание: сос && сос.всего, итог: /показано\s*12\s*из 305/.test(итог.replace(/\n/g, " ")) };
+      });
+      await q.evaluate(() => exportXlsx());
+      const ф3 = await собратьФайлы(q);
+      const xl3 = ф3.find(x => /Объекты/.test(x));
+      const строк3 = xl3 ? spawnSync("python3", ["-c", "import openpyxl,sys;ws=openpyxl.load_workbook(sys.argv[1]).active;print(ws.max_row)", xl3], { encoding: "utf8" }).stdout.trim() : "";
+      да(р3.видно === 12 && р3.ждём === 12 && р3.листание === 12 && р3.итог && +строк3 >= 13 && +строк3 <= 14,
+        "отбор «содержит»: 12 теплообменников, итог «показано 12 из 305», листание карточек и Excel — по отобранному", JSON.stringify(р3) + " строк в Excel " + строк3);
+      // Перерисовка раздела (поиск) отбор не теряет; сброс
+      await q.evaluate(() => renderObjects());
+      const р4 = await q.evaluate(() => { const t = document.querySelector("table[data-список=obj]");
+        const до = [...t.tBodies[0].rows].filter(r => r.style.display !== "none").length;
+        const поле = t.querySelector(".отбстр input[data-i='0']").value;
+        document.querySelector(".отбитог button").click();
+        const t2 = document.querySelector("table[data-список=obj]");
+        return { до, поле, после: [...t2.tBodies[0].rows].filter(r => r.style.display !== "none").length, всё: РЯДЫ_СПРАВОЧНИКА.obj().length }; });
+      да(р4.до === 12 && р4.поле === "теплообменник 273" && р4.после === 305 && р4.всё === 305, "перерисовка раздела отбор сохраняет; «✕ сбросить отбор» возвращает весь список", JSON.stringify(р4));
+      // Приборы: даты сравниваются как даты; выпадающий список; «!» и «—»; пусто — своя строка
+      await q.evaluate(() => switchView("si"));
+      const р5 = await q.evaluate(() => {
+        const t = document.querySelector("table[data-список=si]");
+        const колонки = [...t.querySelectorAll(".отбстр td")].map(td => td.firstChild ? td.firstChild.tagName : "-");
+        const задать = (i, v) => { const x = t.querySelector(`.отбстр [data-i='${i}']`); x.value = v; x.dispatchEvent(new Event(x.tagName === "SELECT" ? "change" : "input")); };
+        const видно = () => [...t.tBodies[0].rows].filter(r => r.style.display !== "none" && r.dataset.id).map(r => r.dataset.id);
+        задать(3, "<01.01.2026"); const до26 = видно().length;
+        const ждём = рядыПриборов().filter(s => s.поверка_до && s.поверка_до < "2026-01-01").length;
+        задать(3, "—"); const безДаты = видно().length; const ждёмБез = рядыПриборов().filter(s => !s.поверка_до).length;
+        задать(3, "");
+        const стат = t.querySelector(".отбстр select[data-i='4']");
+        const вар = [...стат.options].map(o => o.value);
+        задать(4, "=просрочен"); const просроч = видно().length; const ждёмП = рядыПриборов().filter(s => siStatus(s)[1] === "просрочен").length;
+        задать(4, "");
+        задать(0, "!люксметр"); const безЛюкс = видно().length; const ждёмЛ = рядыПриборов().filter(s => !нижеОтб(s.наименование + " " + [s.тип, s.категория].filter(Boolean).join(" · ")).includes("люксметр")).length;
+        задать(0, "нет такого прибора"); const пусто = !!t.querySelector("tr.отбпусто") && видно().length === 0;
+        задать(0, "");
+        return { колонки, до26, ждём, безДаты, ждёмБез, вар: вар.length, просроч, ждёмП, безЛюкс, ждёмЛ, пусто };
+      });
+      да(р5.колонки[3] === "INPUT" && р5.колонки[4] === "SELECT" && р5.до26 === р5.ждём && р5.до26 > 0 && р5.безДаты === р5.ждёмБез,
+        "даты — полем с «<01.01.2026» (сравнение как дат) и «—» (пусто); немногие значения — выпадающим списком", JSON.stringify(р5));
+      да(р5.просроч === р5.ждёмП && р5.безЛюкс === р5.ждёмЛ && р5.пусто, "выбор значения из списка, «!текст» — не содержит, пустой результат — своя строка", JSON.stringify(р5));
+      // Не трогает: журнал и задачи (свои отборы), листы документов, карту работ
+      const р6 = await q.evaluate(() => {
+        const отб = в => { switchView(в); return [...document.querySelectorAll("#main table")].map(t => t.dataset.отб || "нет"); };
+        return { journal: отб("journal"), passport: [...new Set(отб("passport"))], dash: отб("dash"), vibro: отб("vibro"), pg: отб("pg"), docs: отб("docs") };
+      });
+      await q.waitForTimeout(50);
+      const р6б = await q.evaluate(() => ({ docs: [...document.querySelectorAll("#main table")].map(t => t.dataset.отб) }));
+      да(р6.journal.every(x => x !== "1") && р6.passport.every(x => x !== "1") && р6.dash.every(x => x !== "1"),
+        "журнал (свои фильтры), паспорт и карта работ на пульте не затронуты", JSON.stringify(р6));
+      да(р6б.docs.includes("1"), "реестр актов, карточки вибрации, планы-графики — сортируются и отбираются", JSON.stringify(р6б));
+      // Печать: строка отбора не печатается, итог отбора печатается
+      await q.evaluate(() => switchView("objects"));
+      await q.waitForTimeout(50);
+      await q.evaluate(() => { const inp = document.querySelector("table[data-список=obj] .отбстр input[data-i='0']"); inp.value = "баллон"; inp.dispatchEvent(new Event("input")); });
+      await q.emulateMedia({ media: "print" });
+      const р7 = await q.evaluate(() => ({ строка: getComputedStyle(document.querySelector(".отбстр")).display, итог: getComputedStyle(document.querySelector(".отбитог")).display }));
+      await q.emulateMedia({ media: "screen" });
+      да(р7.строка === "none" && р7.итог !== "none", "в печати строки отбора нет, итог «Отбор: … показано N из M» есть", JSON.stringify(р7));
+      // Рабочее место специалиста → задача
+      const р8 = await q.evaluate(() => {
+        saveWS({ код: "М1", мастер: false, начальник: true });
+        const [А, Б] = live(P);
+        editReg("ppl", А.id);
+        const сел = document.getElementById("rf_рабочее_место");
+        const вар = сел ? [...сел.options].map(o => o.value) : [];
+        сел.value = "М3"; saveRegRec("ppl", А.id);
+        const сохр = P.find(x => x.id === А.id).рабочее_место;
+        Б.рабочее_место = ""; saveReg(REG_PPL, P);
+        editTask(null);
+        const исп = document.getElementById("t_исполнитель");
+        исп.value = А.вдок || А.фио; исп.dispatchEvent(new Event("change"));
+        const подставлено = document.getElementById("t_место").value;
+        исп.value = Б.вдок || Б.фио; исп.dispatchEvent(new Event("change"));
+        const безМеста = document.getElementById("t_место").value;
+        const подск = document.getElementById("t_местоПодсказ").textContent;
+        исп.value = А.вдок || А.фио; исп.dispatchEvent(new Event("change"));
+        document.getElementById("t_место").value = "М5";
+        document.getElementById("t_что").value = "Проверить место";
+        saveTask("");
+        const з = ЗАД.find(x => x.что === "Проверить место");
+        switchView("people");
+        const вСписке = document.getElementById("main").textContent.includes("М3");
+        return { вар, сохр, подставлено, безМеста, подск: /не указано/.test(подск), место: з && з.место, исп: з && з.исполнитель, вСписке,
+          поСпец: местоСпециалиста(А.вдок || А.фио), служ: полеНаСлужебномКлюче ? полеНаСлужебномКлюче().length : 0 };
+      });
+      да(р8.вар.includes("М1") && р8.вар.includes("М6") && р8.сохр === "М3" && р8.вСписке, "у специалиста поле «Рабочее место» — выбор кода места, видно в списке", JSON.stringify(р8));
+      да(р8.подставлено === "М3" && р8.безМеста === "М3" && р8.подск && р8.место === "М5", "в задаче выбор исполнителя подставляет его место, поле правится и сохраняется как вписано", JSON.stringify(р8));
+      // Обмен: одна кнопка — всегда с файлами
+      const р9 = await q.evaluate(async () => {
+        switchView("exchange");
+        const т = document.getElementById("main").innerHTML;
+        const былоВП = выгрузитьВПапку, былоВФ = выбратьФлешку; let опц = null;
+        window.выбратьФлешку = async () => ({ name: "флешка", getFileHandle: async () => { throw new Error("нет"); } });
+        window.выгрузитьВПапку = async (ц, о) => { опц = о; return "ок"; };
+        const былоНВ = найтиВерсиюПрограммы; window.найтиВерсиюПрограммы = async () => null;
+        const ал = window.alert; window.alert = () => {};
+        document.getElementById("флВсе").checked = true; await сохранитьНаФлешку(); const о1 = опц;
+        document.getElementById("флВсе").checked = false; await сохранитьНаФлешку(); const о2 = опц;
+        window.alert = ал; window.выгрузитьВПапку = былоВП; window.выбратьФлешку = былоВФ; window.найтиВерсиюПрограммы = былоНВ;
+        return { безФайлов: /exchangeExport\(\)|Выгрузить всё|Обмен с файлами на флешку|…со всеми файлами/.test(т),
+          главная: /Сохранить на флешку/.test(т) && /Принять…/.test(т) && /Принять отдельный файл/.test(т), флажок: !!/id="флВсе"/.test(т),
+          о1: о1 && о1.все && о1.копия, о2: о2 && !о2.все && о2.копия, вЕщё: /Вся база в Excel/.test(т) };
+      });
+      да(!р9.безФайлов && р9.главная && р9.флажок && р9.вЕщё, "«Обмен»: отдельных кнопок обмена без файлов нет; «Сохранить на флешку», «Принять…», «Принять отдельный файл…»", JSON.stringify(р9));
+      да(р9.о1 && р9.о2, "«Сохранить на флешку» всегда с копией и файлами; флажок «все файлы» — все документы, без него — недостающие у других мест", JSON.stringify(р9));
       await m.c.close();
     }
 

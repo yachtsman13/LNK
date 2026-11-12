@@ -37,6 +37,7 @@ function sortPeople(c){
 function peopleSortKey(p,c){
   switch(c){
     case "должность": return p.должность||"";
+    case "место": return p.рабочее_место||"";
     case "функции": return p.функции||"";
     case "стаж": return p.стаж||"";
     case "инструктаж": return инструктажДо(p.инструктаж_дата)||"";
@@ -98,9 +99,10 @@ function renderPeople(){
     const[cо,tо]=срокОгрПространств(p); const[cэ,tэ]=срокЭлектробез(p);
     const[cп,tп]=срокПожбез(p); const[cб,tб]=срокПБ(p); const[c1,t1]=срокА1(p);
     const[cа,tа]=ближайшаяАттестация(p); const[cк,tк]=ближайшаяКлассность(p); return `
-    <tr onclick="showPerson('${esc(p.id)}')">
+    <tr data-id="${esc(p.id)}" onclick="showPerson('${esc(p.id)}')">
       <td class="obj" style="width:${шФИО}px;min-width:0">${esc(p.вдок||p.фио)}</td>
       <td>${esc(p.должность)||"—"}</td>
+      <td>${esc(p.рабочее_место)||"<span class='muted'>—</span>"}</td>
       <td>${esc(p.функции)||"<span class='muted'>—</span>"}</td>
       <td class="num">${esc(ru(p.стаж))||"—"}</td>
       <td><span class="st ${cи}">${esc(tи)}</span></td>
@@ -111,14 +113,14 @@ function renderPeople(){
       <td><span class="st ${c1}">${t1==="не требуется"?"<span class='muted'>—</span>":esc(t1)}</span></td>
       <td><span class="st ${cа}">${esc(tа)}</span></td>
       <td><span class="st ${cк}">${esc(tк)}</span></td>
-    </tr>`;}).join("")||`<tr><td colspan="12" class="empty">Список пуст.</td></tr>`;
+    </tr>`;}).join("")||`<tr><td colspan="13" class="empty">Список пуст.</td></tr>`;
   const годТек=new Date().getFullYear();
   const годы=[годТек, годТек+1, годТек+2, годТек+3];
   const прогноз=прогнозРяды(аттПрогноз.год);
   const прстр=c=>прогСорт.c===c?(прогСорт.d===1?" ▲":" ▼"):"";
   const пth=(c,l)=>`<th class="sortable" onclick="sortПрогноз('${c}')">${l}${прстр(c)}</th>`;
-  const прогнозТело=прогноз.length ? прогноз.map(з=>`
-    <tr><td class="obj">${esc(з.специалист.вдок||з.специалист.фио)}</td>
+  const прогнозТело=прогноз.length ? прогноз.map((з,i)=>`
+    <tr data-id="${i}"><td class="obj">${esc(з.специалист.вдок||з.специалист.фио)}</td>
       <td>${esc(з.метод)}</td><td>${esc(з.уровень)||"<span class='muted'>—</span>"}</td>
       <td>${esc(з.вид)||"<span class='muted'>—</span>"}</td>
       <td class="num">${з.до?ru(з.до):"<span class='muted'>—</span>"}${з.пометка?`<div class="прогпометка">${esc(з.пометка)}</div>`:""}</td>
@@ -136,8 +138,8 @@ function renderPeople(){
       <button class="btn" onclick="document.getElementById('imp_ppl').click()">⬆ Импорт из Excel</button>
       <input type="file" id="imp_ppl" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('ppl',this)">
       <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
-    <div class="card"><div class="tblwrap"><table>
-      <thead><tr>${th("фио","ФИО",` style="width:${шФИО}px"`)}${th("должность","Должность")}${th("функции","Функции в ЛНК")}${th("стаж","Стаж с")}${th("инструктаж","Инструктаж ОТ")}
+    <div class="card"><div class="tblwrap"><table data-список="ppl">
+      <thead><tr>${th("фио","ФИО",` style="width:${шФИО}px"`)}${th("должность","Должность")}${th("место","Место")}${th("функции","Функции в ЛНК")}${th("стаж","Стаж с")}${th("инструктаж","Инструктаж ОТ")}
         ${th("огрпр","Огр. пространства")}${th("электробез","Электробезопасность")}${th("пожбез","Пожарная безопасность")}${th("пб","Проверка знаний ПБ")}${th("а1","Аттестация А.1")}
         ${th("аттестация","Ближайшая аттестация")}${th("классность","Классность")}</tr></thead>
       <tbody>${body}</tbody></table></div></div>
@@ -146,7 +148,7 @@ function renderPeople(){
         <div class="spring"></div>
         ${годы.map(г=>`<button class="btn ${г===аттПрогноз.год?"on":""}" onclick="setАттПрогнозГод(${г})">${г}</button>`).join("")}
         <button class="btn" onclick="exportПрогнозАттестации()">⤓ Excel</button></div>
-      <div class="tblwrap"><table>
+      <div class="tblwrap"><table data-список="прогноз">
         <thead><tr>${пth("фио","ФИО")}${пth("метод","Метод")}${пth("уровень","Уровень")}${пth("вид","Вид текущей")}${пth("до","Действует до")}${пth("действие","Что нужно")}</tr></thead>
         <tbody>${прогнозТело}</tbody></table></div>
       <div class="note" style="margin:8px 12px 12px">После «Первичная» и «Повторная» — продление (правило заказчика:
@@ -357,7 +359,7 @@ function showPerson(id){
       <button class="btn primary" onclick="closeDrawer();editReg('ppl','${esc(p.id)}')">✎ Изменить</button>
       <button class="btn danger" onclick="delReg('ppl','${esc(p.id)}')">✕ Удалить</button>
       <button class="btn" onclick="листУдостоверений({спец:['${esc(p.id)}']})">🪪 Лист удостоверений</button>
-    </div>${F("В документах",p.вдок)}${F("Должность",p.должность)}${p.должность_полно?F("Полное наименование должности",p.должность_полно):""}${F("Функции в ЛНК",p.функции)}${F("Стаж по НК с",ru(p.стаж))}
+    </div>${F("В документах",p.вдок)}${F("Должность",p.должность)}${F("Рабочее место",p.рабочее_место)}${p.должность_полно?F("Полное наименование должности",p.должность_полно):""}${F("Функции в ЛНК",p.функции)}${F("Стаж по НК с",ru(p.стаж))}
     ${F("Инструктаж по охране труда",(p.инструктаж_дата?ru(p.инструктаж_дата)+" — ":"")+tи)}
     ${F("Обучение по работе в ограниченных и замкнутых пространствах (группа I)",(p.огр_простр_дата?ru(p.огр_простр_дата)+" — ":"")+tо)}
     ${F("Экзамен по электробезопасности",(p.эл_безоп_дата?ru(p.эл_безоп_дата)+" — ":"")+tэ)}

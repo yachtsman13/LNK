@@ -41,7 +41,7 @@ function листРеестраАктов(акты){
   return {имя:"Реестр актов", колонки, строки, пусто:!р.ряды.length};
 }
 function exportРеестрАктов(){
-  const л=листРеестраАктов(актыПоказанные());
+  const л=листРеестраАктов(какНаЭкране("akty",актыПоказанные(),g=>g.ключ));
   if(л.пусто){ toast("Актов не найдено — выгружать нечего"); return; }
   xlsxФайл("Реестр актов "+сегодня()+".xlsx",[л]);
   toast("Реестр выгружен: актов "+л.строки.length);
@@ -106,7 +106,7 @@ function renderDocs(){
     const zs=g.записи, дата=zs.map(z=>z.дата).filter(Boolean).sort();
     const мет=спискиАкта(zs);
     const ждут=zs.filter(ждётНомеров).length;
-    return `<tr onclick="renderAkt('${esc(g.ключ)}')">
+    return `<tr data-id="${esc(g.ключ)}" onclick="renderAkt('${esc(g.ключ)}')">
       <td class="num">${esc(номерАкта(g.ключ))}</td>
       <td class="num">${ru(дата[0])}${дата.length>1&&дата[дата.length-1]!==дата[0]?(" – "+ru(дата[дата.length-1])):""}</td>
       <td class="num">${zs.length}</td>
@@ -132,7 +132,7 @@ function renderDocs(){
       <button class="btn small" onclick="журналОтбор('докум','без')">ждут номера <b>${бн}</b></button>
       <button class="btn small" onclick="журналОтбор('докум','нужно')">без заключения <b>${бз}</b></button>
     </div>
-    <div class="card"><div class="tblwrap"><table>
+    <div class="card"><div class="tblwrap"><table data-список="akty">
       <thead><tr><th style="width:90px">№ акта</th><th style="width:110px">Дата</th><th style="width:70px">Объектов</th><th>Объект контроля</th><th>Документы</th></tr></thead>
       <tbody>${bodyА}</tbody>
     </table></div></div>`;

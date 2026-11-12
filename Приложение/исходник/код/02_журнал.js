@@ -218,7 +218,7 @@ function renderJournal(){
         `<span class="fnote">заголовок таблицы — сортировка по клику</span>`}
     </div>
     ${блокМассовойПравки()}
-    <div class="card"><div class="tblwrap"><table>
+    <div class="card"><div class="tblwrap"><table data-отбор="нет">
       <thead><tr><th class="noprint жчб"><input type="checkbox" ${всеПоказаны?"checked":""}
         onchange="жОтметитьПоказанные(this.checked)" title="Отметить все показанные записи"></th>
         <th class="pnum">№</th>${th("акт","№ акта")}${th("дата","Дата")}${th("объект","Объект контроля")}${th("методы","Методы")}${th("исп","Исполнители")}${th("статус","Статус")}</tr></thead>

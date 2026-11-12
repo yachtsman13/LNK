@@ -193,7 +193,7 @@ function renderВибрация(){
   const счёт=у=>сост.filter(с=>с.ур===у).length;
   const body=сост.length?сост.map(с=>{ const к=с.к, подр=найтиПоИд(live(ПОДР),к.подразделение);
     const мх=с.посл?макЗамера(с.посл,к):null;
-    return `<tr onclick="открытьКартуВибрации('${esc(к.id)}')">
+    return `<tr data-id="${esc(к.id)}" onclick="открытьКартуВибрации('${esc(к.id)}')">
       <td class="num">${esc(к.номер)}</td>
       <td>${esc(к.группа)||"<span class='muted'>—</span>"}</td>
       <td class="obj">${esc(заголовокКарты(к))||"<span class='muted'>—</span>"}${к.место_установки?`<div class="muted" style="font-size:11.5px">${esc(к.место_установки)}</div>`:""}</td>
@@ -211,8 +211,8 @@ function renderВибрация(){
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('vk','')">+ Карточка</button>
       <button class="btn" onclick="switchView('vibronorm')">Нормы вибрации</button>
-      <button class="btn" onclick="печатьКартВибрации(рядыКартВибр().map(к=>к.id))" title="Все показанные карточки, каждая на своём листе">⎙ Печать карточек</button>
-      <button class="btn" onclick="exportКартыВибрации(рядыКартВибр().map(к=>к.id))" title="Каждая карточка — свой лист книги">▤ Карточки в Excel</button>
+      <button class="btn" onclick="печатьКартВибрации(какНаЭкране('vk',рядыКартВибр()).map(к=>к.id))" title="Все показанные карточки, каждая на своём листе">⎙ Печать карточек</button>
+      <button class="btn" onclick="exportКартыВибрации(какНаЭкране('vk',рядыКартВибр()).map(к=>к.id))" title="Каждая карточка — свой лист книги">▤ Карточки в Excel</button>
       <button class="btn" onclick="выгрузкаДляПравки('vk')" title="Основные данные карточек — выгрузить, поправить в Excel и загрузить обратно">⤓ Выгрузить для правки</button>
       <button class="btn" onclick="document.getElementById('imp_vk').click()">⬆ Импорт из Excel</button>
       <input type="file" id="imp_vk" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('vk',this)"></div>
@@ -222,7 +222,7 @@ function renderВибрация(){
       <div class="tile ${счёт("прог")?"warn":""}"><div class="n">${счёт("прог")}</div><div class="l">возможное превышение в ${горизонтВибр()} дн.</div></div>
       <div class="tile"><div class="n">${счёт("нет")+счёт("непред")}</div><div class="l">без замеров или без предела</div></div>
     </div>
-    <div class="card"><div class="tblwrap"><table>
+    <div class="card"><div class="tblwrap"><table data-список="vk">
       <thead><tr><th style="width:80px">№</th><th style="width:120px">Группа</th><th>Оборудование</th>
         <th style="width:180px">Подразделение</th><th style="width:110px">Последний замер</th>
         <th style="width:120px">Наиб. СКЗ / предел, мм/с</th><th style="width:210px">Состояние</th></tr></thead>
@@ -487,11 +487,11 @@ function renderНормыВибр(){
     <div class="note noprint">Предельные значения вибрации — по действующим ГОСТам (указание заказчика). Числа вносятся по
       тексту стандарта: полных текстов у меня нет, поэтому я их сюда не вписываю сам. Норма, у которой не отмечено
       «сверено с текстом документа», работает, но в карточке и в «Проверке данных» помечена.</div>
-    <div class="card"><div class="tblwrap"><table>
+    <div class="card"><div class="tblwrap"><table data-список="vn">
       <thead><tr><th>Оборудование</th><th style="width:170px">Документ, пункт</th><th style="width:100px">Опора</th>
         <th style="width:80px">Ввод, мм/с</th><th style="width:110px">Предупреждение, мм/с</th><th style="width:100px">Предельное, мм/с</th>
         <th style="width:110px">Сверено</th><th style="width:80px">Карточек</th></tr></thead>
-      <tbody>${ряды.length?ряды.map(x=>`<tr onclick="editReg('vn','${esc(x.id)}')">
+      <tbody>${ряды.length?ряды.map(x=>`<tr data-id="${esc(x.id)}" onclick="editReg('vn','${esc(x.id)}')">
         <td class="obj">${esc(x.оборудование)}</td><td>${esc([x.документ,x.пункт].filter(Boolean).join(", "))}</td>
         <td>${esc(x.тип_опоры)}</td><td class="num">${чВ(x.ввод)}</td><td class="num">${чВ(x.предупреждение)}</td>
         <td class="num">${чВ(x.предел)}</td><td>${x.сверено?`<span class="st ok">да</span>`:`<span class="st warn">нет</span>`}</td>

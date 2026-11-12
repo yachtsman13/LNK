@@ -622,10 +622,10 @@ function editTask(id, заготовка){
       </div>`:""}
       ${з&&з.причина_возврата?`<div class="draftnote">Возвращена на доработку: ${esc(з.причина_возврата)}</div>`:""}
       ${з?блокЗаметок(з):""}
-      <div class="formbtns">
+      <div class="formbtns закреп">
         ${(!з||я)?`<button class="btn primary" onclick="saveTask('${з?esc(з.id):""}')">✓ Сохранить</button>`:""}
         ${з?действияЗадачи(з,я,мой):""}
-        <button class="btn" onclick="switchView('tasks')">Отмена</button>
+        ${кнопкаНазад('tasks')}
         ${з&&я?`<button class="btn danger" style="margin-left:auto" onclick="delTask('${esc(з.id)}')">Удалить</button>`:""}
       </div>
       ${з?`<div class="note">Поставил: ${esc(пост)} · создана ${ru(String(з.создано||"").slice(0,10))}

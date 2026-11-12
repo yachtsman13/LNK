@@ -358,9 +358,9 @@ function editЗамерВибр(картаИд, замерИд){
         <label>Иная причина<input id="вб_иное" value="${v(з&&з.причина_иное)}"></label>
       </div>
       <label class="wide">Примечание<textarea id="вб_примечание">${v(з&&з.примечание)}</textarea></label>
-      <div class="formbtns">
+      <div class="formbtns закреп">
         <button class="btn primary" onclick="saveЗамерВибр()">✓ Сохранить</button>
-        <button class="btn" onclick="формаСохранена();открытьКартуВибрации('${esc(к.id)}')">Отмена</button>
+        ${кнопкаНазад('vibrocard',`if(уходСФормы())открытьКартуВибрации('${esc(к.id)}')`)}
         ${з?`<button class="btn danger" style="margin-left:auto" onclick="delЗамерВибр('${esc(з.id)}')">✕ Удалить</button>`:""}
       </div>${з?блокИстории(REG_ВИБИ,з.id):""}</div></div>`;
   замерОценить();

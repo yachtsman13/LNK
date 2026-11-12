@@ -333,9 +333,9 @@ function editMetodika(м){
           (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
       </div>
 
-      <div class="formbtns">
+      <div class="formbtns закреп">
         <button class="btn primary" onclick="saveMetodika('${esc(м)}')">✓ Сохранить</button>
-        <button class="btn" onclick="switchView('metod')">Отмена</button>
+        ${кнопкаНазад('metod')}
       </div>
       ${блокИстории(REG_МЕТОДИКИ,ОДИНОЧНЫЕ[REG_МЕТОДИКИ].ид,путь=>путь.split(".")[0]===м)}
     </div></div>`;

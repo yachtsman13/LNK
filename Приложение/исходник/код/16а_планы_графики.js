@@ -384,9 +384,9 @@ function editПГП(id, пгИд){
         когда именно. ${вд?"«По периодичности» ставит месяцы так же, как формулы книги ВД: первый месяц, дальше через "+
         "12 × периодичность месяцев до конца года.":""}</div>
       ${отм?`<div class="note">Отметок о выполнении у позиции: ${отм}. Убранный месяц отметку не удаляет — она вернётся вместе с месяцем.</div>`:""}
-      <div class="formbtns">
+      <div class="formbtns закреп">
         <button class="btn primary" onclick="saveПГП(${п?`'${esc(п.id)}'`:"null"})">✓ Сохранить</button>
-        <button class="btn" onclick="switchView('pg')">Отмена</button>
+        ${кнопкаНазад('pg')}
         ${п?`<button class="btn danger" style="margin-left:auto" onclick="delПГП('${esc(п.id)}')">✕ Удалить</button>`:""}
       </div>
       ${п?блокИстории(REG_ПГП,п.id):""}
@@ -458,9 +458,9 @@ function editПГ(id){
       </div>
       <div class="note">Заголовок документа строится сам: «ПЛАН-ГРАФИК проведения работ ${г?esc(названиеПГ(г)):"по … контролю на ГГГГ г."}».
         ${г?"":"По образцу переносятся наименования, подразделения, количество, методы, периодичность и карточки вибрации; отметки о выполнении — нет."}</div>
-      <div class="formbtns">
+      <div class="formbtns закреп">
         <button class="btn primary" onclick="saveПГ(${г?`'${esc(г.id)}'`:"null"})">✓ Сохранить</button>
-        <button class="btn" onclick="switchView('pg')">Отмена</button>
+        ${кнопкаНазад('pg')}
         ${г?`<button class="btn danger" style="margin-left:auto" onclick="delПГ('${esc(г.id)}')">✕ Удалить план-график</button>`:""}
       </div>
       ${г?блокИстории(REG_ПГ,г.id):""}

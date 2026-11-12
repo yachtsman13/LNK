@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  54. кнопки форм на виду: полоса у низа окна, «← Назад» с местом, пометка несохранённого, печать.
 //  53. вход по паролю: права у человека, временный пароль, автовыход, «кто правил», обмен, ПИН убран.
 //  52. файлы по папкам (свидетельства, документы приборов, НД, СМ, архив), система менеджмента, предложения, окно прибора, логотип.
 //  51. бирки по результатам поверки: размеры и кегль по образцу, ответственный за эксплуатацию, Word.
@@ -3773,6 +3774,97 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       да(!р9.вкл && !р9.окно && р9.пр.some(x => /^внимание:Вход по паролю выключен аварийно на месте М2/.test(x)),
         "«Все руководители забыли пароль» — вход выключается, но не тихо: «внимание» в «Проверке данных»", JSON.stringify(р9));
       await m1.c.close(); await m2.c.close();
+    }
+
+    раздел("54. Кнопки форм на виду: полоса у низа окна, «← Назад» с местом, пометка несохранённого");
+    {
+      const m = await место(b, "М1"); все.push(m.p);
+      const q = m.p;
+      // Все страницы правки — с прилипающей полосой
+      const ф = await q.evaluate(() => {
+        const пр = (имя, f) => { формаСохранена(); _возвратВПроверку = false; f(); const п = document.querySelectorAll("#main .formbtns.закреп");
+          return [имя, п.length, п.length ? getComputedStyle(п[0]).position : "", п.length ? (п[0].querySelector(".назад") || {}).textContent || "" : ""]; };
+        const z = live(J).find(x => x.методы && x.методы.ВИК && x.методы.ВИК.н);
+        const si = live(S)[0], пг = live(ПГП)[0], ппр = позицииППР()[0];
+        const out = [
+          пр("запись", () => editJournal(z.id)), пр("повтор", () => размножитьОткрыть(z.id)),
+          ...["obj", "si", "ppl", "podr", "nd", "pom", "vk", "vn", "smk", "idea"].map(k => пр(k, () => editReg(k, (REGS[k].arr().filter(x => !x.удалено)[0] || {}).id || null))),
+          пр("задача", () => editTask(null)), пр("ппр", () => editППР(ппр.id)), пр("позиция ПГ", () => editПГП(пг.id)), пр("новый ПГ", () => editПГ(null)),
+          пр("лаборатория", () => switchView("lab")), пр("методика", () => editMetodika("ВИК")), пр("части", () => частиСпискомОткрыть(si.id)),
+          пр("замер", () => editЗамерВибр(live(ВИБК)[0].id, null)),
+          пр("протокол", () => { editJournal(z.id); открытьПротокол(z.id, "ВИК"); })];
+        формаСохранена(); switchView("dash");
+        return out;
+      });
+      const без = ф.filter(x => x[1] !== 1 || x[2] !== "sticky");
+      да(без.length === 0, "все 21 страница правки — с одной прилипающей полосой кнопок", JSON.stringify(без));
+      const подп = Object.fromEntries(ф.map(x => [x[0], x[3]]));
+      да(подп.запись === "← к журналу" && подп.si === "← к приборам" && подп.ppl === "← к специалистам" && подп.повтор === "← к записи" &&
+        подп.протокол === "← к записи" && подп.замер === "← к карточке вибрации" && подп.части === "← к приборам" && подп.лаборатория === "",
+        "«← Назад» называет, куда ведёт (у карточки лаборатории — раздел меню, кнопки нет)", JSON.stringify(подп));
+      const р0 = await q.evaluate(() => { _возвратВПроверку = true; editReg("si", live(S)[0].id);
+        const т = document.querySelector("#main .formbtns.закреп .назад").textContent; формаСохранена(); _возвратВПроверку = false; switchView("dash"); return т; });
+      да(р0 === "← в проверку данных", "открыта из «Проверки данных» — «← в проверку данных»", р0);
+      // Длинная форма специалиста: полоса в окне при прокрутке с начала
+      await q.evaluate(() => { editReg("ppl", live(P)[0].id); document.getElementById("main").scrollTop = 0; });
+      await q.waitForTimeout(50);
+      const р1 = await q.evaluate(() => {
+        const м = document.getElementById("main"), п = м.querySelector(".formbtns.закреп"), к = п.querySelector(".btn.primary");
+        const мr = м.getBoundingClientRect(), пr = п.getBoundingClientRect(), кr = к.getBoundingClientRect();
+        const над = document.elementFromPoint(кr.left + кr.width / 2, кr.top + кr.height / 2);
+        return { длинная: м.scrollHeight > м.clientHeight + 300, вОкне: пr.top >= мr.top && пr.bottom <= мr.bottom + 1, уНиза: мr.bottom - пr.bottom,
+          кнопка: над === к || к.contains(над), пометка: getComputedStyle(п, "::before").content };
+      });
+      да(р1.длинная && р1.вОкне && р1.уНиза < 30 && р1.кнопка && р1.пометка === "none",
+        "форма длиннее окна: полоса у нижнего края окна, «Сохранить» не перекрыта, пометки нет", JSON.stringify(р1));
+      // Ввод — пометка; прокрутка до конца — полоса на своём месте и не закрывает поля
+      await q.type("#rf_должность", " (правка)");
+      await q.waitForTimeout(50);
+      const р2 = await q.evaluate(() => {
+        const м = document.getElementById("main"); м.scrollTop = м.scrollHeight;
+        const п = м.querySelector(".formbtns.закреп"), пр = п.previousElementSibling;
+        return { пометка: getComputedStyle(п, "::before").content, грязно: _несохранено,
+          неЗакрывает: !пр || пр.getBoundingClientRect().bottom <= п.getBoundingClientRect().top + 1 };
+      });
+      да(/несохранённые изменения/.test(р2.пометка) && р2.грязно && р2.неЗакрывает,
+        "после ввода — «есть несохранённые изменения»; в конце формы полоса не заходит на поля", JSON.stringify(р2));
+      // Флаг, поставленный кодом напрямую (добавление строки), тоже видно
+      await q.evaluate(() => { формаСохранена(); });
+      await q.waitForTimeout(400);
+      const р3a = await q.evaluate(() => getComputedStyle(document.querySelector("#main .formbtns.закреп"), "::before").content);
+      await q.evaluate(() => { _несохранено = true; });
+      await q.waitForTimeout(400);
+      const р3b = await q.evaluate(() => getComputedStyle(document.querySelector("#main .formbtns.закреп"), "::before").content);
+      да(р3a === "none" && /несохранённые/.test(р3b), "пометка следует за флагом, поставленным кодом (не только вводом)", р3a + " / " + р3b);
+      // «Сохранить» из полосы: сохраняет, уходит в список без вопроса
+      await q.evaluate(() => { document.getElementById("main").scrollTop = 0; document.getElementById("rf_должность").value += " (правка)"; _несохранено = true; });
+      await q.click("#main .formbtns.закреп .btn.primary");
+      const р4 = await q.evaluate(() => ({ вид: curView, долж: live(P)[0].должность, грязно: _несохранено }));
+      да(р4.вид === "people" && /\(правка\)/.test(р4.долж) && !р4.грязно, "«✓ Сохранить» в полосе сохраняет и возвращает в список", JSON.stringify(р4));
+      // «← Назад» с несохранённым — вопрос; отказ оставляет в форме
+      await q.evaluate(() => { editReg("si", live(S)[0].id); document.getElementById("rf_тип").value = "Т-1"; _несохранено = true; });
+      m.p.отказ = true;
+      await q.click("#main .formbtns.закреп .назад");
+      m.p.отказ = false;
+      const р5 = await q.evaluate(() => ({ вид: curView, тип: document.getElementById("rf_тип") && document.getElementById("rf_тип").value }));
+      await q.click("#main .formbtns.закреп .назад");
+      const р5b = await q.evaluate(() => curView);
+      да(р5.вид === "regedit" && р5.тип === "Т-1" && р5b === "si", "«← Назад» при несохранённом спрашивает: отказ — в форме с введённым, согласие — в список", JSON.stringify([р5, р5b]));
+      // Узкое окно — кнопки переносятся, не выходят за край; печать — полосы нет
+      await q.setViewportSize({ width: 620, height: 800 });
+      const р6 = await q.evaluate(() => { editJournal(live(J)[0].id);
+        const п = document.querySelector("#main .formbtns.закреп");
+        return { вмещ: п.scrollWidth <= п.clientWidth + 1, строк: new Set([...п.children].map(x => Math.round(x.getBoundingClientRect().top))).size }; });
+      await q.setViewportSize({ width: 1400, height: 900 });
+      await q.emulateMedia({ media: "print" });
+      const р7 = await q.evaluate(() => getComputedStyle(document.querySelector("#main .formbtns.закреп")).display);
+      await q.emulateMedia({ media: "screen" });
+      да(р6.вмещ && р6.строк >= 2 && р7 === "none", "узкое окно — кнопки во вторую строку, в печать полоса не идёт", JSON.stringify([р6, р7]));
+      // Ctrl+S в бланке протокола — кнопка полосы
+      await q.evaluate(() => { формаСохранена(); const z = live(J).find(x => x.методы && x.методы.ВИК && x.методы.ВИК.н); открытьПротокол(z.id, "ВИК"); });
+      const р8 = await q.evaluate(() => ({ шапка: !!document.querySelector("#main .head .btn.primary"), полоса: !!document.querySelector("#main .formbtns.закреп .btn.primary") }));
+      да(!р8.шапка && р8.полоса, "бланк протокола: «Сохранить», «Назад», «Заполнить заново» — в полосе снизу", JSON.stringify(р8));
+      await q.evaluate(() => { формаСохранена(); switchView("dash"); });
     }
 
     раздел("Ошибки на страницах");

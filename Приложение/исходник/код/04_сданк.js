@@ -501,7 +501,7 @@ function renderLab(){
         </div>`).join("")}
       <button class="btn small" type="button" onclick="допПлюс()">+ Сведение</button>
 
-      <div class="formbtns"><button class="btn primary" onclick="saveЛабИзФормы()">✓ Сохранить</button></div>
+      <div class="formbtns закреп"><button class="btn primary" onclick="saveЛабИзФормы()">✓ Сохранить</button></div>
       ${блокИстории(REG_ЛАБ,ОДИНОЧНЫЕ[REG_ЛАБ].ид)}
     </div></div>
     ${блокВхода()}`;

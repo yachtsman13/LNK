@@ -683,8 +683,8 @@ function частиСпискомОткрыть(ид){
       <label class="wide">По одному в строке (можно вставить столбец из Excel) или через «;» и запятую
         <textarea id="чс_номера" rows="8" oninput="частиПредпросмотр()" placeholder="7678&#10;7679&#10;7680"></textarea></label>
       <div id="чс_итог" style="margin:8px 0 4px;font-size:13px;line-height:1.5"></div>
-      <div class="formbtns"><button class="btn primary" onclick="частиСоздать()">✓ Добавить части</button>
-        <button class="btn" onclick="switchView('si')">Отмена</button></div>
+      <div class="formbtns закреп"><button class="btn primary" onclick="частиСоздать()">✓ Добавить части</button>
+        ${кнопкаНазад('si')}</div>
       ${есть.length?`<div class="hint" style="margin-top:14px">Уже заведено частей у этого прибора: ${есть.length}
         (${esc(есть.map(ч=>ч.зав||"без номера").join(", "))}).</div>`:""}
     </div></div>`;

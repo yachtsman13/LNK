@@ -304,9 +304,9 @@ function editППР(id){
         Проверка разметки против периодичности — в «Проверке данных».</div>
       ${отм?`<div class="note">У позиции ${отм} ${числослово(отм,["отметка","отметки","отметок"])} о выполнении.
         Если убрать месяц с отметкой из плана, отметка не удаляется — вернёте месяц, вернётся и она.</div>`:""}
-      <div class="formbtns">
+      <div class="formbtns закреп">
         <button class="btn primary" onclick="saveППР(${п?`'${esc(п.id)}'`:"null"})">✓ Сохранить</button>
-        <button class="btn" onclick="switchView('plan')">Отмена</button>
+        ${кнопкаНазад('plan')}
         ${изКниги?`<button class="btn" onclick="ппрКакВКниге('${esc(п.id)}')"
           title="Вернуть позицию к тому виду, в каком она пришла из книги ППР">Вернуть как в книге</button>`:""}
         ${п?`<button class="btn danger" style="margin-left:auto" onclick="delППР('${esc(п.id)}')">✕ Удалить</button>`:""}

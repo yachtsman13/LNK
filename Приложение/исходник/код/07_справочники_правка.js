@@ -836,9 +836,9 @@ function editReg(kind,id,изИд){
       ${C.классность?блокКлассности(z):""}
       ${C.план_обучения?блокПланаОбучения(z):""}
       ${C.блок?C.блок(z||нов):""}
-      <div class="formbtns">
+      <div class="formbtns закреп">
         <button class="btn primary" onclick="saveRegRec('${kind}','${z?esc(z.id):""}')">✓ Сохранить</button>
-        <button class="btn" onclick="switchView('${C.view}')">Отмена</button>
+        ${кнопкаНазад(C.view)}
         ${z?`<button class="btn danger" style="margin-left:auto" onclick="delReg('${kind}','${esc(z.id)}')">✕ Удалить</button>`:""}
       </div>${z?блокИстории(C.key,z.id):""}</div></div>`;
   // Карточка прибора, уже помеченная как неотъемлемая часть: даты поверки

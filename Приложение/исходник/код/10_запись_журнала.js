@@ -234,9 +234,9 @@ function editJournal(id){
         <div class="sect">Примечание</div>
         <div class="grid"><label class="wide"><textarea id="e_примечание">${val(z&&z.примечание)}</textarea></label></div>
         </fieldset>
-        <div class="formbtns">
+        <div class="formbtns закреп">
           ${заперта?"":`<button class="btn primary" onclick="saveJournalRec('${z?esc(z.id):""}')">✓ Сохранить</button>`}
-          <button class="btn" onclick="switchView('journal')">${заперта?"← К журналу":"Отмена"}</button>
+          ${кнопкаНазад('journal')}
           ${z?`<button class="btn" onclick="размножитьОткрыть('${esc(z.id)}')"
             title="Создать такие же записи по другим объектам">⧉ Повторить по объектам</button>`:""}
           ${z&&!заперта?`<button class="btn danger" style="margin-left:auto" onclick="delJournal('${esc(z.id)}')">✕ Удалить</button>`:""}
@@ -457,9 +457,9 @@ function renderРазмножить(толькоСписок){
       </div>
       <div id="размнСписок" class="сд-список мет-набор"
         style="max-height:46vh;overflow:auto">${строки}</div>
-      <div class="formbtns">
+      <div class="formbtns закреп">
         <button class="btn primary" onclick="размножитьСоздать()">✓ Создать записи</button>
-        <button class="btn" onclick="editJournal('${esc(z.id)}')">Отмена</button>
+        ${кнопкаНазад('edit',`editJournal('${esc(z.id)}')`)}
       </div>
     </div>`;
   const q=document.getElementById("размнQ");

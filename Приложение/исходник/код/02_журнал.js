@@ -49,8 +49,9 @@ function setChrome(){
   // справочника на новые id) идёт раньше. Без защиты такой ранний вызов
   // ронял всю загрузку, и до пульта дело не доходило вовсе.
   if(цз){ const зд=ЗАД||[];
-          const n=зд.filter(з=>живаяЗадача(з)&&з.статус!=="закрыта").length;
-          цз.textContent=n; цз.classList.toggle("warn", зд.some(просроченаЗадача)); }
+          const ну=наУтверждение().length;
+          const n=зд.filter(з=>живаяЗадача(з)&&з.статус!=="закрыта").length+ну;
+          цз.textContent=n; цз.classList.toggle("warn", ну>0 || зд.some(просроченаЗадача)); }
   const пр=document.getElementById("cCheck");
   if(пр){ const n=числоПроблем(); пр.textContent=n; пр.classList.toggle("warn", n>0); }
   document.getElementById("cObjects").textContent=live(O).length;

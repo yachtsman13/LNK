@@ -564,6 +564,7 @@ function применитьДанные(d, заменить){
     if(d.методики && typeof d.методики==="object") saveМетодики(d.методики, true);
     if(d.названия && typeof d.названия==="object") saveИмена(d.названия);
     rebuildObjIndex();
+    перенестиЗаметкиЗадач();
     return null;
   }
   const r={ o:mergeInto(O,REG_OBJ,d.объекты), s:mergeInto(S,REG_SI,d.приборы),
@@ -596,6 +597,7 @@ function применитьДанные(d, заменить){
   if(Array.isArray(d.редакции)) слитьРедакции(d.редакции);
   if(Array.isArray(d.закрытыегоды)) слитьЗакрытые(d.закрытыегоды);
   if(r.o.added||r.o.updated) rebuildObjIndex();
+  перенестиЗаметкиЗадач();
   return r;
 }
 function backupSave(){

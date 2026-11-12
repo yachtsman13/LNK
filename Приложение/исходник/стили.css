@@ -841,3 +841,13 @@ body.входзакрыт .app{visibility:hidden}
 .входсмена .пинокно input{letter-spacing:normal;font-size:15px}
 .входокно .лнкзн{background:var(--logo-bg);color:var(--logo-ink);border-radius:6px;padding:1px 7px;font-weight:800;margin-left:4px}
 .входокно a{color:var(--brand)}
+/* 3.88: комментарии к задачам */
+.комлента{display:flex;flex-direction:column;gap:8px;margin:6px 0 10px}
+.ком{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel)}
+.ком.моё{border-left:3px solid var(--brand)}
+.комшап{display:flex;gap:10px;align-items:center;font-size:12.5px;flex-wrap:wrap}
+.комшап .spring{flex:1}
+.комтекст{white-space:pre-line;margin-top:4px;font-size:13.5px}
+.комввод{display:flex;gap:8px;align-items:flex-end}
+.комввод textarea{flex:1;min-height:44px}
+.ком-нов{font-size:11px;padding:1px 6px}

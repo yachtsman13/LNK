@@ -258,6 +258,8 @@ function renderDash(){
           з.просрочено?"bad":"warn","tasks") : ""; })()}
       ${(()=>{ const с=задачиСкоро();
         return с.всего ? tile(с.всего,"горит на этой неделе","warn","tasks") : ""; })()}
+      ${(()=>{ const н=наУтверждение().length; if(!н) return "";
+        return tile(н,"проектов задач на утверждение","warn","tasks"); })()}
       ${(()=>{ const м=задачиМоегоМеста(); if(!м.всего) return "";
         return `<div class="tile ${м.просрочено||м.вернули?"bad":"warn"} click" onclick="document.getElementById('мои_задачи').scrollIntoView({behavior:'smooth'})">
           <div class="n">${м.всего}</div><div class="l">мои задачи</div></div>`; })()}

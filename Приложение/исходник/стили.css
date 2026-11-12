@@ -758,3 +758,10 @@ details.удлвыбор{margin:0 0 10px}
 .подгверх .spring{flex:1}
 select.подгисп{max-width:220px}
 @media print{ select.подгисп{border:0;appearance:none;background:transparent} .подгработа.сдел{opacity:1} }
+.флокно{max-width:520px}
+.флсписок{display:flex;flex-direction:column;gap:8px;margin:6px 0 10px}
+.флстр{display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center}
+.флстр button{grid-row:span 2;min-width:150px;text-align:left}
+.флсост{font-size:13px;color:var(--ink)}
+.флсост.плохо{color:var(--danger)}
+.флпосл{font-size:12px;color:var(--muted)}

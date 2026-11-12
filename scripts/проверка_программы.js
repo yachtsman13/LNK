@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  50. выбор флешки из запомненных при «Сохранить на флешку» и «Принять».
 //  49. папка «ЛНК обмен» на флешке, запомненные флешки, смена кода рабочего места.
 //  48. сортировка по заголовкам и отбор во всех списках, рабочее место специалиста, обмен всегда с файлами.
 //  47. подготовка работ (п. 7): приборы, документы, допуски и измерения на период, исполнитель работы плана-графика.
@@ -110,6 +111,13 @@ async function открыть(p){
   await p.waitForFunction(() => window.ЛНК_ГОТОВ, null, { timeout: 30000 });
   await p.evaluate(() => {
     window.__ф = [];
+    // Окно выбора флешки (3.83): прежние проверки подменяют окно выбора
+    // папки — им окно сразу нажимает «Другая флешка». window.__флАвто =
+    // false — окно остаётся, проверка нажимает в нём сама.
+    window.__флАвто = true;
+    new MutationObserver(() => { if(!window.__флАвто) return;
+      const кн = document.querySelector(".флокно #флДругая"); if(кн && !кн.dataset.нажата){ кн.dataset.нажата = "1"; кн.click(); } })
+      .observe(document.body, { childList: true });
     window.dlBlob = (имя, blob) => { const fr = new FileReader();
       fr.onload = () => __ф.push({ имя, b64: fr.result.split(",")[1] }); fr.readAsDataURL(blob); };
   });
@@ -3368,6 +3376,91 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       q1.отказ = false;
       да(р8.ок === false && р8.код === "М3", "отказ в вопросе — код места не меняется", JSON.stringify(р8));
       await m1.c.close(); await m2.c.close();
+    }
+
+    раздел("50. Выбор флешки из запомненных");
+    {
+      const ФС50 = fs.readFileSync(__filename, "utf8").match(/const ФС = `([\s\S]*?)`;/)[1];
+      const m1 = await место(b, "М1"); все.push(m1.p); const q = m1.p;
+      await q.evaluate(ФС50);
+      // Ни одной запомненной — сразу окно выбора папки, без списка
+      const р1 = await q.evaluate(async () => {
+        window.__флАвто = false; window.__alert = window.alert; window.alert = () => {};
+        const ф = фс.папка("E:"); let выборов = 0; window.showDirectoryPicker = async () => { выборов++; return ф; };
+        await сохранитьНаФлешку();
+        const ф2 = фс.папка("G:"); window.__ф2 = ф2; window.__ф1 = ф;
+        return { выборов, окно: !!document.querySelector(".флокно"), флешки: флешки().map(x => x.имя), в: Object.keys(ф.д) };
+      });
+      да(р1.выборов === 1 && !р1.окно && р1.флешки.join() === "Флешка 1" && р1.в.join() === "ЛНК обмен",
+        "ни одной запомненной флешки — «Сохранить на флешку» сразу открывает выбор папки, флешка запоминается", JSON.stringify(р1));
+      // Запомненная: список, «вставлена», щелчок — сохранение без окна выбора папки.
+      // Ручки поддельных папок в IndexedDB не кладутся — подменяем чтение.
+      await q.evaluate(() => {
+        const ид = флешки()[0].id; window.__ид1 = ид; window.__ручки = { ["флешка:" + ид]: __ф1.д["ЛНК обмен"] };
+        const было = идбЧтение; window.__идбБыло = было;
+        window.идбЧтение = async к => (к in __ручки ? __ручки[к] : было(к));
+        window.__выборов = 0; window.showDirectoryPicker = async () => { __выборов++; return __ф2; };
+        window.__итог = "ждёт"; сохранитьНаФлешку().then(() => { __итог = "готово"; });
+      });
+      await q.waitForSelector(".флокно .флстр button");
+      await q.waitForFunction(() => /вставлена/.test((document.getElementById("флсост0") || {}).textContent || ""));
+      const р2 = await q.evaluate(() => ({ заголовок: document.querySelector(".флокно h3").textContent,
+        кнопки: [...document.querySelectorAll(".флокно .флстр button")].map(x => x.textContent), сост: document.getElementById("флсост0").textContent,
+        другая: !!document.getElementById("флДругая") }));
+      await q.click(".флокно .флстр button");
+      await q.waitForFunction(() => __итог === "готово");
+      const р3 = await q.evaluate(() => ({ выборов: __выборов, окно: !!document.querySelector(".флокно"),
+        файлов: Object.keys(__ф1.д["ЛНК обмен"].д).filter(x => /^Обмен ЛНК /.test(x)).length, вG: Object.keys(__ф2.д).length,
+        что: флешки()[0].что, флешек: флешки().length }));
+      да(/сохранить/.test(р2.заголовок) && р2.кнопки.length === 1 && /Флешка 1/.test(р2.кнопки[0]) && /вставлена/.test(р2.сост) && р2.другая,
+        "запомненная флешка: «Сохранить на флешку» показывает список флешек с состоянием «вставлена» и кнопку «Другая флешка»", JSON.stringify(р2));
+      да(р3.выборов === 0 && !р3.окно && р3.файлов >= 1 && р3.вG === 0 && р3.флешек === 1,
+        "щелчок по флешке в списке — сохранено на неё, окно выбора папки не открывалось", JSON.stringify(р3));
+      // Флешка не вставлена: «не найдена», окно остаётся; «Другая флешка» — новая флешка, имя спрашивается
+      await q.evaluate(() => {
+        const нет = () => new DOMException("нет", "NotFoundError");
+        __ручки["флешка:" + __ид1] = { kind: "directory", name: "ЛНК обмен", async queryPermission(){ return "granted"; },
+          async requestPermission(){ return "granted"; }, async getFileHandle(){ throw нет(); }, async getDirectoryHandle(){ throw нет(); },
+          async *entries(){ throw нет(); } };
+        window.__итог = "ждёт"; сохранитьНаФлешку().then(() => { __итог = "готово"; });
+      });
+      await q.waitForSelector(".флокно .флстр button");
+      await q.waitForFunction(() => /не найдена/.test((document.getElementById("флсост0") || {}).textContent || ""));
+      await q.click(".флокно .флстр button");
+      await q.waitForTimeout(300);
+      const р4 = await q.evaluate(() => ({ окно: !!document.querySelector(".флокно"), сост: document.getElementById("флсост0").textContent,
+        плохо: document.getElementById("флсост0").classList.contains("плохо"), итог: __итог }));
+      да(р4.окно && /не вставлена|другую букву/.test(р4.сост) && р4.плохо && р4.итог === "ждёт",
+        "флешка не вставлена — в списке «не найдена», щелчок объясняет (другая буква диска) и окно не закрывается", JSON.stringify(р4));
+      const имён = q.диалоги.filter(x => /Как назвать эту флешку/.test(x)).length;
+      await q.click("#флДругая");
+      await q.waitForFunction(() => __итог === "готово");
+      const р5 = await q.evaluate(() => ({ выборов: __выборов, флешки: флешки().map(x => x.имя), вG: Object.keys(__ф2.д) }));
+      да(р5.выборов === 1 && р5.флешки.join() === "Флешка 2,Флешка 1" && р5.вG.join() === "ЛНК обмен" &&
+        q.диалоги.filter(x => /Как назвать эту флешку/.test(x)).length === имён + 1,
+        "«Другая флешка…» открывает выбор папки; новая флешка заводится с именем и встаёт первой в списке", JSON.stringify(р5));
+      // По пути другой флешки — «другая флешка»; Esc — отмена, ничего не записано
+      await q.evaluate(() => {
+        __ручки["флешка:" + __ид1] = __ф2.д["ЛНК обмен"];
+        const ид2 = флешки().find(x => x.имя === "Флешка 2").id; __ручки["флешка:" + ид2] = undefined; delete __ручки["флешка:" + ид2];
+        window.__итог = "ждёт"; принятьСФлешки().then(() => { __итог = "готово"; });
+      });
+      await q.waitForSelector(".флокно .флстр button");
+      const р6 = await q.evaluate(() => ({ заголовок: document.querySelector(".флокно h3").textContent,
+        кнопки: [...document.querySelectorAll(".флокно .флстр button")].map(x => x.textContent.trim()) }));
+      const и1 = р6.кнопки.findIndex(x => /Флешка 1/.test(x)), и2 = р6.кнопки.findIndex(x => /Флешка 2/.test(x));
+      await q.click(`.флокно .флстр button[data-i="${и1}"]`); await q.waitForTimeout(300);
+      const сост1 = await q.evaluate(и => document.getElementById("флсост" + и).textContent, и1);
+      const сост2 = await q.evaluate(и => document.getElementById("флсост" + и).textContent, и2);
+      await q.keyboard.press("Escape");
+      await q.waitForFunction(() => __итог === "готово");
+      const р7 = await q.evaluate(() => ({ окно: !!document.querySelector(".флокно"), выборов: __выборов }));
+      да(/принять/.test(р6.заголовок) && р6.кнопки.length === 2, "«▲ Принять» показывает тот же список флешек", JSON.stringify(р6));
+      да(/другая флешка/.test(сост1) && /Флешка 2/.test(сост1) && /нет сведений о пути/.test(сост2),
+        "по пути запомненной флешки сейчас другая — так и сказано; флешка без пути — подсказка «Другая флешка»", JSON.stringify([сост1, сост2]));
+      да(!р7.окно && р7.выборов === 1, "Esc закрывает окно, ничего не принимается", JSON.stringify(р7));
+      await q.evaluate(() => { window.идбЧтение = __идбБыло; window.alert = window.__alert; window.__флАвто = true; });
+      await m1.c.close();
     }
 
     раздел("Ошибки на страницах");

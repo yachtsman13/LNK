@@ -689,6 +689,7 @@ function renderAkt(ключ){
   if(!zs.length){ toast("По акту "+ключ+" записей нет"); return; }
   curView="akt";
   document.querySelectorAll(".nav").forEach(n=>n.classList.remove("on"));
+  автовидАкта(ключ,zs);
   автоподразделениеАкта(ключ,zs);
   const a=актЗапись(ключ,false), п=подрАкта(ключ), к=контрактАкта(ключ);
   const подрРазнобой=подразделенияАкта(zs);

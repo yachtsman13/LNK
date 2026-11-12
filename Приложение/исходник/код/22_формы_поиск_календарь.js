@@ -8,7 +8,7 @@
 // перерисовывают свой блок, не теряя полей. Выбор файла в «Обмене» —
 // тоже change, но импорт там происходит сразу, поэтому раздел в список
 // не входит: иначе после каждого импорта выскакивал бы ложный вопрос.
-const ВИДЫ_С_ФОРМОЙ=["edit","regedit","taskedit","noteedit","lab","metod","planedit","partsedit","vibroizm","pgedit","prot"];
+const ВИДЫ_С_ФОРМОЙ=["edit","regedit","taskedit","noteedit","reqedit","lab","metod","planedit","partsedit","vibroizm","pgedit","prot"];
 let _несохранено=false;
 function формаСохранена(){ _несохранено=false; }
 function уходСФормы(){
@@ -44,7 +44,7 @@ const НАЗАД_КУДА={journal:"к журналу",objects:"к объект�
   podr:"к подразделениям",nd:"к норм. документам",premises:"к помещениям",tasks:"к задачам",plan:"к ППР",
   pg:"к планам-графикам",metod:"к методикам",vibro:"к карточкам вибрации",vibrocard:"к карточке вибрации",
   vibronorm:"к нормам вибрации",smk:"к документам СМ",ideas:"к предложениям",check:"в проверку данных",
-  passport:"в паспорт",lab:"в карточку лаборатории",docs:"к актам",dash:"на пульт",edit:"к записи",
+  passport:"в паспорт",lab:"в карточку лаборатории",requests:"к заявкам",docs:"к актам",dash:"на пульт",edit:"к записи",
   calendar:"в календарь",prep:"в подготовку работ"};
 function подписьНазад(вид, своё){
   if(_возвратВПроверку && !своё) вид=typeof _возвратВПроверку==="string"?_возвратВПроверку:"check";
@@ -171,7 +171,7 @@ const КАЛ_ВИДЫ=[["день","День"],["неделя","Неделя"],[
 // Чем меньше — тем выше в списке дел одной даты. «План-график» — место
 // под работы по планам-графикам (их в программе ещё нет: заказчик пришлёт
 // образцы); неизвестный источник — между задачами и ППР.
-const ПОРЯДОК_ИСТОЧНИКОВ={"План-график":0, "Задачи":1, "ППР":9};
+const ПОРЯДОК_ИСТОЧНИКОВ={"План-график":0, "Внеплановые работы":0.5, "Задачи":1, "ППР":9};
 function весДела(x){ const в=ПОРЯДОК_ИСТОЧНИКОВ[x.источник]; return в==null?5:в; }
 function порядокДел(a,b){
   return String(a.срок).localeCompare(String(b.срок)) || весДела(a)-весДела(b) ||
@@ -186,6 +186,10 @@ function календарьДела(база, вид){
     ид:"ЗД|"+з.id, источник:"Задачи", что:з.что+(з.исполнитель?(" — "+з.исполнитель):""),
     срок:з.срок, сделано:з.статус==="выполнена"||з.статус==="закрыта", куда:"tasks",
     приоритет:весПриоритета(з), приоритетТ:приоритетЗадачи(з)}));
+  // Заявки подразделений (3.89) — тип «Внеплановые работы», по сроку
+  делаЗаявок(с,по).forEach(з=>из.push({ид:"ЗВ|"+з.id, источник:"Внеплановые работы",
+    что:"Заявка "+(з.номер||"")+": "+заявкаКратко(з)+((з.методы||[]).length?" ("+з.методы.join(", ")+")":"")+(исполнительЗаявки(з)?" — "+исполнительЗаявки(з):""),
+    срок:срокЗаявки(з), сделано:з.статус==="выполнена", куда:"requests"}));
   // Заметки со сроком (3.88) — те, что видны этому человеку (месту)
   видимыеЗаметки().filter(з=>з.срок && з.срок>=с && з.срок<=по).forEach(з=>из.push({
     ид:"ЗМ|"+з.id, источник:"Заметки", что:String(з.текст||"").split("\n")[0].slice(0,120)+(з.видимость==="всем"?"":" 🔒"),
@@ -203,6 +207,7 @@ function открытьДелоКалендаря(ид){
   if(!уходСФормы()) return;
   if(ч[0]==="ЗД"){ editTask(ч.slice(1).join("|")); return; }
   if(ч[0]==="ЗМ"){ editЗаметка(ч.slice(1).join("|")); return; }
+  if(ч[0]==="ЗВ"){ открытьЗаявку(ч.slice(1).join("|")); return; }
   if(ч[0]==="СИ" && найтиПоИд(live(S),ч[1])){ editReg("si",ч[1]); return; }
   if(["ИНСТР","ОГРПР","ЭЛБЕЗ","ПОЖБЕЗ","ПБ","КЛАСС","АТТ","А1"].includes(ч[0]) && найтиПоИд(live(P),ч[1])){ editReg("ppl",ч[1]); return; }
   if(ч[0]==="ППР"){ const п=найтиПоИд(live(ППР_ПОЗ),ч[1]); if(п) план.год=+ч[2]; switchView("plan"); return; }
@@ -458,7 +463,7 @@ function switchView(v){
   if(_возвратВПроверку && ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) v=typeof _возвратВПроверку==="string"?_возвратВПроверку:"check";
   curView=v;query=""; _актИзЗаписи=null;
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
-  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,smk:renderСМК,ideas:renderПредложения,filesort:renderРаскладка,pg:renderПГ,pgedit:renderПГ,prot:()=>_прот?открытьПротокол(_прот.zid,_прот.м,_прот.ф):renderJournal(),
+  ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,smk:renderСМК,ideas:renderПредложения,requests:renderЗаявки,reqedit:renderЗаявки,filesort:renderРаскладка,pg:renderПГ,pgedit:renderПГ,prot:()=>_прот?открытьПротокол(_прот.zid,_прот.м,_прот.ф):renderJournal(),
     vibrocard:()=>открытьКартуВибрации(_картаВибр),vibroizm:()=>открытьКартуВибрации(_картаВибр),
     vibroprint:()=>печатьКартВибрации(_печатьВибр),certsheet:renderЛистУдостоверений,labels:renderБирки,prep:renderПодготовка}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"ППР",

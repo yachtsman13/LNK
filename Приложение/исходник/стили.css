@@ -851,3 +851,7 @@ body.входзакрыт .app{visibility:hidden}
 .комввод{display:flex;gap:8px;align-items:flex-end}
 .комввод textarea{flex:1;min-height:44px}
 .ком-нов{font-size:11px;padding:1px 6px}
+/* 3.89: заявки подразделений */
+.зв-методы{display:flex;flex-wrap:wrap;gap:6px 18px}
+.form label.зв-метод{flex-direction:row;align-items:center;gap:6px;font-weight:500}
+.зв-способ{margin-top:12px}

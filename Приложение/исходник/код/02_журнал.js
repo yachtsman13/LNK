@@ -52,6 +52,10 @@ function setChrome(){
           const ну=наУтверждение().length;
           const n=зд.filter(з=>живаяЗадача(з)&&з.статус!=="закрыта").length+ну;
           цз.textContent=n; цз.classList.toggle("warn", ну>0 || зд.some(просроченаЗадача)); }
+  const цзв=document.getElementById("cЗаяв");
+  // try: счётчики могут обновляться до того, как объявлен реестр заявок
+  if(цзв) try{ const откр=ЗАЯВ.filter(з=>заявкаОткрыта(з)).length; цзв.textContent=откр;
+           цзв.classList.toggle("warn", заявокПросрочено()>0 || заявокНаУтверждение()>0); }catch(e){}
   const пр=document.getElementById("cCheck");
   if(пр){ const n=числоПроблем(); пр.textContent=n; пр.classList.toggle("warn", n>0); }
   document.getElementById("cObjects").textContent=live(O).length;

@@ -29,6 +29,8 @@ function printSign(){
 }
 
 function setChrome(){
+  // вход включили (обменом, копией), а никто не вошёл — спросить
+  if(window.ЛНК_ГОТОВ && входВкл() && _я==null && !_окноВхода) показатьВход();
   document.getElementById("cJournal").textContent=liveJ().length;
   const пд=document.getElementById("cPodr"); if(пд) пд.textContent=live(ПОДР).length;
   const цНд=document.getElementById("cНд"); if(цНд) цНд.textContent=live(НД).length;

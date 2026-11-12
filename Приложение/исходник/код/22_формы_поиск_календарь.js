@@ -18,7 +18,9 @@ function уходСФормы(){
   _несохранено=false; return true;
 }
 ["input","change"].forEach(тип=>
-  document.getElementById("main").addEventListener(тип, ()=>{
+  document.getElementById("main").addEventListener(тип, (e)=>{
+    // блок со своими кнопками внутри формы (вход и права в «Лаборатории»)
+    if(e.target && e.target.closest && e.target.closest(".неформа")) return;
     if(ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) _несохранено=true;
   }));
 // Закрытие вкладки и перезагрузка: текст предупреждения задаёт сам

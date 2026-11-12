@@ -813,3 +813,21 @@ table.раскформ{width:100%;border-collapse:collapse;font-size:13px;margin
 table.раскформ th,table.раскформ td{border:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left}
 table.раскформ code{white-space:normal;word-break:break-word}
 @media print{ .опфон{display:none!important} }
+/* Вход по паролю (3.86) */
+body.входзакрыт .app{visibility:hidden}
+.входфон{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:3000}
+.входокно{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--card-radius);
+  box-shadow:var(--shadow);padding:22px 24px;width:min(420px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px}
+.входокно .входшапка{display:flex;align-items:center;gap:10px;font-size:17px;color:var(--brand)}
+.входокно .входшапка svg{color:var(--brand)}
+.входокно label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.входокно select,.входокно input{font:inherit;font-size:15px;padding:7px 9px;background:var(--input-bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--radius)}
+.входшапка-верх{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.входшапка-верх .входкн{background:transparent;border:1px solid currentColor;color:var(--top-ink);border-radius:12px;
+  padding:1px 8px;font:inherit;font-size:11.5px;opacity:.85;cursor:pointer}
+.входшапка-верх .входкн:hover{opacity:1;background:var(--top-tag)}
+.входсмена{z-index:3100}
+.входсмена .пинокно input{letter-spacing:normal;font-size:15px}
+.входокно .лнкзн{background:var(--logo-bg);color:var(--logo-ink);border-radius:6px;padding:1px 7px;font-weight:800;margin-left:4px}
+.входокно a{color:var(--brand)}

@@ -765,3 +765,19 @@ select.подгисп{max-width:220px}
 .флсост{font-size:13px;color:var(--ink)}
 .флсост.плохо{color:var(--danger)}
 .флпосл{font-size:12px;color:var(--muted)}
+/* Бирки по результатам поверки (13а, 3.84): размеры в см, кегль в пт —
+   как в образце заказчика; рамка снаружи тройная, внутри тонкая. */
+.бирклист{display:flex;flex-wrap:wrap;gap:3mm;align-items:flex-start;width:190mm;background:#fff;color:#000;
+  padding:10mm;box-shadow:var(--shadow);border:1px solid var(--line);page:бирки}
+.sheet .бирка,.бирклист .бирка{border-collapse:collapse;table-layout:fixed;border:3px double #000;font-family:"Times New Roman",serif;
+  color:#000;background:#fff;line-height:1.15;break-inside:avoid}
+.бирка td{border:1px solid #000;padding:0 .5mm;vertical-align:middle;text-align:left;white-space:normal;background:#fff;color:#000}
+.бирка tr:hover td,.бирка tr:nth-child(even) td{background:#fff}
+.бирка .биркаимя{font-weight:bold;text-align:center}
+.биркивыбор{margin:0 0 10px}
+.биркивыбор td input.бирккегль{width:4em}
+@page бирки{size:A4 portrait;margin:0}
+@media print{ .бирклист{box-shadow:none;border:0;padding:10mm;margin:0}
+  /* общее правило печати списков (td 11px, серые рамки) бирку не трогает */
+  .бирка td{font-size:inherit!important;border:1px solid #000!important;padding:0 .5mm!important;color:#000!important} }
+@media print{.toast{display:none!important}}

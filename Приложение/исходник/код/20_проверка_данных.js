@@ -21,7 +21,7 @@ const КЛЮЧИ_ДАННЫХ={ "lnk_obj":"объекты", "lnk_si":"прибо
   "lnk_pg":"планыграфики", "lnk_pg_pos":"пгпозиции", "lnk_pg_otm":"пготметки", "lnk_prot":"протоколы", "lnk_files":"файлы", "lnk_auth":"вход", "lnk_users":"пользователи",
   "lnk_lab":"лаборатория", "lnk_metodiki":"методики", "lnk_docnames":"названия" };
 ДОП_РЕЕСТРЫ.forEach(р=>{ КЛЮЧИ_ДАННЫХ[р.ключ]=р.поле; });
-const КЛЮЧИ_НАСТРОЕК=["lnk_ws","lnk_setup","lnk_comm_read","lnk_cal","lnk_dash","lnk_theme","lnk_jsort","lnk_psort","lnk_tsort","lnk_progsort",
+const КЛЮЧИ_НАСТРОЕК=["lnk_ws","lnk_setup","lnk_jgroup","lnk_comm_read","lnk_cal","lnk_dash","lnk_theme","lnk_jsort","lnk_psort","lnk_tsort","lnk_progsort",
   "lnk_last_backup","lnk_last_export","lnk_last_import","lnk_grant","lnk_fs",
   // последняя отмена — одноразовое состояние этого места, не данные
   "lnk_undo",

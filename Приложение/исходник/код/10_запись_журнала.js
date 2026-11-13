@@ -220,7 +220,7 @@ function editJournal(id){
         <div class="sect">Методы контроля <span class="hint" style="display:inline">— заполняйте только применённые</span></div>
         ${mrows}
         <div class="sect">Заключение <span class="hint" style="display:inline">— по нему раздел
-          «Акты и протоколы» считает документ оформленным</span></div>
+          «Документ» журнала считает запись оформленным</span></div>
         <div class="grid"><label class="wide"><textarea id="e_заключение"
           placeholder="Вывод по результатам контроля — как он записан в документе">${val(z&&z.заключение)}</textarea></label></div>
         <div class="sect">Движение экземпляров</div>

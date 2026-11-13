@@ -469,6 +469,13 @@
   .form label.пгмес input[type=checkbox]{width:auto;margin:0}
   th.жчб,td.жчб{width:26px;padding-left:8px;padding-right:0;text-align:center}
   tr.отм td{background:var(--chip)}
+  /* журнал «по актам» (3.98): строка акта над его записями */
+  tr.актгр td{background:var(--head-bg);border-top:2px solid var(--line);padding-top:8px;padding-bottom:8px;cursor:pointer;font-size:13px}
+  tr.актгр.безакта td{cursor:default}
+  tr.актгр .st{margin-left:6px}
+  tr.актгр .актгркн{float:right;display:inline-flex;gap:4px}
+  label.жгр{display:inline-flex;align-items:center;gap:4px;flex-direction:row}
+  tr.пакетпусто td{color:var(--danger)}
   .кал{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
   .кал .дн{min-height:86px;border:1px solid var(--line);border-radius:6px;padding:4px 5px;cursor:pointer;
     overflow:hidden;background:var(--panel)}

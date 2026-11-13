@@ -93,7 +93,7 @@ function показатьВкладкиРаздела(вид){
   блоки.forEach(б=>{ б.hidden=б.dataset.вклр!==акт; });
   document.querySelectorAll("#main .вкладки .вкл").forEach(x=>{ if(ключи.indexOf(x.dataset.вкл)>=0) x.classList.toggle("on",x.dataset.вкл===акт); });
 }
-const МЕНЮ_РОДИТЕЛЬ={passport:"lab", premises:"lab", smk:"lab", calendar:"dash", siissue:"si", labels:"si",
+const МЕНЮ_РОДИТЕЛЬ={docs:"journal", akt:"journal", prot:"journal", passport:"lab", premises:"lab", smk:"lab", calendar:"dash", siissue:"si", labels:"si",
   certsheet:"people", vibronorm:"vibro", vibrocard:"vibro", vibroprint:"vibro", filesort:"exchange"};
 function подсветитьМеню(вид){
   const в=МЕНЮ_РОДИТЕЛЬ[вид]||вид;

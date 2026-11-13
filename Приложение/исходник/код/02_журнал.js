@@ -86,6 +86,34 @@ let jsort=(function(){ try{ const r=ХР.getItem("lnk_jsort");
   return {c:"дата", d:-1}; })();   // по умолчанию — свежие сверху
 
 function jsortSave(){ try{ ХР.setItem("lnk_jsort",JSON.stringify(jsort)); }catch(e){} }
+// Журнал и акты — один раздел (3.98, вариант А заказчика): вкладки «Записи»
+// и «Акты», в «Записях» — переключатель «по актам»: записи под строкой
+// своего акта, записи без акта — последней группой. Помнится на месте.
+let jПоАктам=(()=>{ try{ return ХР.getItem("lnk_jgroup")==="1"; }catch(e){ return false; } })();
+function setПоАктам(v){ jПоАктам=!!v; try{ ХР.setItem("lnk_jgroup", jПоАктам?"1":"0"); }catch(e){} renderJournal(); }
+function вкладкиЖурнала(){ return вкладкиРаздела("journal", [["journal","Записи",true],["docs","Акты ("+списокАктов().length+")",true]]); }
+// Строки по актам: порядок актов — как в списке актов (от большего номера),
+// внутри акта — порядок показанного списка (отбор и сортировка журнала).
+function группыЖурнала(rows){
+  const поАкту={}, без=[];
+  rows.forEach(z=>{ const к=актКлюч(z); if(к) (поАкту[к]=поАкту[к]||[]).push(z); else без.push(z); });
+  const ключи=Object.keys(поАкту).sort((a,b)=>b.localeCompare(a,"ru",{numeric:true}));
+  return ключи.map(к=>({ключ:к, записи:поАкту[к]})).concat(без.length?[{ключ:"", записи:без}]:[]);
+}
+function строкаАктаВЖурнале(г){
+  if(!г.ключ) return `<tr class="актгр безакта"><td class="noprint жчб"></td><td colspan="7"><b>Без акта</b> <span class="muted">· записей ${г.записи.length}</span></td></tr>`;
+  const все=записиАкта(г.ключ), д=все.map(z=>z.дата).filter(Boolean).sort();
+  const п=подрАкта(г.ключ), подр=п?(п.наименование||""):String(актЗапись(г.ключ,false).подразделение||"").trim();
+  const ош=готовностьАкта(г.ключ).filter(x=>x.ур==="ошибка").length, k=esc(г.ключ).replace(/'/g,"\\'");
+  return `<tr class="актгр" onclick="renderAkt('${k}')" title="Открыть акт"><td class="noprint жчб"></td><td colspan="7">
+    <b>Акт № ${esc(номерАкта(г.ключ))}</b>${подр?` · ${esc(подр)}`:""}${д.length?` · ${ru(д[0])}${д[д.length-1]!==д[0]?" – "+ru(д[д.length-1]):""}`:""}
+    · <span class="muted">записей ${г.записи.length===все.length?все.length:г.записи.length+" из "+все.length}</span>
+    ${ош?`<span class="st bad" title="откройте акт — блок «Готовность к выдаче»">ошибок ${ош}</span>`:""}
+    <span class="актгркн noprint" onclick="event.stopPropagation()">
+      <button class="btn small" onclick="renderAkt('${k}')">Акт</button>
+      <button class="btn small" onclick="протоколыАктаВWord('${k}')" title="Заготовки протоколов и заключений по всем записям акта">⤓ Протоколы (Word)</button>
+      <button class="btn small" onclick="собратьПачку('${k}')" title="Акт, протоколы и PDF-приложения в одну папку">📁 Пачка</button></span></td></tr>`;
+}
 function setJF(k,v){ if(jf[k]===v) return; jf[k]=v; renderJournal(); }
 // Поле даты в фильтре, после которого раздел перерисовывается. Chromium
 // шлёт change уже после первых цифр года (значение «0020-10-05»), а
@@ -173,7 +201,7 @@ function renderJournal(){
   const th=(c,l)=>`<th class="sortable" onclick="sortJournal('${c}')">${l}${стрелка(c)}</th>`;
   // Колонка «№ п/п» существует всегда, но видна только в печати:
   // на экране она не нужна, а в распечатке без неё строки не сослаться.
-  const body=rows.length?rows.map((z,i)=>`
+  const строка=(z,i)=>`
     <tr onclick="showJournal('${esc(z.id)}')"${жОтм.has(String(z.id))?' class="отм"':""}>
       <td class="noprint жчб" onclick="event.stopPropagation()"><input type="checkbox" ${жОтм.has(String(z.id))?"checked":""}
         onchange="жОтметить('${esc(z.id)}',this.checked)" title="Отметить для массовой правки"></td>
@@ -189,7 +217,11 @@ function renderJournal(){
       <td class="жисп">${исполнителиЗаписи(z).map(и=>`<div>${esc(и)}</div>`).join("")||"<span class='muted'>—</span>"}</td>
       <td><span class="st ${statusClass(z.статус)}">${esc(z.статус)||"—"}</span>${ждётНомеров(z)?`<div class="muted" style="font-size:11px">ждёт номера</div>`
         :jf.докум&&methodsOf(z).length?`<div class="muted" style="font-size:11px">${состояниеДокумента(z)==="готовые"?"готов":"нет заключения"}</div>`:""}</td>
-    </tr>`).join(""):`<tr><td colspan="8" class="empty">Ничего не найдено.</td></tr>`;
+    </tr>`;
+  let нп=0;
+  const body=!rows.length?`<tr><td colspan="8" class="empty">Ничего не найдено.</td></tr>`
+    :jПоАктам?группыЖурнала(rows).map(г=>строкаАктаВЖурнале(г)+г.записи.map(z=>строка(z,нп++)).join("")).join("")
+    :rows.map((z,i)=>строка(z,i)).join("");
   const всеПоказаны=rows.length && rows.every(z=>жОтм.has(String(z.id)));
   // Что именно отобрано — попадёт в подзаголовок распечатки.
   const отбор=[jf.год?("год "+jf.год):"", jf.метод?("метод "+jf.метод):"",
@@ -200,6 +232,7 @@ function renderJournal(){
     ${printHead("Журнал учёта заключений ЛНК",
       (отбор?("отобрано: "+отбор+" · "):"")+"записей "+rows.length+
       (jf.год&&годЗакрыт(jf.год)?" · год закрыт "+ru(((закрытиеГода(jf.год)||{}).когда||"").slice(0,10)):""))}
+    ${вкладкиЖурнала()}
     <div class="head">
       <h2>Журнал</h2><span class="sub" id="cnt">${rows.length} из ${liveJ().length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: объект, № акта, зав. №, метод…" value="${esc(query)}"></div>
@@ -223,6 +256,8 @@ function renderJournal(){
       <label>Дата с <input id="jf_с" type="date" value="${esc(jf.с)}" onchange="датаВвод(this,v=>setJF('с',v))" onblur="датаВвод(this,v=>setJF('с',v),1)"></label>
       <label>по <input id="jf_по" type="date" value="${esc(jf.по)}" onchange="датаВвод(this,v=>setJF('по',v))" onblur="датаВвод(this,v=>setJF('по',v),1)"></label>
       ${jf.с&&jf.по&&jf.с>jf.по?`<span class="fnote" style="color:var(--danger)">«с» позже «по» — ничего не попадёт</span>`:""}
+      <label class="жгр" title="Записи — под строкой своего акта, без акта — последней группой"><input type="checkbox" ${jПоАктам?"checked":""}
+        onchange="setПоАктам(this.checked)"> по актам</label>
       ${естьФильтр?`<button class="btn" onclick="resetJF()">✕ Сбросить отбор</button>
         <span class="fnote">показано ${rows.length} из ${liveJ().length}</span>`:
         `<span class="fnote">заголовок таблицы — сортировка по клику</span>`}

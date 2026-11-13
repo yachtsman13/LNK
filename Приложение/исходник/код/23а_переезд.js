@@ -26,7 +26,7 @@ const ТИП_ПЕРЕЕЗДА="переезд места ЛНК";
 // ручки папок (lnk_fs — их браузер привязывает к компьютеру) и последняя
 // отмена загрузки (она про базу старого компьютера).
 const НАСТРОЙКИ_ПЕРЕЕЗДА=["lnk_theme","lnk_jsort","lnk_psort","lnk_tsort","lnk_progsort",
-  "lnk_last_backup","lnk_last_export","lnk_last_import","lnk_exch_places","lnk_check_ok","lnk_find_recent","lnk_udl","lnk_list_sort","lnk_ws_prev","lnk_flashes","lnk_autologout","lnk_comm_read","lnk_cal","lnk_dash"];
+  "lnk_last_backup","lnk_last_export","lnk_last_import","lnk_exch_places","lnk_check_ok","lnk_find_recent","lnk_udl","lnk_list_sort","lnk_ws_prev","lnk_flashes","lnk_autologout","lnk_comm_read","lnk_cal","lnk_dash","lnk_jgroup"];
 function чтениеОтметки(k){ try{ const r=ХР.getItem(k); return r?JSON.parse(r):null; }catch(e){ return null; } }
 function переехалоОтсюда(){ return чтениеОтметки(REG_ПЕРЕЕХАЛО); }
 function приехалоСюда(){ return чтениеОтметки(REG_ПРИЕХАЛО); }

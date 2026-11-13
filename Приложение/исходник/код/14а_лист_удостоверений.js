@@ -256,7 +256,7 @@ async function renderЛистУдостоверений(){
   if(curView!=="certsheet" && !уходСФормы()) return;
   curView="certsheet"; query="";
   const опц=_удл.опц||{};
-  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===(опц.акт?"docs":"people")));
+  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===(опц.акт?"journal":"people")));
   const ход=++_удл.ход, режим=режимУДЛ();
   const группы=составЛистаУдостоверений(опц);
   const main=document.getElementById("main");

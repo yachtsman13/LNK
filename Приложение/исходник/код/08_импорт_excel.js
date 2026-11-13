@@ -187,14 +187,24 @@ function значениеДляExcel(поле, z){
   const v=z[поле.k];
   if(поле.type==="месяцы") return месяцыТекст(z);
   if(поле.type==="podr"){ const п=найтиПоИд(live(ПОДР),v); return п?String(п.наименование||""):String(v==null?"":v); }
-  if(поле.type==="ref"){ const сп=(поле.ref?поле.ref():[])||[];
-    const н=найтиПоИд(сп,v); return н?String(н[поле.refName]||""):String(v==null?"":v); }
+  if(поле.type==="ref"){ const сп=(поле.refВсе?поле.refВсе():поле.ref?поле.ref():[])||[];
+    const н=найтиПоИд(сп,v); return н?String(поле.refВExcel?поле.refВExcel(н):(н[поле.refName]||"")):String(v==null?"":v); }
   return v==null?"":v;
 }
+// Строка Excel для карточки: поле «виды» разворачивается в колонку на
+// каждый вид (телефон рабочий, мобильный…), остальные — как есть.
+function ячейкиКарточки(C, z){
+  const из=[];
+  C.fields.forEach(f=>{ if(f.type==="виды") f.виды.forEach(в=>из.push(видыТекст(z[f.k],в))); else из.push(значениеДляExcel(f,z)); });
+  return из;
+}
 function колонкиИмпорта(C){
-  return [{з:КОЛ_КОД,ш:18}].concat(C.fields.map(f=>({з:f.l,
-    ш:Math.max(14,Math.min(f.wide?44:28,f.l.length+6)),
-    тип:f.type==="date"?"дата":undefined})));
+  const из=[{з:КОЛ_КОД,ш:18}];
+  C.fields.forEach(f=>{
+    if(f.type==="виды"){ f.виды.forEach(в=>из.push({з:колонкаВида(f,в), ш:f.wide?36:22})); return; }
+    из.push({з:f.l, ш:Math.max(14,Math.min(f.wide?44:28,f.l.length+6)), тип:f.type==="date"?"дата":undefined});
+  });
+  return из;
 }
 function шаблонИмпортаXlsx(kind){
   const C=REGS[kind];
@@ -207,7 +217,7 @@ function выгрузкаДляПравки(kind){
   if(!записи.length){ toast("В справочнике «"+ИМПОРТ_НАЗВАНИЯ[kind]+"» пока пусто"); return; }
   xlsxФайл("Правка — "+ИМПОРТ_НАЗВАНИЯ[kind]+" "+сегодня()+".xlsx",
     [{имя:C.view, колонки:колонкиИмпорта(C),
-      строки:записи.map(z=>[String(z.id)].concat(C.fields.map(f=>значениеДляExcel(f,z))))}]);
+      строки:записи.map(z=>[String(z.id)].concat(ячейкиКарточки(C,z)))}]);
   toast("Выгружено для правки: "+записи.length+" — правьте и загружайте тем же «Импортом из Excel»"+
     (ИМПОРТ_НЕ_В_ФАЙЛЕ[kind]?" (в файл не идут: "+ИМПОРТ_НЕ_В_ФАЙЛЕ[kind]+")":""));
 }
@@ -236,10 +246,14 @@ function импортПрименить(kind, строки){
   // просто игнорируются. Отдельно ищется техническая колонка с кодом
   // записи (см. КОЛ_КОД) — по ней строка ложится в СВОЮ карточку.
   const шапка=строки[0];
-  const сопост={}; let колКода="";
+  const сопост={}, сопостВиды={}; let колКода="";
   Object.keys(шапка).forEach(буква=>{
     const текст=String(шапка[буква]||"").trim().toLowerCase();
     if(текст===КОЛ_КОД.toLowerCase()){ колКода=буква; return; }
+    for(const f of C.fields.filter(f=>f.type==="виды")){
+      const в=f.виды.find(в=>колонкаВида(f,в).toLowerCase()===текст);
+      if(в){ сопостВиды[буква]={k:f.k, вид:в}; return; }
+    }
     const поле=C.fields.find(f=>f.l.trim().toLowerCase()===текст)||
       C.fields.find(f=>(f.прежние||[]).some(л=>л.trim().toLowerCase()===текст));
     if(поле) сопост[буква]=поле.k;
@@ -298,7 +312,7 @@ function импортПрименить(kind, строки){
         // само называет (refName); не нашли — оставляем пустым и
         // перечисляем в диалоге, а не подставляем что попало.
         const сп=(поле.ref?поле.ref():[])||[];
-        const н=сп.find(x=>String(x[поле.refName]||"").trim().toLowerCase()===v.toLowerCase());
+        const н=поле.refНайти?поле.refНайти(v):сп.find(x=>String(x[поле.refName]||"").trim().toLowerCase()===v.toLowerCase());
         if(н) v=н.id; else { неНайденоПодр.add(v); return; }
       }
       else if(поле && поле.type==="podr" && v){
@@ -311,6 +325,16 @@ function импортПрименить(kind, строки){
       }
       знач[ключ]=v;
     });
+    // Поля «виды»: из файла — только виды, чьи колонки в нём есть.
+    const видыФайла={};
+    Object.keys(сопостВиды).forEach(буква=>{ const {k,вид}=сопостВиды[буква];
+      (видыФайла[k]=видыФайла[k]||{})[вид]=String(ряд[буква]||"").split(/\s*;\s*/).map(x=>x.trim()).filter(Boolean); });
+    const видыИтог=(k,было)=>{ const f=C.fields.find(x=>x.k===k), фв=видыФайла[k];
+      const ост=(было||[]).filter(x=>!(x.вид in фв)), из=[];
+      f.виды.concat(Object.keys(фв).filter(в=>f.виды.indexOf(в)<0)).forEach(в=>{
+        if(в in фв) фв[в].forEach(т=>из.push({вид:в,т})); else ост.filter(x=>x.вид===в).forEach(x=>из.push(x)); });
+      ост.filter(x=>f.виды.indexOf(x.вид)<0 && !(x.вид in фв)).forEach(x=>{ if(из.indexOf(x)<0) из.push(x); });
+      return из; };
     const код=колКода?String(ряд[колКода]||"").trim():"";
     if(код){
       // Строка с кодом — правка существующей карточки.
@@ -330,12 +354,20 @@ function импортПрименить(kind, строки){
         if(такоеЖе(был[k],знач[k])) return;
         поля.push(k);
       });
+      Object.keys(видыФайла).forEach(k=>{
+        const нов=видыИтог(k,был[k]);
+        if(JSON.stringify(нов)===JSON.stringify(был[k]||[])) return;
+        const f=C.fields.find(x=>x.k===k);
+        Object.keys(видыФайла[k]).forEach(в=>{ if(!видыФайла[k][в].length && (был[k]||[]).some(x=>x.вид===в)) стёртоДоб(стёрто,колонкаВида(f,в)); });
+        знач[k]=нов; поля.push(k);
+      });
       if(поля.length) правки.push({rec:был, знач:знач, поля:поля});
       continue;
     }
     if(!знач[C.name]) continue; // пустая строка (в т.ч. хвост шаблона) — не ошибка, просто пропуск
     const rec={};
     Object.keys(знач).forEach(k=>{ if(!пусто(C.fields.find(f=>f.k===k),знач[k])) rec[k]=знач[k]; });
+    Object.keys(видыФайла).forEach(k=>{ const нов=видыИтог(k,[]); if(нов.length) rec[k]=нов; });
     rec.id=newId(C.pfx);
     rec.изменено=new Date().toISOString(); rec.место=getWS().код;
     новые.push(rec);

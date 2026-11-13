@@ -129,7 +129,7 @@ function навКнопки(){
   "renderPodr","renderNd","renderPremises","renderLab","renderTasks","renderПаспорт","renderMetod","renderКалендарь",
   "renderВыдачаСИ","renderВибрация","renderНормыВибр","renderСМК","renderПредложения","renderЗаявки","renderРаскладка",
   "renderПГ","renderЛистУдостоверений","renderРуководство","renderБирки","renderПодготовка","renderDash","renderНайти",
-  "renderОтчёт","renderAkt","renderРазмножить",
+  "renderОтчёт","renderAkt","renderРазмножить","renderКонтакты","renderОтсутствия",
   "editReg","editJournal","editMetodika","карточкаОбъектаЛист","editЗамерВибр","открытьКартуВибрации",
   "печатьКартВибрации","частиСпискомОткрыть","editППР","editПГ","editПГП","открытьПротокол","editTask",
   "editЗаметка","открытьЗаявку"

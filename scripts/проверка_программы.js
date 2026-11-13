@@ -41,6 +41,8 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  68. отсутствия сотрудников: график, календарь, пульт, допуск, подготовка, проверка данных, Excel; вкладка «Файлы по папкам» запоминается.
+//  67. контакты: свой раздел, структура подразделений любой вложенности, телефоны и адреса с видом, круг через Excel, перенос из 3.99.
 //  66. дни рождения: дата у специалиста, контакты подразделений, календарь, пульт.
 //  65. папки по перечню для аттестации: «Входящие», персонал, протоколы, пакет для НОАЛ, выгрузки в пункты; журнал по актам.
 //  64. «Назад» в то же место, плитки «Лаборатории» на всех вкладках, последний вход, имена свидетельств «… до …».
@@ -4141,8 +4143,8 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
         флажки: [...document.querySelectorAll(".калтипы input")].map(x => x.checked) }));
       await перезагрузить(q);
       const р1b = await q.evaluate(() => ({ типы: кал.типы, моё: кал.моё, мимо: реестрыМимоКопии().length }));
-      да(р1.ид.length === 2 && р1.ид.includes("ЗД|ЗД-57-1") && р1.ид.includes("ЗМ|ЗМ-57") && р1.флажки.join() === "true,true,true,false,true,false,true,true" &&
-        р1b.моё === true && р1b.типы.join() === "заметки,мои,общие,внеплан,др" && р1b.мимо === 0,
+      да(р1.ид.length === 2 && р1.ид.includes("ЗД|ЗД-57-1") && р1.ид.includes("ЗМ|ЗМ-57") && р1.флажки.join() === "true,true,true,false,true,false,true,true,true" &&
+        р1b.моё === true && р1b.типы.join() === "заметки,мои,общие,внеплан,др,отс" && р1b.мимо === 0,
         "флажки типов и «только моё»: видны моя задача и моя заметка; отбор помнится после перезагрузки (настройка места)", JSON.stringify([р1, р1b]));
       await q.evaluate(() => { калВсеТипы(); калМоё(); });
       // Просрочено ранее
@@ -4676,20 +4678,22 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
         const d = new Date(сегодняМестн() + "T00:00:00"); d.setDate(d.getDate() + 3);
         const через3 = калISO(d);
         if (!live(ПОДР).length) { ПОДР.push({ id: "ПД-Т1", наименование: "Цех № 5" }); saveReg(REG_ПОДР, ПОДР); }
+        editReg("unit", ""); await ж();
+        const подск = [...document.querySelectorAll("#рфсп_наименование option")].map(o => o.value);
+        document.getElementById("rf_наименование").value = "Цех № 5"; saveRegRec("unit", ""); await ж();
         editReg("kont", ""); await ж();
-        const подск = [...document.querySelectorAll("#рфсп_подразделение option")].map(o => o.value);
         document.getElementById("rf_фио").value = "Петров Пётр Петрович";
         document.getElementById("rf_должность").value = "мастер";
-        document.getElementById("rf_подразделение").value = "Цех № 5";
+        document.getElementById("rf_подразделение").value = String(live(ЕД)[0].id);
         document.getElementById("rf_дата_рождения").value = "1985-" + через3.slice(5);
         saveRegRec("kont", ""); await ж();
-        const вид = curView, вкл = (document.querySelector("#main .вкладки .вкл.on") || {}).textContent;
+        const вид = curView, вкл = document.getElementById("cКонт").textContent;
         const стр = [...document.querySelectorAll("#main table[data-список=kont] tbody tr")].map(t => t.innerText.replace(/\s+/g, " "));
         return { подск, вид, вкл, стр, всего: live(КОНТ).length };
       });
-      да(р2.подск.indexOf("Цех № 5") >= 0 && р2.вид === "podr" && /^Контакты \(1\)$/.test(р2.вкл || "") && р2.всего === 1 &&
+      да(р2.подск.indexOf("Цех № 5") >= 0 && р2.вид === "contacts" && р2.вкл === "1" && р2.всего === 1 &&
         р2.стр.length === 1 && /Петров Пётр Петрович/.test(р2.стр[0]) && /через 3 дн\./.test(р2.стр[0]) && !/1985/.test(р2.стр[0]),
-        "«＋ Контакт»: подсказка подразделений, после сохранения — вкладка «Контакты», «через 3 дн.», без года", JSON.stringify(р2));
+        "«＋ Контакт»: подсказка заказывающих подразделений в структуре, после сохранения — раздел «Контакты», «через 3 дн.», без года", JSON.stringify(р2));
       // Календарь и пульт
       const р3 = await q.evaluate(async () => {
         const ж = () => new Promise(r => setTimeout(r, 80));
@@ -4736,6 +4740,190 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       да(р5.вКопии && р5.данные === "контакты" && р5.мимо === 0, "контакты — в резервной копии и в обмене", JSON.stringify(р5));
       да(р5.кол.indexOf("Дата рождения") > 0 && р5.кол.indexOf("Подразделение") > 0 && р5.колСп,
         "шаблон импорта: у контактов и у специалистов колонка «Дата рождения»", JSON.stringify(р5));
+      await m1.c.close();
+    }
+
+    раздел("67. Контакты: структура подразделений, телефоны и адреса, Excel, перенос из 3.99");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p);
+      const q = m1.p;
+      await q.evaluate(() => saveWS({ код: "М1", мастер: false, начальник: true }));
+      // Перенос из 3.99: подразделение текстом, один телефон
+      await q.evaluate(() => { ХР.setItem("lnk_contacts", JSON.stringify({rows:[
+        { id: "КТ-Т1", фио: "Сидоров С.С.", подразделение: "Цех № 7", телефон: "11-22", изменено: "2026-11-01T00:00:00.000Z" },
+        { id: "КТ-Т2", фио: "Кузнецов К.К.", подразделение: "Цех № 7" }]})); ХР.removeItem("lnk_units"); });
+      await перезагрузить(q);
+      const р0 = await q.evaluate(() => ({ ед: live(ЕД).map(x => x.id + "|" + x.наименование), к: КОНТ.map(к => [к.подразделение, JSON.stringify(к.телефоны || null), "телефон" in к, к.изменено || ""]) }));
+      да(р0.ед.length === 1 && /^ЕД-П[0-9a-f]{8}\|Цех № 7$/.test(р0.ед[0]) && р0.к[0][0] === р0.ед[0].split("|")[0] && р0.к[1][0] === р0.к[0][0] &&
+        р0.к[0][1] === JSON.stringify([{ вид: "другой", т: "11-22" }]) && !р0.к[0][2] && р0.к[0][3] === "2026-11-01T00:00:00.000Z",
+        "перенос из 3.99: подразделение-текст → одна карточка структуры (id из текста), телефон → список «другой», «изменено» не тронуто", JSON.stringify(р0));
+      // Структура: вложенность, кольцо не допускается, отбор с вложенными
+      const р1 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 80));
+        const ц = live(ЕД)[0];
+        editReg("unit", ""); await ж(); document.getElementById("rf_наименование").value = "Участок 2";
+        document.getElementById("rf_родитель").value = String(ц.id); saveRegRec("unit", ""); await ж();
+        const у = live(ЕД).find(x => x.наименование === "Участок 2");
+        editReg("unit", ""); await ж(); document.getElementById("rf_наименование").value = "Бригада 3";
+        document.getElementById("rf_родитель").value = String(у.id); saveRegRec("unit", ""); await ж();
+        const бр = live(ЕД).find(x => x.наименование === "Бригада 3");
+        editReg("unit", String(ц.id)); await ж();
+        const опц = [...document.querySelectorAll("#rf_родитель option")].map(o => o.value).filter(Boolean);
+        const ошибка = REGS.unit.проверить({ родитель: String(бр.id) }, String(ц.id));
+        const к = найтиПоИд(КОНТ, "КТ-Т2"); к.подразделение = String(бр.id); saveReg(REG_КОНТ, КОНТ);
+        switchView("contacts"); await ж(); setКонтОтбор(String(ц.id)); await ж();
+        const вЦехе = document.querySelectorAll("#main table[data-список=kont] tbody tr[data-id]").length;
+        setКонтОтбор(String(у.id)); await ж();
+        const вУч = [...document.querySelectorAll("#main table[data-список=kont] tbody tr[data-id]")].map(t => t.dataset.id);
+        const дерево = [...document.querySelectorAll("#main .едпункт .едимя")].map(x => x.textContent.trim());
+        setКонтОтбор(""); await ж();
+        return { путь: путьЕд(бр.id), опц, ошибка, вЦехе, вУч, дерево, меню: document.getElementById("cКонт").textContent, вид: curView };
+      });
+      да(р1.путь === "Цех № 7 / Участок 2 / Бригада 3" && р1.опц.length === 0 && /само в себя/.test(р1.ошибка || ""),
+        "структура: три уровня вложенности, путь «Цех / Участок / Бригада»; своё вложенное выбрать нельзя", JSON.stringify(р1));
+      да(р1.вЦехе === 2 && р1.вУч.length === 1 && р1.вУч[0] === "КТ-Т2" && р1.дерево.join("|") === "Все контакты|Цех № 7|Участок 2|Бригада 3" && р1.меню === "2" && р1.вид === "contacts",
+        "раздел «Контакты» в меню: дерево слева, отбор по подразделению вместе с вложенными", JSON.stringify(р1));
+      // Телефоны и адреса в форме
+      const р2 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 80));
+        editReg("kont", "КТ-Т1"); await ж();
+        видыПлюс("kont", "телефоны");
+        const строки = [...document.querySelectorAll("#rf_телефоны .видстр")];
+        строки[1].querySelector(".видвид").value = "мобильный"; строки[1].querySelector(".видзн").value = "+7 900 111-22-33";
+        document.querySelector("#rf_адреса .видзн").value = "г. Энск, ул. Мира, 1";
+        saveRegRec("kont", "КТ-Т1"); await ж();
+        return найтиПоИд(КОНТ, "КТ-Т1");
+      });
+      да(JSON.stringify(р2.телефоны) === JSON.stringify([{ вид: "другой", т: "11-22" }, { вид: "мобильный", т: "+7 900 111-22-33" }]) &&
+        JSON.stringify(р2.адреса) === JSON.stringify([{ вид: "рабочий", т: "г. Энск, ул. Мира, 1" }]),
+        "несколько телефонов и адрес с видом сохраняются списком", JSON.stringify(р2));
+      // Круг через Excel
+      await q.evaluate(() => switchView("contacts"));
+      await q.evaluate(() => выгрузкаДляПравки("kont"));
+      const [фк] = await собратьФайлы(q);
+      const пр = spawnSync("python3", ["-c", `
+import openpyxl,sys
+wb=openpyxl.load_workbook(sys.argv[1]); ws=wb.active
+h={c.value:c.column for c in ws[1]}
+print("|".join(str(c.value) for c in ws[1]))
+for r in range(2,ws.max_row+1):
+    if ws.cell(r,h["Код записи (не менять)"]).value=="КТ-Т1":
+        ws.cell(r,h["Телефон: мобильный"]).value="+7 900 111-22-33; +7 911 000-00-00"
+        ws.cell(r,h["Телефон: другой"]).value=None
+        ws.cell(r,h["Адрес: домашний"]).value="г. Энск, ул. Лесная, 5"
+n=ws.max_row+1
+ws.cell(n,h["ФИО"]).value="Новиков Н.Н."
+ws.cell(n,h["Подразделение"]).value="Цех № 7 / Участок 2"
+ws.cell(n,h["Телефон: рабочий"]).value="33-44"
+ws.cell(n,h["Дата рождения"]).value="05.03.1990"
+wb.save(sys.argv[2])`, фк, фк.replace(/\.xlsx$/, "-правка.xlsx")], { encoding: "utf8" });
+      const пров = spawnSync("python3", [path.join(КОРЕНЬ, "scripts", "проверка_xlsx.py"), фк], { encoding: "utf8" });
+      await подать(q, () => document.getElementById("imp_kont").click(), фк.replace(/\.xlsx$/, "-правка.xlsx"));
+      const р3 = await q.evaluate(() => ({ т1: найтиПоИд(КОНТ, "КТ-Т1"), нов: live(КОНТ).find(к => к.фио === "Новиков Н.Н."), уч: live(ЕД).find(x => x.наименование === "Участок 2").id }));
+      да(пров.status === 0 && /Телефон: рабочий\|Телефон: мобильный\|Телефон: домашний/.test(пр.stdout) && /Адрес: почтовый/.test(пр.stdout),
+        "выгрузка для правки: колонка на каждый вид телефона и адреса, файл проходит проверка_xlsx", (пр.stdout || "") + (пр.stderr || "") + пров.stdout);
+      да(JSON.stringify(р3.т1.телефоны) === JSON.stringify([{ вид: "мобильный", т: "+7 900 111-22-33" }, { вид: "мобильный", т: "+7 911 000-00-00" }]) &&
+        JSON.stringify(р3.т1.адреса) === JSON.stringify([{ вид: "рабочий", т: "г. Энск, ул. Мира, 1" }, { вид: "домашний", т: "г. Энск, ул. Лесная, 5" }]),
+        "загрузка из Excel: два мобильных через «; », очищенный «другой» стёрт, добавлен домашний адрес", JSON.stringify(р3.т1));
+      да(р3.нов && String(р3.нов.подразделение) === String(р3.уч) && JSON.stringify(р3.нов.телефоны) === JSON.stringify([{ вид: "рабочий", т: "33-44" }]) && р3.нов.дата_рождения === "1990-03-05",
+        "новая строка без кода: подразделение найдено по пути «Цех / Участок», телефон, дата рождения", JSON.stringify(р3.нов));
+      // Прошедшие дни рождения
+      const р4 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 80));
+        const к = найтиПоИд(КОНТ, "КТ-Т2"); к.дата_рождения = "1975-" + сдвигДней(сегодняМестн(), -2).slice(5); saveReg(REG_КОНТ, КОНТ);
+        switchView("contacts"); await ж();
+        const блок = document.querySelector("#main .дрколонки").innerText;
+        switchView("dash"); await ж();
+        return { блок, пульт: [...document.querySelectorAll("#main .плашкадр")].map(x => x.innerText).join(" | ") };
+      });
+      да(/Прошедшие 30 дней — 1/.test(р4.блок) && /был 2 дн\. назад/.test(р4.блок) && /Недавно были: Кузнецов К\.К\./.test(р4.пульт) && /был 2 дн\. назад/.test(р4.пульт),
+        "прошедшие дни рождения: в «Контактах» (30 дней) и на пульте (7 дней)", JSON.stringify(р4));
+      const р5 = await q.evaluate(() => ({ копия: Array.isArray(всеДанные().структура) && всеДанные().структура.length === 3, ключ: КЛЮЧИ_ДАННЫХ["lnk_units"], мимо: реестрыМимоКопии().length,
+        поиск: найтиПоВсем("911 000").some(г => /Контакты/.test(г.раздел.н)) }));
+      да(р5.копия && р5.ключ === "структура" && р5.мимо === 0 && р5.поиск, "структура и контакты — в копии и обмене; поиск по базе находит по телефону", JSON.stringify(р5));
+      await m1.c.close();
+    }
+
+    раздел("68. Отсутствия сотрудников; вкладка «Файлы по папкам» запоминается");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p);
+      const q = m1.p;
+      await q.evaluate(() => saveWS({ код: "М1", мастер: false, начальник: true }));
+      const р1 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 80));
+        const сп = live(P)[0], с = сегодняМестн();
+        switchView("absence"); await ж();
+        // щелчок по пустой клетке — новое отсутствие с этого дня
+        const кл = [...document.querySelectorAll("#main .отсграф tbody tr")][0].querySelectorAll("td")[+с.slice(8, 10)];
+        кл.click(); await ж();
+        const заготовка = { сотр: document.getElementById("rf_сотрудник").value, с: document.getElementById("rf_с").value };
+        document.getElementById("rf_по").value = сдвигДней(с, -1);
+        saveRegRec("abs", ""); await ж();
+        const ошибкаДат = live(ОТС).length === 0;
+        document.getElementById("rf_по").value = сдвигДней(с, 6);
+        saveRegRec("abs", ""); await ж();
+        const клеток = document.querySelectorAll("#main .отсграф td.о").length;
+        const x = live(ОТС)[0];
+        return { заготовка, ошибкаДат, клеток, x, сп: String(сп.id), вид: curView, меню: document.getElementById("cОтс").textContent };
+      });
+      да(р1.заготовка.с === await q.evaluate(() => сегодняМестн()) && р1.ошибкаДат && р1.x && р1.x.вид === "Отпуск" && р1.вид === "absence" && р1.меню === "1",
+        "щелчок по клетке графика — новое отсутствие с этого дня; «по» раньше «с» не сохраняется; счётчик меню — кто отсутствует сегодня", JSON.stringify(р1));
+      const р2 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 80));
+        const сп = найтиПоИд(P, live(ОТС)[0].сотрудник), с = сегодняМестн(), имя = сп.вдок || сп.фио;
+        const доп = замечанияДопуска(имя, "ВИК", с, [], false).filter(x => /отсутствует/.test(x.т)).length;
+        const завтра = сдвигДней(с, 20);
+        const допПосле = замечанияДопуска(имя, "ВИК", завтра, [], false).filter(x => /отсутствует/.test(x.т)).length;
+        const кал = календарьДела(null, null, [с, сдвигДней(с, 7)]).filter(x => x.тип === "отс");
+        const проср = делаПульта().прос.filter(x => x.тип === "отс").length;
+        switchView("dash"); await ж();
+        const пульт = [...document.querySelectorAll("#main .плашкадр")].map(x => x.innerText).join(" | ");
+        // подготовка работ: отсутствующий исполнитель
+        const подг = допускИсполнителя({ исп: имя, методы: ["ВИК"], срок: с });
+        // пересечение и работа в день отсутствия
+        ОТС.push({ id: "ОТ-Т2", сотрудник: String(сп.id), вид: "Командировка", с: сдвигДней(с, 2), по: сдвигДней(с, 3), изменено: new Date().toISOString() }); saveReg(REG_ОТС, ОТС);
+        const z = liveJ().find(z => Object.values(z.методы || {}).some(m => m.исп)); const м = Object.keys(z.методы).find(k => z.методы[k].исп);
+        const был = { д: z.дата, и: z.методы[м].исп }; z.дата = с; z.методы[м].исп = имя;
+        const пров = проверки().filter(x => x.тема === "Отсутствия сотрудников").map(x => x.текст);
+        z.дата = был.д; z.методы[м].исп = был.и;
+        return { доп, допПосле, кал: кал.map(x => x.что), проср, пульт, подг, пров };
+      });
+      да(р2.доп === 1 && р2.допПосле === 0 && р2.подг && р2.подг.ок === false && /отсутствует: отпуск/.test(р2.подг.т),
+        "допуск в записи журнала и в «Подготовке работ»: исполнитель в отпуске — отмечен; после отпуска — нет", JSON.stringify(р2));
+      да(р2.кал.length === 1 && /^Отпуск: /.test(р2.кал[0]) && р2.проср === 0 && /Сегодня отсутствуют: .*отпуск по/.test(р2.пульт),
+        "календарь (тип «Отсутствия») и пульт: кто отсутствует сегодня; в «просрочено» не идёт", JSON.stringify(р2));
+      да(р2.пров.some(т => /пересекаются: 1/.test(т)) && р2.пров.some(т => /исполнитель по графику отсутствует: 1/.test(т)),
+        "«Проверка данных»: пересечение периодов и работа в день отсутствия", JSON.stringify(р2.пров));
+      // Год, рабочие дни, Excel
+      const р3 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 80));
+        setОтс("вид", "год"); await ж();
+        const клетки = [...document.querySelectorAll("#main .отсграф td.о")].map(x => x.textContent);
+        setОтс("вид", "месяц");
+        return { клетки, раб: рабочихДней("2026-11-02", "2026-11-08"), раб2: рабочихДней("2026-12-31", "2027-01-11") };
+      });
+      да(р3.клетки.length >= 1 && /О\d+/.test(р3.клетки.join(" ")) && р3.раб === 4 && р3.раб2 === 1,
+        "график года по месяцам; рабочие дни по производственному календарю (4 ноября, новогодние праздники)", JSON.stringify(р3));
+      await q.evaluate(() => exportОтсутствия());
+      const [фо] = await собратьФайлы(q);
+      const пв = spawnSync("python3", [path.join(КОРЕНЬ, "scripts", "проверка_xlsx.py"), фо], { encoding: "utf8" });
+      да(пв.status === 0, "Excel отсутствий за период проходит проверка_xlsx", пв.stdout + пв.stderr);
+      // Вкладка «Файлы по папкам» запоминается: меню возвращает на неё
+      const р4 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 80));
+        switchView("exchange"); await ж();
+        [...document.querySelectorAll("#main .вкладки .вкл")].find(b => b.dataset.вкл === "filesort").click(); await ж();
+        const в1 = curView;
+        document.querySelector('#side .nav[data-view="journal"]').click(); await ж();
+        document.querySelector('#side .nav[data-view="exchange"]').click(); await ж();
+        const в2 = curView, подсв = document.querySelector("#side .nav.on").dataset.view;
+        [...document.querySelectorAll("#main .вкладки .вкл")].find(b => b.dataset.вкл === "обмен").click(); await ж();
+        document.querySelector('#side .nav[data-view="journal"]').click(); await ж();
+        document.querySelector('#side .nav[data-view="exchange"]').click(); await ж();
+        return { в1, в2, подсв, в3: curView, вкл: (document.querySelector("#main .вкладки .вкл.on") || {}).dataset.вкл };
+      });
+      да(р4.в1 === "filesort" && р4.в2 === "filesort" && р4.подсв === "exchange" && р4.в3 === "exchange" && р4.вкл === "обмен",
+        "«Обмен файлами» из меню открывается на вкладке, где его оставили, — и на «Файлах по папкам»", JSON.stringify(р4));
       await m1.c.close();
     }
 

@@ -18,7 +18,7 @@ function renderPodr(){
           :"<span class='st new'>контрактов нет</span>"}</td>
     </tr>`;}).join(""):`<tr><td colspan="5" class="empty">Подразделений пока нет.</td></tr>`;
   document.getElementById("main").innerHTML=`
-    ${вкладкиРаздела("podr", [["список","Подразделения"],["контакты","Контакты ("+live(КОНТ).length+")"],["сводка","Сводка работ"]])}
+    ${вкладкиРаздела("podr", [["список","Подразделения"],["сводка","Сводка работ"]])}
     <div data-вклр="список">
     ${printHead("Заказывающие подразделения","карточек "+rows.length)}
     <div class="head"><h2>Подразделения</h2><span class="sub">${rows.length}</span>
@@ -39,7 +39,6 @@ function renderPodr(){
         <th style="width:220px">Экспертная организация</th><th style="width:150px">Руководитель</th>
         <th style="width:150px">Контракты</th></tr></thead>
       <tbody>${body}</tbody></table></div></div></div>
-    <div data-вклр="контакты">${блокКонтактов()}</div>
     <div data-вклр="сводка">${блокСводкиПодр()}</div>`;
   показатьВкладкиРаздела("podr");
   wireSearch(renderPodr);

@@ -319,7 +319,7 @@ function renderDash(){
   const открыта=!!пультНастр().сводка;
   document.getElementById("main").innerHTML=`
     <div class="head"><h2>Пульт</h2><span class="sub">на ${ru(new Date().toISOString().slice(0,10))}</span></div>
-    ${плашкаДнейРождения()}
+    ${плашкаДнейРождения()}${плашкаОтсутствий()}
     ${плашкаПереезда()}
     ${плашкаПапкиОбмена(true)}${плашкаРаскладки()}
     ${тревога?`<div class="draftnote" style="cursor:pointer" onclick="switchView('exchange')">

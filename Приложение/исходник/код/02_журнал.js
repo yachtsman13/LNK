@@ -33,6 +33,8 @@ function setChrome(){
   if(window.ЛНК_ГОТОВ && входВкл() && _я==null && !_окноВхода) показатьВход();
   document.getElementById("cJournal").textContent=liveJ().length;
   const пд=document.getElementById("cPodr"); if(пд) пд.textContent=live(ПОДР).length;
+  const цК=document.getElementById("cКонт"); if(цК) цК.textContent=live(КОНТ).length;
+  const цО=document.getElementById("cОтс"); if(цО){ const н=отсутствуютСегодня().length; цО.textContent=н; цО.style.display=н?"":"none"; }
   const цНд=document.getElementById("cНд"); if(цНд) цНд.textContent=live(НД).length;
   const цПом=document.getElementById("cПом"); if(цПом) цПом.textContent=live(ПОМ).length;
   // Документы СМ — число действующих; предложения — новые (не разобранные).

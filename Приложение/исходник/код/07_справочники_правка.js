@@ -802,7 +802,7 @@ function editReg(kind,id,изИд){
       // справочник ПОДР, и текущая карточка исключена из списка (нельзя
       // сослаться на саму себя).
       : f.type==="ref" ? (()=>{
-          let сп=f.ref().filter(x=>x!==z).slice();
+          let сп=f.ref(z).filter(x=>x!==z).slice();
           // Уже сохранённое значение могло выпасть из списка — например,
           // основной прибор потом отметили «составных частей нет». Без
           // своего пункта select показал бы пустоту, а сохранение формы
@@ -812,7 +812,7 @@ function editReg(kind,id,изИд){
             if(был) сп.push(был);
           }
           return `<select id="rf_${f.k}"${f.при_смене?` onchange="${f.при_смене}"`:""}><option value="">— не выбрано —</option>${
-            сп.sort((a,b)=>String(a[f.refName]||"").localeCompare(String(b[f.refName]||""),"ru"))
+            (f.refПорядок?сп:сп.sort((a,b)=>String(a[f.refName]||"").localeCompare(String(b[f.refName]||""),"ru")))
               .map(x=>`<option value="${val(x.id)}" ${String(v)===String(x.id)?"selected":""}>${
                 f.refТекст?val(f.refТекст(x)):(val(x[f.refName])+(f.refSub&&x[f.refSub]?(" · "+val(x[f.refSub])):""))
                 }</option>`).join("")}</select>`; })()
@@ -828,11 +828,17 @@ function editReg(kind,id,изИд){
             return `<span class="месгод"><b>${г}</b><select id="rf_${f.k}_${г}">
             <option value="">${расч?("— расчёт: "+расч.toLowerCase()+" —"):"— нет —"}</option>${МЕСЯЦЫ.map(м=>
               `<option ${String((v&&v[г])||"")===м?"selected":""}>${м}</option>`).join("")}</select></span>`; }).join("")}</span>`
+      // Несколько значений с видом — телефоны (рабочий, мобильный…),
+      // адреса (4.0): строка «вид + значение», «＋» добавляет строку.
+      : f.type==="виды" ? `<div class="видыспис" id="rf_${f.k}">${(Array.isArray(v)&&v.length?v:[{}]).map(x=>строкаВида(f,x)).join("")}</div>
+          <button type="button" class="btn small видыплюс" onclick="видыПлюс('${kind}','${f.k}')">＋ ${esc(f.ещё||"ещё")}</button>`
       : f.type==="флажок" ? `<input id="rf_${f.k}" type="checkbox" ${v?"checked":""}>`
       // f.варианты — подсказка при вводе (datalist): не запрещает своё значение
       : `<input id="rf_${f.k}" ${f.type==="date"?"type=date":""} value="${val(v)}"${f.варианты?` list="рфсп_${f.k}"`:""}>${
           f.варианты?`<datalist id="рфсп_${f.k}">${f.варианты.map(о=>`<option value="${val(о)}">`).join("")}</datalist>`:""}`;
     if(f.type==="флажок") return `<label class="флажокполе${f.wide?" wide":""}">${body}${f.l}</label>`;
+    if(f.type==="виды") return `<div class="wide видыполе"><span class="видыподп">${f.l}</span>${body}${
+      f.подсказка?`<span class="полеподсказ справ">${f.подсказка}</span>`:""}</div>`;
     if(f.запереть && f.запереть()) body=body.replace(/^<(select|input|textarea)/,"<$1 disabled");
     return `<label class="${f.wide?"wide":""}">${f.l}${
       f.файлДок&&ЕСТЬ_ПАПКИ?`<span class="файлобёртка">${body}${кнопкаФайлаДок("rf_"+f.k)}</span>`:body}${
@@ -1269,7 +1275,7 @@ function пбПовтМинус(i){
 // Справочники, где одинаковое наименование — повод переспросить.
 // Приборов и специалистов здесь нет намеренно: два одинаковых люксметра
 // или два однофамильца — обычное дело, вопрос был бы шумом.
-const ДУБЛЬ_ПРЕДУПРЕЖДАТЬ=["obj","nd","pom","podr"];
+const ДУБЛЬ_ПРЕДУПРЕЖДАТЬ=["obj","nd","pom","podr","kont"];
 function нормИмя(v){ return String(v==null?"":v).toLowerCase().replace(/\s+/g," ").trim(); }
 function похожиеКарточки(kind, имя){
   if(ДУБЛЬ_ПРЕДУПРЕЖДАТЬ.indexOf(kind)<0) return [];
@@ -1330,10 +1336,19 @@ function saveRegRec(kind,id){
           const м=el?el.value.trim():""; if(м) из[String(г)]=м; });
       rec[f.k]=из; return;
     }
+    if(f.type==="виды"){
+      const к=document.getElementById("rf_"+f.k); if(!к) return;
+      rec[f.k]=[...к.querySelectorAll(".видстр")].map(р=>({вид:р.querySelector(".видвид").value,
+        т:р.querySelector(".видзн").value.trim()})).filter(x=>x.т);
+      return;
+    }
     const el=document.getElementById("rf_"+f.k);
     rec[f.k]=!el?"":(el.type==="checkbox"?(el.checked?"Да":""):el.value.trim());
   });
   if(!rec[C.name]){ toast("Заполните: "+C.fields.find(f=>f.k===C.name).l); return; }
+  // Своя проверка справочника (4.0): например, подразделение не может
+  // входить само в себя или в своё же вложенное.
+  if(C.проверить){ const о=C.проверить(rec, id); if(о){ toast(о); return; } }
   rec.изменено=new Date().toISOString(); rec.место=getWS().код;
   if(C.контракты) rec.контракты=_контракты.filter(к=>String(к.год||"").trim());
   if(C.аттестации) rec.аттестации=_аттестации.filter(а=>String(а.метод||"").trim());
@@ -1379,3 +1394,22 @@ function delReg(kind,id){
   формаСохранена(); closeDrawer(); switchView(C.view); toast("Удалено");
 }
 
+
+// ── Поле «несколько значений с видом» (4.0) ────────────────────
+// Хранится списком [{вид, т}]. В Excel — по колонке на каждый вид
+// (`колонкаВида`), несколько значений одного вида — через «; ».
+function строкаВида(f,x){
+  const виды=f.виды.slice(); if(x.вид && виды.indexOf(x.вид)<0) виды.push(x.вид);
+  return `<div class="видстр"><select class="видвид">${виды.map(в=>`<option ${x.вид===в?"selected":""}>${esc(в)}</option>`).join("")}</select>
+    <input class="видзн" value="${esc(x.т||"")}" placeholder="${esc(f.пример||"")}">
+    <button type="button" class="btn small" title="Убрать строку" onclick="this.closest('.видстр').remove();_несохранено=true">✕</button></div>`;
+}
+function видыПлюс(kind,k){
+  const f=REGS[kind].fields.find(x=>x.k===k), к=document.getElementById("rf_"+k); if(!f||!к) return;
+  const занято=[...к.querySelectorAll(".видвид")].map(s=>s.value);
+  к.insertAdjacentHTML("beforeend", строкаВида(f,{вид:f.виды.find(в=>занято.indexOf(в)<0)||f.виды[f.виды.length-1]}));
+  const нов=к.lastElementChild.querySelector(".видзн"); if(нов) нов.focus();
+}
+function колонкаВида(f,вид){ return (f.колонка||f.l)+": "+вид; }
+function видыТекст(список, вид){ return (список||[]).filter(x=>x.вид===вид).map(x=>x.т).join("; "); }
+function видыКоротко(список){ return (список||[]).map(x=>x.т+(x.вид?" ("+x.вид+")":"")).join(", "); }

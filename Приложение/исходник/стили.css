@@ -874,6 +874,48 @@ body.входзакрыт .app{visibility:hidden}
 .т-план{--тц:#2e9e5b} .т-внеплан{--тц:#e07b1f} .т-сроки{--тц:#b8860b} .т-др{--тц:#d0558f}
 .плашкадр{margin:0 0 12px;padding:10px 14px;border-radius:10px;border:1px solid #d0558f;border-left-width:5px;
   background:var(--panel);color:var(--ink);cursor:pointer}
+/* Контакты (4.0): дерево подразделений слева, список справа */
+.контсетка{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:14px;align-items:start}
+.контсетка>div{min-width:0}
+@media (max-width:1100px){.контсетка{grid-template-columns:1fr}}
+@media print{.контсетка{display:block}}
+.едкарта{padding:12px 14px}
+.едпункт{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;cursor:pointer}
+.едпункт:hover{background:var(--head-bg)}
+.едпункт.on{background:var(--brand);color:#fff}
+.едпункт.on .muted{color:#fff;opacity:.85}
+.едпункт .едимя{flex:1}
+.едпункт .едправ{padding:0 6px;opacity:.6}
+.едпункт:hover .едправ{opacity:1}
+.дрколонки{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:900px){.дрколонки{grid-template-columns:1fr}}
+.excelменю{position:relative}
+.excelменю>summary{list-style:none;cursor:pointer}
+.excelменю>summary::-webkit-details-marker{display:none}
+.excelпункты{position:absolute;right:0;top:calc(100% + 4px);z-index:30;display:flex;flex-direction:column;gap:6px;
+  padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);min-width:240px}
+/* Поле «несколько значений с видом» (телефоны, адреса) */
+.видыполе{display:flex;flex-direction:column;gap:6px}
+.видыподп{font-size:13px;color:var(--muted)}
+.видыспис{display:flex;flex-direction:column;gap:6px}
+.видстр{display:grid;grid-template-columns:150px 1fr auto;gap:6px;align-items:center}
+.видыплюс{align-self:flex-start}
+/* Отсутствия (4.0): график по дням */
+.отсграф{border-collapse:collapse;font-size:12px}
+.отсграф th,.отсграф td{border:1px solid var(--line);padding:0;text-align:center;min-width:22px;height:24px}
+.отсграф th{position:static;text-transform:none;letter-spacing:normal;font-weight:600;padding:2px}
+.отсграф td.имя,.отсграф th.имя{text-align:left;padding:2px 8px;min-width:160px;white-space:nowrap}
+.отсграф td.вых,.отсграф th.вых{background:rgba(127,127,127,.2)}
+.отсграф .сег{outline:2px solid var(--brand);outline-offset:-2px}
+.отсграф td.о{cursor:pointer;color:#fff;font-weight:600}
+.отс-Отпуск{background:#2e9e5b} .отс-Обучение{background:#1f7ae0} .отс-Больничный{background:#c0392b}
+.отс-Командировка{background:#e07b1f} .отс-Прочее{background:#7f8c8d}
+.отсграф td.план{opacity:.55;background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 3px,transparent 3px 7px)}
+.отслег{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin:6px 0}
+.отслег span.к{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+.т-отс{--тц:#7f8c8d}
+.отсзнак{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:0}
+@media print{.отсграф td.о{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .калметка{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--тц,#999);flex:0 0 10px}
 .кал .сб[class*="т-"]{border-left-color:var(--тц)}
 .кал .сб.прос{color:var(--danger)} .кал .сб.сдел{text-decoration:line-through}

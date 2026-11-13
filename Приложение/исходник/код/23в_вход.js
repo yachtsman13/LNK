@@ -115,12 +115,16 @@ function показатьВход(причина){
   if(_окноВхода) return;
   document.body.classList.add("входзакрыт");
   const сп=live(P).slice().sort((a,b)=>String(a.фио||"").localeCompare(String(b.фио||""),"ru"));
-  const прежний=_последнийВошёл;
+  const пв=последнийВходМеста();
+  const прежний=_последнийВошёл!=null?_последнийВошёл:(пв&&пв.ид);
+  const пвСп=пв&&найтиПоИд(live(P),пв.ид);
   const фон=document.createElement("div"); фон.className="входфон";
   фон.innerHTML=`<div class="входокно" role="dialog" aria-label="Вход в программу">
     <div class="входшапка">${document.querySelector(".top .logo").innerHTML}<b>Система <span class="лнкзн">ЛНК</span></b></div>
     ${причина==="авто"?`<div class="note">Сеанс закрыт: ${минутАвтовыхода()} мин без действий. Несохранённое осталось на месте —
       войдите тем же пользователем, чтобы продолжить.</div>`:""}
+    ${пвСп&&_последнийВошёл==null?`<div class="muted" id="входПоследний">Последним на этом компьютере входил(а) <b>${esc(фамилияИО(пвСп))}</b>${
+      пв.когда?" — "+esc(new Date(пв.когда).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})):""}. Введите пароль или выберите другого.</div>`:""}
     <label>Кто входит<select id="входКто">${сп.map(x=>`<option value="${esc(String(x.id))}"${String(x.id)===String(прежний)?" selected":""}>${
       esc(x.фио||x.вдок||"")}${руководитель(x)?" — "+праваСпец(x).toLowerCase():""}</option>`).join("")}</select></label>
     <label>Пароль<input type="password" id="входПароль" autocomplete="current-password" maxlength="${ПАРОЛЬ_МАКС}"></label>
@@ -145,6 +149,11 @@ function показатьВход(причина){
   setTimeout(()=>{ const п=фон.querySelector("#входПароль"); if(п) п.focus(); },0);
 }
 let _последнийВошёл=null;
+// Кто последним входил на ЭТОМ компьютере (3.97) — окно входа сразу
+// предлагает его и ставит курсор в пароль. Настройка места: на другом
+// компьютере свой последний, в обмен и при переезде не едет.
+function последнийВходМеста(){ try{ const x=JSON.parse(ХР.getItem("lnk_last_login")||"null"); return x&&x.ид!=null?x:null; }catch(e){ return null; } }
+function запомнитьВход(ид){ ХР.setItem("lnk_last_login", JSON.stringify({ид:String(ид), когда:new Date().toISOString()})); }
 async function вошёл(ид){
   const прежний=_последнийВошёл, сменился=прежний!=null && String(прежний)!==String(ид);
   if(сменился && _несохранено){
@@ -153,7 +162,7 @@ async function вошёл(ид){
       "Сохранить её от вашего имени нельзя. Отбросить её и войти?")) return;
     формаСохранена();
   }
-  _я=String(ид); _последнийВошёл=_я; _последнееДействие=Date.now();
+  _я=String(ид); _последнийВошёл=_я; _последнееДействие=Date.now(); запомнитьВход(_я);
   if(_окноВхода){ _окноВхода.фон.remove(); _окноВхода=null; }
   document.body.classList.remove("входзакрыт");
   обновитьШапкуВхода(); setChrome();
@@ -335,7 +344,7 @@ async function включитьВход(){
   const без=live(P).filter(x=>состояниеПароля(x.id)==="не выдан").length;
   if(!confirm("Включить вход по паролю?\n\nПосле обмена он включится на всех местах. "+
     (без?"Паролей ещё нет у "+без+" специалистов — они не смогут войти, пока вы не выдадите им временные.":"Пароли есть у всех."))) return;
-  _я=String(сп.id); _последнийВошёл=_я; _последнееДействие=Date.now();
+  _я=String(сп.id); _последнийВошёл=_я; _последнееДействие=Date.now(); запомнитьВход(_я);
   const о=вход(); о.вкл=true; о.сброшен=null; сохранитьВход(о);
   обновитьШапкуВхода(); setChrome(); if(curView==="lab") renderLab();
   toast("Вход включён. Вы вошли: "+фамилияИО(сп));

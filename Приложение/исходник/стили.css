@@ -78,6 +78,10 @@
   .top .tag{font-size:11px;background:var(--top-tag);padding:2px 8px;border-radius:20px}
   .top .spring{flex:1}
   .top .who{font-size:12px;opacity:.92}
+  .top .назадкн{margin-left:14px;height:28px;padding:0 12px;border-radius:6px;border:1px solid currentColor;background:transparent;
+    color:inherit;font:inherit;font-size:13px;cursor:pointer;opacity:.9}
+  .top .назадкн:hover:not(:disabled){opacity:1;background:var(--top-tag)}
+  .top .назадкн:disabled{opacity:.35;cursor:default}
   .top .справкакн{width:26px;height:26px;border-radius:50%;border:1px solid currentColor;background:transparent;
     color:var(--top-ink);font:inherit;font-weight:700;font-size:13px;cursor:pointer;opacity:.85;padding:0;flex:none}
   .top .справкакн:hover{opacity:1;background:var(--top-tag)}

@@ -366,7 +366,27 @@ const ЛАБ_ВКЛАДКИ=[["карточка","Карточка"],["атте�
   ["passport","Паспорт ЛНК"],["premises","Помещения"],["smk","Система менеджмента"]];
 const ЛАБ_РАЗДЕЛЫ=["passport","premises","smk"];
 const ЛАБ_НЕ_ФОРМА=["готовность","вход","история"];
-function вкладкиЛаб(активная){ return вкладкиHTML(ЛАБ_ВКЛАДКИ, активная, "лабВкл"); }
+// Плитки сроков лаборатории — над вкладками на КАЖДОЙ вкладке, и в
+// разделах-вкладках «Паспорт ЛНК», «Помещения», «Система менеджмента»
+// (3.97: раньше были только в карточке и там пропадали). В печати —
+// только у самой карточки, паспорту и спискам они ни к чему.
+function плиткиЛаб(печатать){
+  const л=getЛаб();
+  const [кА,тА]=срокЛаб(л.свид_до), [кП,тП]=состояниеПроверкиЛНК(л);
+  return `<div class="tiles${печатать?"":" noprint"}">
+      <div class="tile ${кА||"" }"><div class="n" style="font-size:19px">${esc(тА)}</div>
+        <div class="l">аттестация ЛНК</div></div>
+      <div class="tile ${кП||"" }"><div class="n" style="font-size:${тП.length>24?14:19}px">${esc(тП)}</div>
+        <div class="l">плановая проверка</div></div>
+      <div class="tile"><div class="n">${(л.область_методы||[]).length}</div>
+        <div class="l">методов в области аттестации (СДАНК)</div></div>
+      <div class="tile"><div class="n">${(л.область_объекты||[]).length}</div>
+        <div class="l">объектов в области аттестации (СДАНК)</div></div>
+      <div class="tile"><div class="n">${(л.область_деятельность||[]).length}</div>
+        <div class="l">видов деятельности в области аттестации (СДАНК)</div></div>
+    </div>`;
+}
+function вкладкиЛаб(активная){ return плиткиЛаб(ЛАБ_РАЗДЕЛЫ.indexOf(активная)<0)+вкладкиHTML(ЛАБ_ВКЛАДКИ, активная, "лабВкл"); }
 function лабВклИзПерехода(){ if(ВКЛ_РАЗДЕЛА.lab){ лабВкладка=ВКЛ_РАЗДЕЛА.lab; delete ВКЛ_РАЗДЕЛА.lab; } }
 function лабВкл(к){
   if(ЛАБ_РАЗДЕЛЫ.indexOf(к)>=0){ switchView(к); return; }
@@ -388,7 +408,6 @@ function renderLab(){
   curView="lab";
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="lab"));
   const л=getЛаб();
-  const [кА,тА]=срокЛаб(л.свид_до), [кП,тП]=состояниеПроверкиЛНК(л);
   const v=x=>esc(x||"");
   // Раньше было одно поле «начальник» — подставляем его как ФИО
   // руководителя лаборатории, если это поле ещё не заполнено отдельно,
@@ -402,18 +421,6 @@ function renderLab(){
       <div class="spring"></div>
       <button class="btn" onclick="window.print()">⎙ PDF</button></div>
 
-    <div class="tiles">
-      <div class="tile ${кА||"" }"><div class="n" style="font-size:19px">${esc(тА)}</div>
-        <div class="l">аттестация ЛНК</div></div>
-      <div class="tile ${кП||"" }"><div class="n" style="font-size:${тП.length>24?14:19}px">${esc(тП)}</div>
-        <div class="l">плановая проверка</div></div>
-      <div class="tile"><div class="n">${(л.область_методы||[]).length}</div>
-        <div class="l">методов в области аттестации (СДАНК)</div></div>
-      <div class="tile"><div class="n">${(л.область_объекты||[]).length}</div>
-        <div class="l">объектов в области аттестации (СДАНК)</div></div>
-      <div class="tile"><div class="n">${(л.область_деятельность||[]).length}</div>
-        <div class="l">видов деятельности в области аттестации (СДАНК)</div></div>
-    </div>
     ${вкладкиЛаб(лабВкладка)}
     <div class="card" style="padding:20px" id="лабФорма"><div class="form">
       <div data-лабвкл="карточка">

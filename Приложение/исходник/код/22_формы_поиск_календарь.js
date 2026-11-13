@@ -52,8 +52,12 @@ function подписьНазад(вид, своё){
 }
 // своё — кнопка ведёт своей функцией, а не switchView (бланк протокола):
 // возврат в проверку её не касается.
+// Без своего действия кнопка ведёт по истории (22б): на страницу, с которой
+// форму открыли, в то же место; подпись уточняется после открытия формы.
+// Истории нет (первый запуск) — в свой раздел, как раньше.
 function кнопкаНазад(вид, действие, своё){
-  return `<button class="btn назад" type="button" onclick="${действие||`switchView('${вид}')`}">${esc(подписьНазад(вид, своё))}</button>`;
+  if(действие) return `<button class="btn назад" type="button" onclick="${действие}">${esc(подписьНазад(вид, своё))}</button>`;
+  return `<button class="btn назад" type="button" data-нав="1" onclick="навНазад('${вид}')">${esc(подписьНазад(вид, своё))}</button>`;
 }
 // ── Вкладки разделов (3.92, этап 5 проработки, п. 6–7) ─────────
 // Длинный раздел делится на вкладки — переключатель под заголовком, как у
@@ -844,7 +848,7 @@ function switchView(v){
   if(String(v).indexOf(":")>0){ const ч=String(v).split(":"); if(curView!==ч[0] && !уходСФормы()) return; ВКЛ_РАЗДЕЛА[ч[0]]=ч[1]; v=ч[0]; }
   if(v!==curView && !уходСФормы()) return;
   if(_возвратВПроверку && ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) v=typeof _возвратВПроверку==="string"?_возвратВПроверку:"check";
-  curView=v;query=""; _актИзЗаписи=null;
+  curView=v; query=_навЗапрос!=null?_навЗапрос:""; _актИзЗаписи=null;
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
   ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,smk:renderСМК,ideas:renderПредложения,requests:renderЗаявки,reqedit:renderЗаявки,filesort:renderРаскладка,pg:renderПГ,pgedit:renderПГ,prot:()=>_прот?открытьПротокол(_прот.zid,_прот.м,_прот.ф):renderJournal(),
     vibrocard:()=>открытьКартуВибрации(_картаВибр),vibroizm:()=>открытьКартуВибрации(_картаВибр),

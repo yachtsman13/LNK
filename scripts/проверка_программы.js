@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  64. «Назад» в то же место, плитки «Лаборатории» на всех вкладках, последний вход, имена свидетельств «… до …».
 //  63. справочные пояснения значком «i»: подсказки полей и пояснения разделов, наведение, щелчок, Esc.
 //  62. руководство пользователя: разделы, подписи кнопок совпадают с программой, переходы.
 //  61. списки флажков без своей прокрутки («показать все», «Найти»), карточка специалиста вкладками.
@@ -3792,27 +3793,28 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       const m = await место(b, "М1"); все.push(m.p);
       const q = m.p;
       // Все страницы правки — с прилипающей полосой
-      const ф = await q.evaluate(() => {
-        const пр = (имя, f) => { формаСохранена(); _возвратВПроверку = false; f(); const п = document.querySelectorAll("#main .formbtns.закреп");
+      const [ф, меню] = await q.evaluate(() => {
+        const пр = (имя, f, откуда) => { формаСохранена(); _возвратВПроверку = false; if (откуда) switchView(откуда); f(); const п = document.querySelectorAll("#main .formbtns.закреп");
           return [имя, п.length, п.length ? getComputedStyle(п[0]).position : "", п.length ? (п[0].querySelector(".назад") || {}).textContent || "" : ""]; };
         const z = live(J).find(x => x.методы && x.методы.ВИК && x.методы.ВИК.н);
         const si = live(S)[0], пг = live(ПГП)[0], ппр = позицииППР()[0];
         const out = [
-          пр("запись", () => editJournal(z.id)), пр("повтор", () => размножитьОткрыть(z.id)),
-          ...["obj", "si", "ppl", "podr", "nd", "pom", "vk", "vn", "smk", "idea"].map(k => пр(k, () => editReg(k, (REGS[k].arr().filter(x => !x.удалено)[0] || {}).id || null))),
+          пр("запись", () => editJournal(z.id), "journal"), пр("повтор", () => размножитьОткрыть(z.id)),
+          ...["obj", "si", "ppl", "podr", "nd", "pom", "vk", "vn", "smk", "idea"].map(k => пр(k, () => editReg(k, (REGS[k].arr().filter(x => !x.удалено)[0] || {}).id || null), REGS[k].view || null)),
           пр("задача", () => editTask(null)), пр("ппр", () => editППР(ппр.id)), пр("позиция ПГ", () => editПГП(пг.id)), пр("новый ПГ", () => editПГ(null)),
-          пр("лаборатория", () => switchView("lab")), пр("методика", () => editMetodika("ВИК")), пр("части", () => частиСпискомОткрыть(si.id)),
+          пр("лаборатория", () => switchView("lab")), пр("методика", () => editMetodika("ВИК")), пр("части", () => частиСпискомОткрыть(si.id), "si"),
           пр("замер", () => editЗамерВибр(live(ВИБК)[0].id, null)),
           пр("протокол", () => { editJournal(z.id); открытьПротокол(z.id, "ВИК"); })];
         формаСохранена(); switchView("dash");
-        return out;
+        const меню = в => Array.from(document.querySelector('.side .nav[data-view="' + в + '"]').childNodes).filter(n => n.nodeType === 3).map(n => n.textContent).join(" ").replace(/\s+/g, " ").trim();
+        return [out, { journal: меню("journal"), si: меню("si"), people: меню("people") }];
       });
       const без = ф.filter(x => x[1] !== 1 || x[2] !== "sticky");
       да(без.length === 0, "все 21 страница правки — с одной прилипающей полосой кнопок", JSON.stringify(без));
       const подп = Object.fromEntries(ф.map(x => [x[0], x[3]]));
-      да(подп.запись === "← к журналу" && подп.si === "← к приборам" && подп.ppl === "← к специалистам" && подп.повтор === "← к записи" &&
-        подп.протокол === "← к записи" && подп.замер === "← к карточке вибрации" && подп.части === "← к приборам" && подп.лаборатория === "",
-        "«← Назад» называет, куда ведёт (у карточки лаборатории — раздел меню, кнопки нет)", JSON.stringify(подп));
+      да(подп.запись === "← " + меню.journal && подп.si === "← " + меню.si && подп.ppl === "← " + меню.people && подп.повтор === "← к записи" &&
+        подп.протокол === "← к записи" && подп.замер === "← к карточке вибрации" && подп.части === "← " + меню.si && подп.лаборатория === "",
+        "«← Назад» называет страницу, с которой открыли форму (у карточки лаборатории — раздел меню, кнопки нет)", JSON.stringify(подп));
       const р0 = await q.evaluate(() => { _возвратВПроверку = true; editReg("si", live(S)[0].id);
         const т = document.querySelector("#main .formbtns.закреп .назад").textContent; формаСохранена(); _возвратВПроверку = false; switchView("dash"); return т; });
       да(р0 === "← в проверку данных", "открыта из «Проверки данных» — «← в проверку данных»", р0);
@@ -4435,6 +4437,97 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
         const ик = [...document.querySelectorAll(".инфо")].filter(x => !document.getElementById(x.dataset.к));
         return { без, битых: ик.length }; });
       да(р7.без.length === 0 && р7.битых === 0, "в разделах все пояснения «справ» превращены в значки, у каждого значка есть текст", JSON.stringify(р7));
+      await m1.c.close();
+    }
+
+    раздел("64. «Назад» в то же место, плитки «Лаборатории», последний вход, имена свидетельств «… до …»");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p);
+      const q = m1.p;
+      await q.evaluate(() => saveWS({ код: "М1", мастер: false, начальник: true }));
+      // Форма из списка: «← …» формы ведёт в список на то же место прокрутки, с тем же поиском
+      const р1 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 120));
+        switchView("journal"); query = "баллон"; renderJournal(); await ж();
+        const m = document.getElementById("main"); m.scrollTop = 600; await ж();
+        const прокр = m.scrollTop;
+        const стр = [...document.querySelectorAll("#main tbody tr[onclick*=showJournal]")].find(t => t.getBoundingClientRect().top > 200);
+        closeDrawer && closeDrawer(); editJournal(/showJournal\('([^']+)'/.exec(стр.getAttribute("onclick"))[1]); await ж();
+        const кн = document.querySelector("#main .formbtns button.назад");
+        const подпись = кн.textContent;
+        кн.click(); await ж();
+        return { прокр, подпись, вид: curView, запрос: query, поле: (document.querySelector("#main input[type=search],#main .search input") || {}).value, после: m.scrollTop };
+      });
+      да(р1.вид === "journal" && р1.запрос === "баллон" && р1.прокр > 300 && Math.abs(р1.после - р1.прокр) < 3 && /← Журнал/.test(р1.подпись),
+        "«← Журнал» из записи: журнал с тем же поиском и на том же месте прокрутки", JSON.stringify(р1));
+      // Сохранение из формы возвращает в список на прежнее место
+      const р2 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 120));
+        switchView("si"); await ж(); const m = document.getElementById("main"); m.scrollTop = 250; await ж(); const прокр = m.scrollTop;
+        editReg("si", live(S)[3].id); await ж(); saveRegRec("si", live(S)[3].id); await ж();
+        return { прокр, вид: curView, после: m.scrollTop };
+      });
+      да(р2.вид === "si" && р2.прокр > 100 && Math.abs(р2.после - р2.прокр) < 3, "«Сохранить» в карточке прибора — список приборов на прежнем месте", JSON.stringify(р2));
+      // Кнопка в шапке и Alt+←: несколько шагов назад; из формы, открытой из поиска, — в поиск
+      const р3 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 80));
+        switchView("people"); await ж(); switchView("pg"); await ж(); switchView("check"); await ж();
+        const кн = document.getElementById("назадКн"), т1 = кн.title, вкл = !кн.disabled;
+        кн.click(); await ж(); const в1 = curView;
+        return { т1, вкл, в1 };
+      });
+      await q.keyboard.press("Alt+ArrowLeft"); await q.waitForTimeout(150);
+      const р3б = await q.evaluate(() => curView);
+      да(р3.вкл && /Назад: Планы-графики/.test(р3.т1) && р3.в1 === "pg" && р3б === "people",
+        "кнопка «← Назад» в шапке (подсказка — куда) и Alt+← — по шагам назад", JSON.stringify([р3, р3б]));
+      const р4 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 120));
+        renderНайти(); await ж(); const п = document.querySelector("#main input"); п.value = "12978"; п.dispatchEvent(new Event("input", { bubbles: true })); await ж();
+        const р = document.querySelector("#main [onclick*=\"открытьИзПоиска\"]"); р.click(); await ж();
+        const форма = curView; document.querySelector("#main .formbtns button.назад").click(); await ж();
+        return { форма, вид: curView, поле: (document.querySelector("#main input") || {}).value };
+      });
+      да(р4.форма === "regedit" && р4.вид === "find" && р4.поле === "12978", "карточка, открытая из «Поиска по базе»: «Назад» — в поиск с тем же запросом", JSON.stringify(р4));
+      // Отказ уйти из несохранённой формы — история цела
+      const р5 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 80));
+        switchView("objects"); await ж(); editReg("obj", live(O)[0].id); await ж();
+        const поле = document.getElementById("rf_примечание"); поле.value = "черновик"; поле.dispatchEvent(new Event("input", { bubbles: true }));
+        const был = window.confirm; window.confirm = () => false; навНазад(); const вид1 = curView; window.confirm = был;
+        формаСохранена(); навНазад(); await ж();
+        return { вид1, вид2: curView };
+      });
+      да(р5.вид1 === "regedit" && р5.вид2 === "objects", "несохранённая форма: «Отмена» оставляет в форме, после — «Назад» работает", JSON.stringify(р5));
+      // Плитки «Лаборатории» на всех вкладках, в т.ч. «Паспорт ЛНК», «Помещения», «Система менеджмента»
+      const р6 = await q.evaluate(async () => {
+        const ж = () => new Promise(r => setTimeout(r, 60)); const рез = {};
+        for (const в of ["lab", "passport", "premises", "smk"]) { switchView(в); await ж(); рез[в] = document.querySelectorAll("#main .tiles .tile").length; }
+        for (const к of ["аттестация", "проверка", "вход", "история"]) { switchView("lab"); лабВкл(к); await ж();
+          const t = document.querySelector("#main .tiles"); рез[к] = t && t.offsetParent ? t.children.length : 0; }
+        switchView("passport"); рез.печатьПаспорт = document.querySelector("#main .tiles").classList.contains("noprint");
+        return рез;
+      });
+      да(Object.keys(р6).filter(к => к !== "печатьПаспорт").every(к => р6[к] === 5) && р6.печатьПаспорт,
+        "плитки сроков лаборатории — на каждой вкладке «Лаборатории» (в печать паспорта не идут)", JSON.stringify(р6));
+      // Последний вошедший на этом компьютере предлагается в окне входа
+      const р7 = await q.evaluate(async () => {
+        const сп = live(P).find(x => /Сиволап/.test(x.фио)); запомнитьВход(сп.id); _последнийВошёл = null;
+        показатьВход(); await new Promise(r => setTimeout(r, 50));
+        const рез = { выбран: document.getElementById("входКто").value === String(сп.id), текст: (document.getElementById("входПоследний") || {}).textContent || "",
+          фокус: document.activeElement && document.activeElement.id, настройка: КЛЮЧИ_НАСТРОЕК.indexOf("lnk_last_login") >= 0, мимо: реестрыМимоКопии().length,
+          вКопии: JSON.stringify(всеДанные()).indexOf("lnk_last_login") >= 0 };
+        _окноВхода.фон.remove(); _окноВхода = null; document.body.classList.remove("входзакрыт");
+        return рез;
+      });
+      да(р7.выбран && /Сиволап П\.С\./.test(р7.текст) && р7.фокус === "входПароль" && р7.настройка && р7.мимо === 0 && !р7.вКопии,
+        "окно входа предлагает того, кто последним входил на этом компьютере, курсор — в пароле; это настройка компьютера, не данные", JSON.stringify(р7));
+      // Имя свидетельства: слово «поверка» перед «до» необязательно
+      const р8 = await q.evaluate(() => ({
+        н: разобратьИмяПоверки("Поверка А1210 зав. №34567 до 27.08.2027.pdf"),
+        с: разобратьИмяПоверки("Поверка ТКМ-459С зав.№ 21032 поверка до 25.06.2027.pdf"),
+        к: разобратьИмяПоверки("Калибровка Люксметр Testo 540 зав. №12 до 01.02.2027.pdf") }));
+      да(р8.н && р8.н.до === "2027-08-27" && р8.н.завТекст === "34567" && /А1210/.test(р8.н.текст) && р8.с && р8.с.до === "2027-06-25" && р8.к && р8.к.калибровка && р8.к.до === "2027-02-01",
+        "«Поверка А1210 зав. №34567 до 27.08.2027» разбирается; прежние «… поверка до …» — тоже", JSON.stringify(р8));
       await m1.c.close();
     }
 

@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  62. руководство пользователя: разделы, подписи кнопок совпадают с программой, переходы.
 //  61. списки флажков без своей прокрутки («показать все», «Найти»), карточка специалиста вкладками.
 //  60. вкладки длинных разделов (приборы, специалисты, подразделения, задачи, обмен, вибрация), «раздел:вкладка».
 //  59. меню по группам, «Лаборатория» вкладками (паспорт, помещения, СМ — вкладки), списки без своей прокрутки.
@@ -99,7 +100,7 @@ const ВЫХОД = fs.mkdtempSync(path.join(os.tmpdir(), "lnk-check-"));
 const ИЗВЕСТНЫЕ_ОШИБКИ = [/приборов с просроченной поверкой/];
 // Разделы программы (switchView).
 const РАЗДЕЛЫ = ["dash","find","journal","objects","si","people","docs","exchange","plan",
-  "check","podr","nd","premises","lab","tasks","passport","metod","calendar","vibro","vibronorm","pg","prep","labels","smk","ideas","filesort"];
+  "check","podr","nd","premises","lab","tasks","passport","metod","calendar","vibro","vibronorm","pg","prep","labels","smk","ideas","filesort","guide"];
 
 function playwright(){
   if(process.env.PW_PATH) return require(process.env.PW_PATH);
@@ -4369,6 +4370,33 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       да(р2.вкл.length === 7 && р2.осн && !р2.атт && р2.атт2 && !р2.осн2,
         "карточка специалиста — вкладки Основное · Допуски · ПБ · Аттестация · Классность · План обучения · История", JSON.stringify(р2));
       да(р2.должн === "Должность 61" && р2.строк >= 1, "«+ Метод» на вкладке аттестаций; «Сохранить» там же сохраняет и поле с вкладки «Основное»", JSON.stringify(р2));
+      await m1.c.close();
+    }
+
+    раздел("62. Руководство пользователя");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p);
+      const q = m1.p;
+      const р1 = await q.evaluate(() => {
+        document.querySelector('#side .nav[data-view="guide"]').click();
+        const разд = document.querySelectorAll("#main section.рукразд").length, оглав = document.querySelectorAll("#main .рукоглав a").length;
+        const кнопки = [...document.querySelectorAll("#main .рукперех button")].map(b => b.getAttribute("onclick"));
+        // Каждая подпись кнопки, названная в руководстве в «…» со знаком в начале, есть в коде программы
+        const код = document.getElementById("lnk-main").textContent + document.body.innerHTML;
+        const подписи = [...new Set(РУКОВОДСТВО.flatMap(р => р.п.join(" ").match(/«[^»]{2,60}»/g) || []).map(x => x.slice(1, -1))
+          .filter(x => /^[＋+⤓▼▲✓⇢↶↺📄⧉№📁🪪⎙▤⬆📎🔍⇣✎→⚙⤢]/.test(x)))];
+        const нет = подписи.filter(x => !код.includes(x.replace(/…$/, "")));
+        // Переходы ведут в свои разделы
+        const куда = [];
+        РУКОВОДСТВО.forEach(р => (р.куда || []).forEach(([т, в, д]) => { switchView("guide");
+          if (д) { eval(д); } else switchView(в);
+          куда.push([в.split(":")[0], curView]); }));
+        лабВкладка = "карточка";
+        справкаКлавиш(); const вСправке = !!document.querySelector("#drawer button[onclick*=guide]"); closeDrawer();
+        return { разд, оглав, кнопок: кнопки.length, подписей: подписи.length, нет, мимо: куда.filter(([а, б]) => а !== б), вСправке }; });
+      да(р1.разд === 16 && р1.оглав === 16 && р1.кнопок >= 14, "«Справка → Руководство»: 16 разделов, оглавление, кнопки перехода", JSON.stringify(р1));
+      да(р1.подписей >= 30 && р1.нет.length === 0, "все кнопки, названные в руководстве, есть в программе под теми же подписями", JSON.stringify(р1.нет));
+      да(р1.мимо.length === 0 && р1.вСправке, "каждая кнопка «→» открывает свой раздел; в справке F1 — ссылка на руководство", JSON.stringify(р1.мимо));
       await m1.c.close();
     }
 

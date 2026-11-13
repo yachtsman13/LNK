@@ -772,7 +772,7 @@ function switchView(v){
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
   ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,smk:renderСМК,ideas:renderПредложения,requests:renderЗаявки,reqedit:renderЗаявки,filesort:renderРаскладка,pg:renderПГ,pgedit:renderПГ,prot:()=>_прот?открытьПротокол(_прот.zid,_прот.м,_прот.ф):renderJournal(),
     vibrocard:()=>открытьКартуВибрации(_картаВибр),vibroizm:()=>открытьКартуВибрации(_картаВибр),
-    vibroprint:()=>печатьКартВибрации(_печатьВибр),certsheet:renderЛистУдостоверений,labels:renderБирки,prep:renderПодготовка}[v]
+    vibroprint:()=>печатьКартВибрации(_печатьВибр),certsheet:renderЛистУдостоверений,guide:renderРуководство,labels:renderБирки,prep:renderПодготовка}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"ППР",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();
   if(МЕНЮ_РОДИТЕЛЬ[v]) подсветитьМеню(v);

@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  63. справочные пояснения значком «i»: подсказки полей и пояснения разделов, наведение, щелчок, Esc.
 //  62. руководство пользователя: разделы, подписи кнопок совпадают с программой, переходы.
 //  61. списки флажков без своей прокрутки («показать все», «Найти»), карточка специалиста вкладками.
 //  60. вкладки длинных разделов (приборы, специалисты, подразделения, задачи, обмен, вибрация), «раздел:вкладка».
@@ -2380,7 +2381,7 @@ print(json.dumps({"ab": ab, "верх": round(s.top_margin.cm, 2), "низ": rou
         return кн.includes("Заключение АЭ") && кн.includes("Протокол АЭ"); });
       да(аэ, "у АЭ в бланке переключатель «Заключение АЭ» / «Протокол АЭ»");
       // ППР вместо «План работ»
-      const ппр = await q.evaluate(() => { switchView("plan"); return [document.querySelector(".head h2").textContent, document.querySelector('.nav[data-view="plan"]').textContent.trim()]; });
+      const ппр = await q.evaluate(() => { switchView("plan"); return [document.querySelector(".head h2").firstChild.textContent.trim(), document.querySelector('.nav[data-view="plan"]').textContent.trim()]; });
       да(ппр[0] === "ППР" && /ППР$/.test(ппр[1]), "раздел «План работ» называется «ППР»", ппр.join(" | "));
       await m1.c.close(); await m2.c.close();
     }
@@ -3815,8 +3816,8 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       const р0 = await q.evaluate(() => { _возвратВПроверку = true; editReg("si", live(S)[0].id);
         const т = document.querySelector("#main .formbtns.закреп .назад").textContent; формаСохранена(); _возвратВПроверку = false; switchView("dash"); return т; });
       да(р0 === "← в проверку данных", "открыта из «Проверки данных» — «← в проверку данных»", р0);
-      // Длинная форма специалиста: полоса в окне при прокрутке с начала
-      await q.evaluate(() => { editReg("ppl", live(P)[0].id); document.getElementById("main").scrollTop = 0; });
+      // Длинная форма (прибор; у специалиста с 3.94 вкладки, с 3.96 пояснения значками — короче окна): полоса в окне
+      await q.evaluate(() => { editReg("si", live(S)[0].id); document.getElementById("main").scrollTop = 0; });
       await q.waitForTimeout(50);
       const р1 = await q.evaluate(() => {
         const м = document.getElementById("main"), п = м.querySelector(".formbtns.закреп"), к = п.querySelector(".btn.primary");
@@ -3828,7 +3829,7 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       да(р1.длинная && р1.вОкне && р1.уНиза < 30 && р1.кнопка && р1.пометка === "none",
         "форма длиннее окна: полоса у нижнего края окна, «Сохранить» не перекрыта, пометки нет", JSON.stringify(р1));
       // Ввод — пометка; прокрутка до конца — полоса на своём месте и не закрывает поля
-      await q.type("#rf_должность", " (правка)");
+      await q.type("#rf_тип", " (правка)");
       await q.waitForTimeout(50);
       const р2 = await q.evaluate(() => {
         const м = document.getElementById("main"); м.scrollTop = м.scrollHeight;
@@ -3847,10 +3848,10 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       const р3b = await q.evaluate(() => getComputedStyle(document.querySelector("#main .formbtns.закреп"), "::before").content);
       да(р3a === "none" && /несохранённые/.test(р3b), "пометка следует за флагом, поставленным кодом (не только вводом)", р3a + " / " + р3b);
       // «Сохранить» из полосы: сохраняет, уходит в список без вопроса
-      await q.evaluate(() => { document.getElementById("main").scrollTop = 0; document.getElementById("rf_должность").value += " (правка)"; _несохранено = true; });
+      await q.evaluate(() => { document.getElementById("main").scrollTop = 0; document.getElementById("rf_тип").value += " (правка)"; _несохранено = true; });
       await q.click("#main .formbtns.закреп .btn.primary");
-      const р4 = await q.evaluate(() => ({ вид: curView, долж: live(P)[0].должность, грязно: _несохранено }));
-      да(р4.вид === "people" && /\(правка\)/.test(р4.долж) && !р4.грязно, "«✓ Сохранить» в полосе сохраняет и возвращает в список", JSON.stringify(р4));
+      const р4 = await q.evaluate(() => ({ вид: curView, долж: live(S)[0].тип, грязно: _несохранено }));
+      да(р4.вид === "si" && /\(правка\)/.test(р4.долж) && !р4.грязно, "«✓ Сохранить» в полосе сохраняет и возвращает в список", JSON.stringify(р4));
       // «← Назад» с несохранённым — вопрос; отказ оставляет в форме
       await q.evaluate(() => { editReg("si", live(S)[0].id); document.getElementById("rf_тип").value = "Т-1"; _несохранено = true; });
       m.p.отказ = true;
@@ -4397,6 +4398,43 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       да(р1.разд === 16 && р1.оглав === 16 && р1.кнопок >= 14, "«Справка → Руководство»: 16 разделов, оглавление, кнопки перехода", JSON.stringify(р1));
       да(р1.подписей >= 30 && р1.нет.length === 0, "все кнопки, названные в руководстве, есть в программе под теми же подписями", JSON.stringify(р1.нет));
       да(р1.мимо.length === 0 && р1.вСправке, "каждая кнопка «→» открывает свой раздел; в справке F1 — ссылка на руководство", JSON.stringify(р1.мимо));
+      await m1.c.close();
+    }
+
+    раздел("63. Справочные пояснения значком «i»");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p);
+      const q = m1.p;
+      await q.evaluate(() => { saveWS({ код: "М1", мастер: false, начальник: true }); editReg("si", live(S)[0].id); });
+      await q.waitForTimeout(100);
+      const р1 = await q.evaluate(() => ({
+        видимых: [...document.querySelectorAll("#main .полеподсказ")].filter(x => x.offsetParent).length,
+        значков: document.querySelectorAll("#main label .инфо").length,
+        скрытых: document.querySelectorAll("#main .полеподсказ.справ[data-сп]").length }));
+      да(р1.видимых === 0 && р1.значков >= 5 && р1.скрытых >= р1.значков, "форма прибора: подсказки полей не видны, у подписей — значок «i»", JSON.stringify(р1));
+      const ик = await q.$("#main label .инфо"); const бб = await ик.boundingBox();
+      await q.mouse.move(бб.x + 5, бб.y + 5); await q.waitForTimeout(100);
+      const р2 = await q.evaluate(() => { const о = document.getElementById("инфоокно"), ик = document.querySelector("#main label .инфо");
+        return { видно: о && о.style.display === "block", тот: о && о.textContent.trim() === document.getElementById(ик.dataset.к).textContent.trim() }; });
+      await q.mouse.move(5, 5); await q.waitForTimeout(100);
+      const р3 = await q.evaluate(() => document.getElementById("инфоокно").style.display);
+      await ик.click(); await q.mouse.move(5, 5); await q.waitForTimeout(100);
+      const р4 = await q.evaluate(() => ({ закреп: document.getElementById("инфоокно").style.display, фокусПоля: document.activeElement && document.activeElement.tagName }));
+      await q.keyboard.press("Escape"); await q.waitForTimeout(50);
+      const р5 = await q.evaluate(() => document.getElementById("инфоокно").style.display);
+      да(р2.видно && р2.тот && р3 === "none" && р4.закреп === "block" && р4.фокусПоля !== "INPUT" && р5 === "none",
+        "наведение показывает текст пояснения, уход — прячет; щелчок закрепляет (поле не получает фокус), Esc — убирает", JSON.stringify([р2, р3, р4, р5]));
+      await ик.click(); await q.waitForTimeout(50);
+      const р6 = await q.evaluate(() => { формаСохранена(); switchView("exchange:копии");
+        const нужн = [...document.querySelectorAll("#main .note")].filter(x => x.offsetParent).map(x => x.textContent);
+        return { окно: document.getElementById("инфоокно").style.display, восст: нужн.some(т => /Восстановление заменяет данные/.test(т)),
+          копияСправ: !!document.querySelector('#main [data-вклр="копии"] .инфо') }; });
+      да(р6.окно === "none" && р6.восст && р6.копияСправ, "при переходе в другой раздел пояснение закрывается; предупреждения остаются видны («Восстановление заменяет данные»)", JSON.stringify(р6));
+      const р7 = await q.evaluate(async () => { const виды = ["dash","journal","si","people","lab","exchange","tasks","plan","pg","vibro","passport","check","metod"];
+        let без = []; for (const в of виды) { switchView(в); await new Promise(r => setTimeout(r, 30)); document.querySelectorAll(".справ").forEach(n => { if (!n.dataset.сп) без.push(в); }); }
+        const ик = [...document.querySelectorAll(".инфо")].filter(x => !document.getElementById(x.dataset.к));
+        return { без, битых: ик.length }; });
+      да(р7.без.length === 0 && р7.битых === 0, "в разделах все пояснения «справ» превращены в значки, у каждого значка есть текст", JSON.stringify(р7));
       await m1.c.close();
     }
 

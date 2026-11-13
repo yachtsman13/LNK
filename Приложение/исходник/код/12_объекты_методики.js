@@ -31,7 +31,7 @@ function renderPodr(){
       <button class="btn" onclick="document.getElementById('imp_podr').click()">⬆ Импорт из Excel</button>
       <input type="file" id="imp_podr" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('podr',this)">
       <button class="btn" onclick="window.print()">⎙ PDF</button></div>
-    <div class="note noprint">Карточка нужна акту: из неё берутся тип контракта, реквизиты
+    <div class="note справ noprint">Карточка нужна акту: из неё берутся тип контракта, реквизиты
       контракта на нужный год и подписант со стороны экспертной организации.
       Контракт свой на каждый год — так у вас и заведено.</div>
     <div class="card"><div class="tblwrap"><table data-список="podr">
@@ -100,7 +100,7 @@ function блокСводкиПодр(){
       ${св.ряды.length>1?`<tfoot><tr><td><b>Итого</b></td><td class="num"><b>${итог("записей")}</b></td><td></td><td></td>
         ${св.методы.map(м=>`<td class="num"><b>${св.ряды.reduce((n,р)=>n+(р.поМетодам[м]||0),0)}</b></td>`).join("")}
         <td class="num"><b>${итог("работ")}</b></td></tr></tfoot>`:""}</table></div>
-    <div class="note" style="margin:8px 12px 12px">Подразделение — как вписано в записи журнала, а если там пусто — из
+    <div class="note справ" style="margin:8px 12px 12px">Подразделение — как вписано в записи журнала, а если там пусто — из
       карточки объекта. Работа — метод в записи; объекты и акты считаются без повторов. Период — по дате контроля
       (${ru(св.с)} — ${ru(св.по)}).${св.безДаты?` Записей без даты — ${св.безДаты}, в период не попадают.`:""}
       ${все&&св.ряды.length?`<br><b>Сейчас подразделение не указано ни в одной записи и ни в одной карточке объекта</b> —
@@ -179,7 +179,7 @@ function renderNd(){
       <button class="btn" onclick="document.getElementById('imp_nd').click()">⬆ Импорт из Excel</button>
       <input type="file" id="imp_nd" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('nd',this)">
       <button class="btn" onclick="window.print()">⎙ PDF</button></div>
-    <div class="note noprint">Идёт в раздел 9 паспорта ЛНК как есть — список ваш, я его не
+    <div class="note справ noprint">Идёт в раздел 9 паспорта ЛНК как есть — список ваш, я его не
       выдумываю и не переношу из образцов. Колонка «Актуальность» в паспорт не идёт (в Форме 3
       её нет), она только для внутреннего контроля — раз в год стоит сверять список с действующими
       изданиями. Поле «Метод» — необязательное, для фильтра здесь же: у документов общего
@@ -219,7 +219,7 @@ function renderPremises(){
       <button class="btn" onclick="document.getElementById('imp_pom').click()">⬆ Импорт из Excel</button>
       <input type="file" id="imp_pom" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('pom',this)">
       <button class="btn" onclick="window.print()">⎙ PDF</button></div>
-    <div class="note noprint">Идёт в раздел 10 паспорта ЛНК.</div>
+    <div class="note справ noprint">Идёт в раздел 10 паспорта ЛНК.</div>
     <div class="card"><div class="tblwrap"><table data-список="pom">
       <thead><tr><th>Идентификация</th><th style="width:220px">Назначение</th>
         <th style="width:90px">Площадь</th><th style="width:220px">Инженерные сети</th></tr></thead>
@@ -305,7 +305,7 @@ function renderMetod(){
     ${printHead("Методики контроля по методам","методов "+METHODS.length)}
     <div class="head"><h2>Методики контроля</h2>
       <span class="sub">стандартный набор приборов и норм. документов на каждый метод</span></div>
-    <div class="note noprint">На каждый из ${METHODS.length} методов — свой набор приборов и
+    <div class="note справ noprint">На каждый из ${METHODS.length} методов — свой набор приборов и
       норм. документов. Он подставляется при заполнении записи журнала (кнопка «⚙ Приборы и
       НД» у метода) — там его можно скорректировать только для этой записи, а можно сохранить
       как новый стандарт для метода.</div>
@@ -436,7 +436,7 @@ function блокИсторииОбъекта(o){
       посл.map(x=>esc(x.м)+" — "+ru(x.дата)).join("; ")}</div></div>`:""}
     <table class="mtab"><thead><tr><th>Дата</th><th>Методы, протоколы, исполнители</th><th>Акт</th></tr></thead>
       <tbody>${строки}</tbody></table>
-    <div class="note">Щелчок по строке открывает запись журнала.</div>`;
+    <div class="note справ">Щелчок по строке открывает запись журнала.</div>`;
 }
 
 // ── Карточка объекта на печать и в Excel ─────────────────────

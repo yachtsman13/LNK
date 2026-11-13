@@ -118,6 +118,82 @@ function проверитьВлезание(){
 let _влезаниеЖдёт=false;
 function проверитьВлезаниеПотом(){ if(_влезаниеЖдёт) return; _влезаниеЖдёт=true;
   requestAnimationFrame(()=>{ _влезаниеЖдёт=false; проверитьВлезание(); }); }
+// 3.96: справочные пояснения — значком «i». Пояснение (элемент с классом
+// «справ»: div.note, span.полеподсказ, draftnote) прячется, а рядом с
+// заголовком блока или подписью поля встаёт значок; наведение или фокус
+// показывают текст, щелчок закрепляет (Esc или щелчок мимо — убрать).
+// Сам текст остаётся в странице (скрытым) — один источник, не копия.
+// Необходимое (предупреждения, состояния, пустые списки) не помечается и
+// видно как раньше.
+const ИНФО_ЗАГ=".grp,.sect,h2,h3,h4,summary,.head h2";
+let _инфоН=0, _инфоЗакреп=null, _инфоПоказан=null;
+function справВИконки(){
+  document.querySelectorAll(".справ:not([data-сп])").forEach(n=>{
+    n.dataset.сп="1";
+    if(!n.id) n.id="справ"+(++_инфоН);
+    const ик=document.createElement("span");
+    ик.className="инфо noprint"; ик.tabIndex=0; ик.setAttribute("role","button");
+    ик.setAttribute("aria-label","Пояснение"); ик.dataset.к=n.id; ик.textContent="i";
+    // 0) явно указанное место (data-куда — селектор в пределах раздела)
+    if(n.dataset.куда){ const обл=n.closest("#пультКал,#main")||document; const ц=обл.querySelector(n.dataset.куда);
+      if(ц){ ц.appendChild(ик); return; } }
+    // 1) внутри подписи поля — сразу за текстом подписи
+    const лб=n.parentElement&&n.parentElement.tagName==="LABEL"?n.parentElement:null;
+    if(лб){
+      let т=[...лб.childNodes].find(x=>(x.nodeType===3&&x.textContent.trim())||(x.nodeType===1&&x.matches("span:not(.справ):not(.файлобёртка),b")));
+      if(т&&т.nodeType===3){ const об=document.createElement("span"); об.className="подп"; лб.insertBefore(об,т); об.appendChild(т); т=об; }
+      if(т){ т.appendChild(ик); return; }
+    }
+    // 2) сразу за кнопками — рядом с кнопками (пояснение к ним)
+    const пред=n.previousElementSibling;
+    if(пред&&пред.matches(".formbtns")){ пред.appendChild(ик); return; }
+    // 3) заголовок блока выше на том же уровне
+    let цель=null, x=n.previousElementSibling;
+    for(let k=0;x&&k<8&&!цель;k++,x=x.previousElementSibling){
+      if(x.matches(ИНФО_ЗАГ)) цель=x;
+      else if(x.matches(".head")) цель=x.querySelector("h2,h3");
+    }
+    // 3) заголовок своей карточки или панели
+    if(!цель){ const к=n.closest(".card,.panel,section,details,.sheet");
+      if(к) цель=к.querySelector(":scope>.head h2,:scope>.head h3,:scope>h3,:scope>h2,:scope>summary,:scope>.grp,:scope>.sect"); }
+    if(цель){ цель.appendChild(ик); return; }
+    // 4) нет заголовка — строкой на месте пояснения
+    const стр=document.createElement("div"); стр.className="справстр noprint";
+    стр.appendChild(ик); стр.appendChild(document.createTextNode(" пояснение"));
+    n.parentNode.insertBefore(стр,n);
+  });
+}
+function инфоОкно(){ let о=document.getElementById("инфоокно");
+  if(!о){ о=document.createElement("div"); о.id="инфоокно"; о.setAttribute("role","tooltip"); document.body.appendChild(о); }
+  return о; }
+function инфоПоказать(ик){
+  const н=document.getElementById(ик.dataset.к); if(!н) return;
+  const о=инфоОкно(); о.innerHTML=н.innerHTML; о.style.display="block"; _инфоПоказан=ик;
+  const р=ик.getBoundingClientRect(), ш=Math.min(420,window.innerWidth-24);
+  о.style.maxWidth=ш+"px";
+  const w=о.offsetWidth, h=о.offsetHeight;
+  let left=Math.min(Math.max(12,р.left-12), window.innerWidth-w-12);
+  let top=р.bottom+6; if(top+h>window.innerHeight-8) top=Math.max(8,р.top-h-6);
+  о.style.left=left+"px"; о.style.top=top+"px";
+}
+function инфоСкрыть(){ const о=document.getElementById("инфоокно"); if(о) о.style.display="none"; }
+document.addEventListener("mouseover",e=>{ const ик=e.target.closest&&e.target.closest(".инфо"); if(ик&&!_инфоЗакреп) инфоПоказать(ик); });
+document.addEventListener("mouseout",e=>{ const ик=e.target.closest&&e.target.closest(".инфо"); if(ик&&!_инфоЗакреп) инфоСкрыть(); });
+document.addEventListener("focusin",e=>{ if(e.target.classList&&e.target.classList.contains("инфо")&&!_инфоЗакреп) инфоПоказать(e.target); });
+document.addEventListener("focusout",e=>{ if(e.target.classList&&e.target.classList.contains("инфо")&&!_инфоЗакреп) инфоСкрыть(); });
+document.addEventListener("click",e=>{
+  const ик=e.target.closest&&e.target.closest(".инфо");
+  if(ик){ e.preventDefault(); e.stopPropagation();
+    if(_инфоЗакреп===ик){ _инфоЗакреп=null; инфоСкрыть(); } else { _инфоЗакреп=ик; инфоПоказать(ик); } return; }
+  if(_инфоЗакреп && !(e.target.closest&&e.target.closest("#инфоокно"))){ _инфоЗакреп=null; инфоСкрыть(); }
+},true);
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"&&document.getElementById("инфоокно")&&document.getElementById("инфоокно").style.display==="block"){ _инфоЗакреп=null; инфоСкрыть(); }
+  if((e.key==="Enter"||e.key===" ")&&e.target.classList&&e.target.classList.contains("инфо")){ e.preventDefault(); e.target.click(); }
+});
+window.addEventListener("scroll",()=>{ if(!_инфоЗакреп) инфоСкрыть(); else инфоПоказать(_инфоЗакреп); },true);
+new MutationObserver(()=>{ справВИконки(); if(_инфоПоказан&&!document.body.contains(_инфоПоказан)){ _инфоЗакреп=null; _инфоПоказан=null; инфоСкрыть(); } })
+  .observe(document.body,{childList:true,subtree:true});
 // 3.94: списки флажков (области СДАНК, приборы и НД методик и записи
 // журнала) — без своей прокрутки. Показываются отмеченные пункты; «показать
 // все» раскрывает весь список, поле «Найти» ищет по всему списку. Если не
@@ -531,7 +607,7 @@ function renderКалендарь(){
       ⚠ Просрочено ранее: <b>${ранее.length}</b> — ${кал.ранее?"скрыть":"показать"}</div>
       ${кал.ранее?`<div class="card" style="padding:10px 18px"><div class="plist">${ранее.map(x=>строкаДелаКал(x, сегодня)).join("")}</div></div>`:""}`:""}
     ${сетка?`<div class="card" style="padding:14px">${сетка}
-      <div class="note калпоясн" style="margin:8px 0 0">Метка слева — тип дела; красный текст — срок прошёл, а дело не сделано; бледное — сделано.
+      <div class="note справ калпоясн" data-куда=".калтипы" style="margin:8px 0 0">Метка слева — тип дела; красный текст — срок прошёл, а дело не сделано; бледное — сделано.
         Заметку и задачу можно перетащить на другой день — это перенос срока (у задачи — с причиной). У работ ППР срок —
         последний день месяца (точной даты в плане нет).</div></div>`:""}
     <div class="card" style="padding:14px 18px">
@@ -540,7 +616,7 @@ function renderКалендарь(){
           <button class="btn small" onclick="калДобавить('заметка')">＋ Заметка на ${esc(ru(деньВыбран))}</button>
           <button class="btn small" onclick="калДобавить('задача')">${яНачальник()?"＋ Задача":"＋ Проект задачи"} на ${esc(ru(деньВыбран))}</button>`:""}</div>
       ${деньВыбран&&работыДня.length?`<div class="note" style="margin:0 0 8px">Работ на день: <b>${работыДня.length}</b>${безИсп?`, без исполнителя: <b style="color:var(--danger)">${безИсп}</b>`:", у всех назначен исполнитель"}.</div>`:""}
-      <div class="note калпоясн" style="margin:0 0 8px">Порядок дел на одну дату: работы по планам-графикам, внеплановые работы, задачи
+      <div class="note справ калпоясн" data-куда=".калденьшап .grp" style="margin:0 0 8px">Порядок дел на одну дату: работы по планам-графикам, внеплановые работы, задачи
         (по приоритету), прочие сроки, в конце — обслуживание оборудования по ППР. Отметить можно прямо здесь:
         заметку, задачу, работу ППР и плана-графика${деньВыбран?"":"; выберите день, чтобы добавить на него заметку или задачу"}.</div>
       <div class="plist">${строки||`<div class="note">Дел нет.</div>`}</div>
@@ -776,6 +852,7 @@ function switchView(v){
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"ППР",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();
   if(МЕНЮ_РОДИТЕЛЬ[v]) подсветитьМеню(v);
+  _инфоЗакреп=null; инфоСкрыть(); справВИконки();
 }
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b){ _возвратВПроверку=false; switchView(b.dataset.view); }});
 

@@ -229,7 +229,7 @@ function renderВибрация(){
         <th style="width:180px">Подразделение</th><th style="width:110px">Последний замер</th>
         <th style="width:120px">Наиб. СКЗ / предел, мм/с</th><th style="width:210px">Состояние</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>
-    <div class="note noprint">Прогноз «возможное превышение» — моё правило: по последним (до шести) замерам
+    <div class="note справ noprint">Прогноз «возможное превышение» — моё правило: по последним (до шести) замерам
       каждой точки проводится прямая, и если она доходит до максимального значения в ближайшие
       <input type="number" min="7" value="${горизонтВибр()}" style="width:64px" onchange="setГоризонтВибр(this.value)"> дн.,
       карточка помечается. Нужно хотя бы три замера с датами.
@@ -429,7 +429,7 @@ function печатьКартВибрации(ids){
     ${вкладкиРаздела("vibro", ВКЛ_ВИБР)}
     <div class="head noprint"><h2>Печать карточек учёта вибрации</h2><span class="sub">${к.length}</span><div class="spring"></div>
       <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button></div>
-    <div class="note noprint">Каждая карточка — на своём альбомном листе; ниже замеров — пустые строки для записи от руки.</div>
+    <div class="note справ noprint">Каждая карточка — на своём альбомном листе; ниже замеров — пустые строки для записи от руки.</div>
     ${к.map(x=>листКартыВибрации(x,true)).join("")}`;
 }
 function имяЛистаXlsx(т, занятые){
@@ -486,7 +486,7 @@ function renderНормыВибр(){
       <button class="btn" onclick="шаблонИмпортаXlsx('vn')">⤓ Шаблон для импорта</button>
       <button class="btn" onclick="document.getElementById('imp_vn').click()">⬆ Импорт из Excel</button>
       <input type="file" id="imp_vn" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('vn',this)"></div>
-    <div class="note noprint">Предельные значения вибрации — по действующим ГОСТам (указание заказчика). Числа вносятся по
+    <div class="note справ noprint">Предельные значения вибрации — по действующим ГОСТам (указание заказчика). Числа вносятся по
       тексту стандарта: полных текстов у меня нет, поэтому я их сюда не вписываю сам. Норма, у которой не отмечено
       «сверено с текстом документа», работает, но в карточке и в «Проверке данных» помечена.</div>
     <div class="card"><div class="tblwrap"><table data-список="vn">

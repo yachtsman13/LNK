@@ -205,6 +205,7 @@ function renderPremises(){
     </tr>`).join(""):`<tr><td colspan="4" class="empty">Помещений пока нет.</td></tr>`;
   document.getElementById("main").innerHTML=`
     ${printHead("Помещения, используемые для проведения НК","помещений "+rows.length)}
+    ${вкладкиЛаб("premises")}
     <div class="head"><h2>Помещения</h2><span class="sub">${rows.length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск по номеру, наименованию…" value="${esc(query)}"></div>
       <div class="spring"></div>

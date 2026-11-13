@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  59. меню по группам, «Лаборатория» вкладками (паспорт, помещения, СМ — вкладки), списки без своей прокрутки.
 //  58. пульт: плитки только с делом, календарь на неделю с «Моими задачами» и заметками без срока, «Сводка», вид «Список».
 //  57. календарь: типы дел с цветом и отбором, «только моё», просрочено ранее, отметка и добавление из календаря, перенос перетаскиванием.
 //  56. заявки подразделений: регистрация, утверждение, записи в журнал, акт по дополнительной заявке, календарь, подготовка, обмен.
@@ -3602,14 +3603,14 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
         await new Promise(r => setTimeout(r, 300));
         ок.утратил = найтиПоИд(СМК, д.id).файл; ок.архив2 = Object.keys(фс.снимок(к)["Система менеджмента"]["Архив"]);
         switchView("smk"); ок.список = document.querySelector('table[data-список="smk"]').innerText;
-        ок.меню = document.getElementById("cСмк").textContent;
+        ок.меню = document.querySelector("#main .вкладки .вкл.on").dataset.вкл;
         return ок;
       });
       да(р4.ред === "2" && /ред\. 2\.pdf$/.test(р4.файл) && р4.ист.length === 1 && /^1:/.test(р4.ист[0]) && р4.дата === "" && р4.архив.length === 1 && /ред\. 1/.test(р4.архив[0]),
         "СМ: файл «ред. 2» — новая редакция, ред. 1 — в «Прежние редакции», её файл — в «Система менеджмента/Архив», дата введения — вписать", JSON.stringify(р4));
       да(р4.просрочено.some(x => /^внимание:Редакция без даты/.test(x)), "«Проверка данных»: редакция без даты введения", JSON.stringify(р4.просрочено));
-      да(/^Система менеджмента\/Архив\//.test(р4.утратил) && р4.архив2.length === 2 && /утратил силу/.test(р4.список) && р4.меню === "0",
-        "СМ «Утратил силу» — файл в архив сразу после сохранения, в счётчике меню не считается", JSON.stringify([р4.утратил, р4.архив2, р4.меню]));
+      да(/^Система менеджмента\/Архив\//.test(р4.утратил) && р4.архив2.length === 2 && /утратил силу/.test(р4.список) && р4.меню === "smk",
+        "СМ «Утратил силу» — файл в архив сразу после сохранения; СМ — вкладка «Лаборатории»", JSON.stringify([р4.утратил, р4.архив2, р4.меню]));
       // Срок проверки
       const р5 = await q.evaluate(() => {
         СМК.push({ id: "СМ-Т", номер: "1-2020.П", наименование: "Положение", редакция: "1", дата_введения: "2020-01-01", периодичность: "12" }); saveReg(REG_СМК, СМК);
@@ -4236,6 +4237,50 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
         renderDash(); const пл = [...document.querySelectorAll("#main .пультплитки .tile")].map(t => t.innerText.replace(/\s+/g, " ").trim());
         return { ком: пл.some(т => /💬 1 новых комментариев/.test(т)), заяв: пл.some(т => /1 заявок без исполнителя/.test(т)) }; });
       да(р6.ком && р6.заяв, "плитки «новых комментариев» и «заявок без исполнителя»", JSON.stringify(р6));
+      await m1.c.close();
+    }
+
+    раздел("59. Меню по группам, «Лаборатория» вкладками, списки без своей прокрутки");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p);
+      const q = m1.p;
+      const р1 = await q.evaluate(() => {
+        const пункты = [...document.querySelectorAll("#side .nav")].map(n => n.dataset.view);
+        switchView("passport"); const подсв = document.querySelector("#side .nav.on").dataset.view;
+        switchView("calendar"); const подсв2 = document.querySelector("#side .nav.on").dataset.view;
+        return { пункты, подсв, подсв2 }; });
+      да(р1.пункты.indexOf("lab") >= 0 && ["passport","premises","smk","calendar"].every(в => р1.пункты.indexOf(в) < 0) && р1.подсв === "lab" && р1.подсв2 === "dash",
+        "в меню нет «Паспорта», «Помещений», «Системы менеджмента», «Календаря» — открытыми они подсвечивают «Лабораторию» и «Пульт»", JSON.stringify(р1));
+      const р2 = await q.evaluate(() => { лабВкладка = "карточка"; switchView("lab");
+        const вкладок = document.querySelectorAll("#main .вкладки .вкл").length;
+        const видна = id => { const e = document.getElementById(id); return !!e && e.offsetParent !== null; };
+        const до = { орг: видна("лабОрг"), свид: видна("лабНомер") };
+        document.getElementById("лабОрг").value = "Орг 59"; document.getElementById("лабОрг").dispatchEvent(new Event("input", { bubbles: true }));
+        лабВкл("аттестация"); const после = { орг: видна("лабОрг"), свид: видна("лабНомер"), вид: curView, грязно: _несохранено };
+        document.getElementById("лабНомер").value = "ЛНК-059";
+        лабВкл("готовность"); const кнопок = [...document.querySelectorAll("#main .formbtns.закреп")].filter(x => x.offsetParent !== null).length;
+        лабВкл("карточка"); saveЛабИзФормы(); const л = getЛаб();
+        лабВкл("passport"); const пасп = curView, пвк = document.querySelector("#main .вкладки .вкл.on").dataset.вкл;
+        лабВкл("smk"); const смк = curView; лабВкл("premises"); const пом = curView;
+        лабВкл("проверка"); const назад = curView, вкл = лабВкладка;
+        return { вкладок, до, после, кнопок, орг: л.организация, свид: л.свид_номер, пасп, пвк, смк, пом, назад, вкл }; });
+      да(р2.вкладок === 10 && р2.до.орг && !р2.до.свид && !р2.после.орг && р2.после.свид && р2.после.вид === "lab" && р2.после.грязно,
+        "«Лаборатория» — 10 вкладок; переключение вкладки не теряет введённое и не уходит из формы", JSON.stringify(р2));
+      да(р2.кнопок === 0 && р2.орг === "Орг 59" && р2.свид === "ЛНК-059",
+        "на вкладке «Готовность» кнопки «Сохранить» нет; «Сохранить» сохраняет все вкладки карточки разом", JSON.stringify(р2));
+      да(р2.пасп === "passport" && р2.пвк === "passport" && р2.смк === "smk" && р2.пом === "premises" && р2.назад === "lab" && р2.вкл === "проверка",
+        "вкладки «Паспорт», «Помещения», «Система менеджмента» — те же разделы, со строкой вкладок сверху и обратно", JSON.stringify(р2));
+      const р3 = await q.evaluate(() => { лабВкладка = "карточка"; switchView("dash"); открытьГотовностьПродления();
+        return { вид: curView, вкл: лабВкладка, видна: document.querySelector("details.готпрод").offsetParent !== null }; });
+      да(р3.вид === "lab" && р3.вкл === "готовность" && р3.видна, "плитка готовности к продлению открывает свою вкладку", JSON.stringify(р3));
+      await q.setViewportSize({ width: 1400, height: 800 });
+      const р4 = await q.evaluate(async () => { switchView("objects"); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const о = document.querySelector("#main .tblwrap"), м = document.getElementById("main");
+        const своя = о.scrollHeight > о.clientHeight + 2;
+        м.scrollTop = 1500; await new Promise(r => requestAnimationFrame(r));
+        const th = о.querySelector("th").getBoundingClientRect(), mm = м.getBoundingClientRect();
+        return { влезает: о.classList.contains("влезает"), своя, листается: м.scrollTop > 1000, шапка: Math.abs(th.top - mm.top) < 3 }; });
+      да(р4.влезает && !р4.своя && р4.листается && р4.шапка, "список объектов без своей прокрутки: листается страница, шапка таблицы прилипает к верху окна", JSON.stringify(р4));
       await m1.c.close();
     }
 

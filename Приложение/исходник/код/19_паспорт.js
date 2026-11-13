@@ -626,6 +626,7 @@ function поручитьПродление(м){
 }
 // Открыть сводку в карточке лаборатории развёрнутой (с плитки пульта).
 function открытьГотовностьПродления(){
+  лабВкладка="готовность";
   switchView("lab"); if(curView!=="lab") return;
   const д=document.querySelector("details.готпрод"); if(д){ д.open=true; д.scrollIntoView({block:"start"}); }
 }
@@ -783,8 +784,8 @@ function renderПаспорт(){
       `</tbody></table>`;
   })();
   document.getElementById("main").innerHTML=`
+    ${вкладкиЛаб("passport")}
     <div class="head noprint">
-      <button class="btn" onclick="switchView('lab')">← К лаборатории</button>
       <h2 style="font-size:16px">Паспорт ЛНК</h2>
       <div class="spring"></div>
       <button class="btn" onclick="паспортВWord()">⤓ Word (.docx)</button>

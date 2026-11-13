@@ -126,7 +126,10 @@
 
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--card-radius);
     box-shadow:var(--shadow);overflow:hidden}
-  .tblwrap{overflow:auto;max-height:calc(100vh - 190px)}
+  .tblwrap{overflow:auto}
+  .tblwrap.влезает{overflow:visible}
+  .card:has(> .tblwrap.влезает),.card:has(> * > .tblwrap.влезает){overflow:clip;display:flow-root}
+  .tblwrap.влезает th{top:-18px}
   table{border-collapse:collapse;width:100%;font-size:13px}
   th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
   th{background:var(--head-bg);color:var(--muted);font-weight:600;position:sticky;top:0;z-index:1;
@@ -888,3 +891,12 @@ body.входзакрыт .app{visibility:hidden}
 .сводка{margin:4px 0 14px;border:1px solid var(--line);border-radius:var(--card-radius,10px);background:var(--panel);padding:10px 14px}
 .сводка>summary{cursor:pointer;font-size:14px;padding:4px 0}
 .сводкатело{margin-top:12px}
+/* 3.92: вкладки разделов */
+.вкладки{display:flex;flex-wrap:wrap;gap:2px;margin:0 0 14px;border-bottom:1px solid var(--line)}
+.вкладки .вкл{appearance:none;border:1px solid transparent;border-bottom:0;background:transparent;color:var(--muted);
+  padding:7px 13px;font:inherit;font-size:13.5px;cursor:pointer;border-radius:8px 8px 0 0;margin-bottom:-1px}
+.вкладки .вкл:hover{color:var(--ink);background:var(--brand-soft)}
+.вкладки .вкл.on{color:var(--ink);font-weight:600;background:var(--panel);border-color:var(--line);border-bottom:1px solid var(--panel)}
+[data-лабвкл][hidden],#лабФорма[hidden]{display:none!important}
+#лабФорма[data-форма="нет"] .formbtns.закреп{display:none}
+@media print{ [data-лабвкл][hidden]{display:block!important} [data-лабвкл="вход"],[data-лабвкл="история"]{display:none!important} }

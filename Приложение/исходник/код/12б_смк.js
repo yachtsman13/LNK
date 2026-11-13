@@ -113,6 +113,7 @@ function renderСМК(){
     :`<tr><td colspan="7" class="empty">${live(СМК).length?"Ничего не найдено.":"Документов пока нет — «＋ Добавить» или загрузка из Excel."}</td></tr>`;
   document.getElementById("main").innerHTML=`
     ${printHead("Журнал учёта документов системы менеджмента", "документов "+rows.length)}
+    ${вкладкиЛаб("smk")}
     <div class="head"><h2>Система менеджмента</h2><span class="sub">${rows.length} из ${live(СМК).length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: номер, наименование…" value="${esc(query)}"></div>
       <div class="spring"></div>

@@ -55,12 +55,48 @@ function подписьНазад(вид, своё){
 function кнопкаНазад(вид, действие, своё){
   return `<button class="btn назад" type="button" onclick="${действие||`switchView('${вид}')`}">${esc(подписьНазад(вид, своё))}</button>`;
 }
+// ── Вкладки разделов (3.92, этап 5 проработки, п. 6–7) ─────────
+// Длинный раздел делится на вкладки — переключатель под заголовком, как у
+// годов; под таблицей больше ничего не висит. Вкладка — либо часть того же
+// раздела (показывается без перерисовки, введённое в полях цело), либо
+// отдельный раздел (своё обработчик, напр. switchView).
+// список — [[ключ, подпись, onclick?]], обработчик — имя функции(ключ).
+function вкладкиHTML(список, активная, обработчик){
+  return `<div class="вкладки noprint" role="tablist">${список.map(([к,т,свой])=>
+    `<button type="button" role="tab" class="вкл${к===активная?" on":""}" data-вкл="${esc(к)}" onclick="${свой||`${обработчик}('${к}')`}">${esc(т)}</button>`).join("")}</div>`;
+}
+// Подразделы, у которых нет своего пункта меню, подсвечивают родителя.
+const МЕНЮ_РОДИТЕЛЬ={passport:"lab", premises:"lab", smk:"lab", calendar:"dash", siissue:"si", labels:"si",
+  certsheet:"people", vibronorm:"vibro", vibrocard:"vibro", vibroprint:"vibro", filesort:"exchange"};
+function подсветитьМеню(вид){
+  const в=МЕНЮ_РОДИТЕЛЬ[вид]||вид;
+  if(!document.querySelector('#side .nav[data-view="'+в+'"]')) return;
+  document.querySelectorAll("#side .nav").forEach(n=>n.classList.toggle("on",n.dataset.view===в));
+}
 function пометкаФормы(){
   const п=_несохранено && ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0;
   document.querySelectorAll("#main .formbtns.закреп").forEach(b=>{ if(b.classList.contains("грязно")!==п) b.classList.toggle("грязно",п); });
 }
 ["input","change"].forEach(тип=>document.getElementById("main").addEventListener(тип, ()=>пометкаФормы()));
 setInterval(пометкаФормы, 300);
+// 3.92: таблица без своей прокрутки. Раньше у каждого списка (.tblwrap)
+// была своя высота — страница с прокруткой внутри страницы. Теперь список
+// растёт на всю длину, листается вся страница, шапка таблицы прилипает к
+// верху окна. Прокрутка вбок остаётся только у таблицы, которая не влезает
+// по ширине (иначе она вылезла бы за карточку). Ширину проверяю после
+// каждой отрисовки и при смене размера окна.
+function проверитьВлезание(){
+  document.querySelectorAll("#main .tblwrap").forEach(о=>{
+    const т=о.querySelector("table"); if(!т) return;
+    const вл=т.scrollWidth<=о.clientWidth+1;
+    if(о.classList.contains("влезает")!==вл) о.classList.toggle("влезает",вл);
+  });
+}
+let _влезаниеЖдёт=false;
+function проверитьВлезаниеПотом(){ if(_влезаниеЖдёт) return; _влезаниеЖдёт=true;
+  requestAnimationFrame(()=>{ _влезаниеЖдёт=false; проверитьВлезание(); }); }
+new MutationObserver(проверитьВлезаниеПотом).observe(document.getElementById("main"),{childList:true,subtree:true});
+window.addEventListener("resize", проверитьВлезаниеПотом);
 // ── Единый поиск по всей базе ─────────────────────────────────────────
 // Поиск в программе был в каждом разделе свой (одна переменная query на
 // всех, но искала она только внутри открытого списка). Чтобы найти, где
@@ -671,6 +707,8 @@ function switchView(v){
     vibrocard:()=>открытьКартуВибрации(_картаВибр),vibroizm:()=>открытьКартуВибрации(_картаВибр),
     vibroprint:()=>печатьКартВибрации(_печатьВибр),certsheet:renderЛистУдостоверений,labels:renderБирки,prep:renderПодготовка}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"ППР",
-       v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();}
+       v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();
+  if(МЕНЮ_РОДИТЕЛЬ[v]) подсветитьМеню(v);
+}
 document.getElementById("side").addEventListener("click",e=>{const b=e.target.closest(".nav");if(b){ _возвратВПроверку=false; switchView(b.dataset.view); }});
 

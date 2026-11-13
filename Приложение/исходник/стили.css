@@ -583,7 +583,7 @@
   .отв-стр{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .отв-роль{flex:0 0 340px;font-size:12.5px;color:var(--muted)}
   .отв-стр input{flex:1;min-width:140px}
-  .сд-список{max-height:260px;overflow-y:auto;border:1px solid var(--line);
+  .сд-список{border:1px solid var(--line);
     border-radius:var(--radius);padding:8px 12px;margin:4px 0 2px;background:var(--card)}
   .сд-группа{margin-bottom:6px}
   .сд-верх-имя{font-weight:600;font-size:13px;margin:6px 0 3px}
@@ -902,3 +902,9 @@ body.входзакрыт .app{visibility:hidden}
 @media print{ [data-лабвкл][hidden]{display:block!important} [data-лабвкл="вход"],[data-лабвкл="история"]{display:none!important} }
 [data-вклр][hidden]{display:none!important}
 .вкл .чсл{display:inline-block;margin-left:5px;padding:0 6px;border-radius:9px;background:var(--brand-soft);font-size:11.5px;font-weight:600}
+/* 3.94: списки флажков без своей прокрутки */
+.флпанель{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 4px}
+.флпанель input{flex:0 1 320px;min-width:180px}
+.флпусто{font-size:12.5px;padding:2px 0}
+[data-фвкл][hidden]{display:none!important}
+@media print{[data-фвкл][hidden]{display:block!important}}

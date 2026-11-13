@@ -324,14 +324,12 @@ function editMetodika(м){
       <span class="sub">стандартный набор приборов и норм. документов</span></div>
     <div class="card" style="padding:20px"><div class="form">
       <div class="grp" style="padding-left:0">Приборы (СИ)</div>
-      <input placeholder="Фильтр по наименованию…" oninput="фильтрСписка(this,'метСпис_си')" style="margin-bottom:6px">
       <div id="метСпис_си" class="сд-список">
         ${списокМетодЧекбоксы(si, н.приборы, "мчб_си", x=>esc(x.наименование)+(x.зав?(" · зав. № "+esc(x.зав)):"")+
           (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
       </div>
 
       <div class="grp" style="padding-left:0;margin-top:14px">Нормативные документы</div>
-      <input placeholder="Фильтр по наименованию или обозначению…" oninput="фильтрСписка(this,'метСпис_нд')" style="margin-bottom:6px">
       <div id="метСпис_нд" class="сд-список">
         ${списокМетодЧекбоксы(nd, н.нд, "мчб_нд", x=>ссылкаНД(x,esc(x.наименование))+(x.обозначение?(" · "+esc(x.обозначение)):"")+
           (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}

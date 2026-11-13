@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  61. списки флажков без своей прокрутки («показать все», «Найти»), карточка специалиста вкладками.
 //  60. вкладки длинных разделов (приборы, специалисты, подразделения, задачи, обмен, вибрация), «раздел:вкладка».
 //  59. меню по группам, «Лаборатория» вкладками (паспорт, помещения, СМ — вкладки), списки без своей прокрутки.
 //  58. пульт: плитки только с делом, календарь на неделю с «Моими задачами» и заметками без срока, «Сводка», вид «Список».
@@ -1873,7 +1874,7 @@ d.save(sys.argv[1])`, синт], { encoding: "utf-8" });
         editReg("si", a.id); o.ручноеЦело = document.getElementById("rf_поверка_до").value;
         формаСохранена();
         // файл удостоверения — своей строкой, широкое поле, кнопка рядом
-        const сп = live(P)[0]; editReg("ppl", сп.id);
+        const сп = live(P)[0]; editReg("ppl", сп.id); спецВкл("аттестации");
         _аттестации = [{ метод: "ВИК", уровень: "II", дата: "2024-01-01", файл: "Уд.pdf" }];
         document.getElementById("аттестации").innerHTML = строкиАттестаций();
         const ф = document.getElementById("аттФайл0"), кн = ф.parentElement.querySelector(".файлкн"),
@@ -4323,6 +4324,51 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       const р2 = await q.evaluate(() => { открытьИзПроверки("exchange:файлы", "");
         return [curView, !document.querySelector('#main [data-вклр="файлы"]').hidden]; });
       да(р2.join() === "exchange,true", "переход из «Проверки данных» открывает нужную вкладку «Обмена»", JSON.stringify(р2));
+      await m1.c.close();
+    }
+
+    раздел("61. Списки флажков без своей прокрутки, карточка специалиста вкладками");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p);
+      const q = m1.p;
+      const р1 = await q.evaluate(async () => { saveWS({ код: "М1", мастер: false, начальник: true });
+        const ждать = () => new Promise(r => setTimeout(r, 30));
+        const мт = getМетодики(); мт["ВИК"] = { приборы: [], нд: [] }; saveМетодики(мт);
+        editMetodika("ВИК"); await ждать();
+        const сп = document.getElementById("метСпис_си"), видимых = () => [...сп.querySelectorAll("label.мет-стр")].filter(l => l.style.display !== "none").length;
+        const р = { панель: !!(сп.previousElementSibling && сп.previousElementSibling.classList.contains("флпанель")), всего: сп.querySelectorAll("label.мет-стр").length,
+          сначала: видимых(), прокрутка: getComputedStyle(сп).overflowY, старогоФильтра: document.querySelectorAll('#main input[oninput*="фильтрСписка"]').length };
+        const ч = сп.querySelector("input[type=checkbox]"); ч.checked = true; ч.dispatchEvent(new Event("change", { bubbles: true }));
+        saveMetodika("ВИК"); editMetodika("ВИК"); await ждать();
+        const сп2 = document.getElementById("метСпис_си"), вид2 = () => [...сп2.querySelectorAll("label.мет-стр")].filter(l => l.style.display !== "none").length;
+        р.после = вид2(); р.кнопка = сп2.previousElementSibling.querySelector("button").textContent;
+        флВсе("метСпис_си"); р.раскрыто = вид2(); флВсе("метСпис_си");
+        const пол = сп2.previousElementSibling.querySelector("input"); пол.value = "люксметр"; флОбновить("метСпис_си"); р.поиск = вид2();
+        пол.value = ""; флОбновить("метСпис_си");
+        р.сохранён = getМетодики()["ВИК"].приборы.length;
+        лабВкладка = "аттестация"; switchView("lab"); await ждать();
+        const об = document.querySelector("#main .сд-список"); р.обл = [...об.querySelectorAll("label")].filter(l => l.style.display !== "none").length;
+        р.облВсего = об.querySelectorAll("label").length; р.облОтм = об.querySelectorAll("input:checked").length;
+        лабВкладка = "карточка";
+        return р; });
+      да(р1.панель && р1.сначала === р1.всего && р1.прокрутка !== "auto" && р1.старогоФильтра === 0,
+        "список флажков без своей прокрутки, с полем «Найти» и кнопкой; ничего не отмечено — открыт весь", JSON.stringify(р1));
+      да(р1.после === 1 && /показать все \(\d+\)/.test(р1.кнопка) && р1.раскрыто === р1.всего && р1.поиск >= 1 && р1.поиск < р1.всего && р1.сохранён === 1,
+        "отмечено — видны только отмеченные; «показать все» раскрывает, «Найти» ищет по всему списку", JSON.stringify(р1));
+      да(р1.обл === р1.облОтм && р1.облОтм > 0 && р1.облВсего > р1.облОтм, "область аттестации в «Лаборатории» — видны отмеченные пункты", JSON.stringify(р1));
+      const р2 = await q.evaluate(async () => { const сп = live(P)[0]; спецВклФормы = "основное"; editReg("ppl", сп.id);
+        const вкл = [...document.querySelectorAll("#main .вкладки .вкл")].map(x => x.dataset.вкл);
+        const видно = к => !document.querySelector('#main [data-фвкл="' + к + '"]').hidden;
+        const р = { вкл, осн: видно("основное"), атт: видно("аттестации") };
+        document.getElementById("rf_должность").value = "Должность 61";
+        спецВкл("аттестации"); р.атт2 = видно("аттестации"); р.осн2 = видно("основное");
+        аттПлюс(); р.строк = document.querySelectorAll('#main [data-фвкл="аттестации"] input[type=date]').length;
+        saveRegRec("ppl", String(сп.id)); const п = найтиПоИд(P, сп.id);
+        р.должн = п.должность;
+        return р; });
+      да(р2.вкл.length === 7 && р2.осн && !р2.атт && р2.атт2 && !р2.осн2,
+        "карточка специалиста — вкладки Основное · Допуски · ПБ · Аттестация · Классность · План обучения · История", JSON.stringify(р2));
+      да(р2.должн === "Должность 61" && р2.строк >= 1, "«+ Метод» на вкладке аттестаций; «Сохранить» там же сохраняет и поле с вкладки «Основное»", JSON.stringify(р2));
       await m1.c.close();
     }
 

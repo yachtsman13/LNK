@@ -118,6 +118,48 @@ function проверитьВлезание(){
 let _влезаниеЖдёт=false;
 function проверитьВлезаниеПотом(){ if(_влезаниеЖдёт) return; _влезаниеЖдёт=true;
   requestAnimationFrame(()=>{ _влезаниеЖдёт=false; проверитьВлезание(); }); }
+// 3.94: списки флажков (области СДАНК, приборы и НД методик и записи
+// журнала) — без своей прокрутки. Показываются отмеченные пункты; «показать
+// все» раскрывает весь список, поле «Найти» ищет по всему списку. Если не
+// отмечено ничего — список сразу открыт целиком. Работает на любом
+// .сд-список: строка с полем и кнопкой ставится сама, вызовы не менялись.
+const ФЛ_СТРОКИ="label.сд-верх, label.сд-под, label.мет-стр";
+function флИнициализировать(){
+  document.querySelectorAll("#main .сд-список:not([data-фл])").forEach((сп,н)=>{
+    if(!сп.id) сп.id="флсп"+Date.now().toString(36)+н;
+    сп.dataset.фл="1";
+    сп.dataset.все=сп.querySelector("input[type=checkbox]:checked")?"0":"1";
+    const п=document.createElement("div"); п.className="флпанель неформа noprint";
+    п.innerHTML=`<input type="search" placeholder="Найти в списке…" oninput="флОбновить('${сп.id}')">
+      <button type="button" class="btn small" onclick="флВсе('${сп.id}')"></button><span class="fnote"></span>`;
+    сп.parentNode.insertBefore(п, сп);
+    флОбновить(сп.id);
+  });
+}
+function флВсе(id){ const сп=document.getElementById(id); if(!сп) return; сп.dataset.все=сп.dataset.все==="1"?"0":"1"; флОбновить(id); }
+function флОбновить(id){
+  const сп=document.getElementById(id); if(!сп) return;
+  const п=сп.previousElementSibling&&сп.previousElementSibling.classList.contains("флпанель")?сп.previousElementSibling:null;
+  const q=п?п.querySelector("input").value.trim().toLowerCase():"";
+  const все=сп.dataset.все==="1";
+  const стр=[...сп.querySelectorAll(ФЛ_СТРОКИ)];
+  let отм=0, видно=0;
+  стр.forEach(l=>{ const ч=l.querySelector("input[type=checkbox]"); const ок=ч&&ч.checked; if(ок) отм++;
+    const показ= q ? l.textContent.toLowerCase().includes(q) : (все||ок);
+    l.style.display=показ?"":"none"; if(показ) видно++; });
+  сп.querySelectorAll(".сд-группа").forEach(г=>{
+    const есть=[...г.querySelectorAll(ФЛ_СТРОКИ)].some(l=>l.style.display!=="none");
+    г.style.display=есть?"":"none"; });
+  let пусто=сп.querySelector(":scope > .флпусто");
+  if(!видно){ if(!пусто){ пусто=document.createElement("div"); пусто.className="флпусто muted"; сп.appendChild(пусто); }
+    пусто.textContent=q?"Ничего не найдено.":"Ничего не отмечено."; } else if(пусто) пусто.remove();
+  if(п){ п.querySelector("button").textContent=все?"только отмеченные":"показать все ("+стр.length+")";
+    п.querySelector("button").hidden=!!q;
+    п.querySelector(".fnote").textContent="отмечено: "+отм+" из "+стр.length; }
+}
+document.getElementById("main").addEventListener("change",e=>{
+  const сп=e.target.closest&&e.target.closest(".сд-список[data-фл]"); if(сп) флОбновить(сп.id); });
+new MutationObserver(()=>флИнициализировать()).observe(document.getElementById("main"),{childList:true,subtree:true});
 new MutationObserver(проверитьВлезаниеПотом).observe(document.getElementById("main"),{childList:true,subtree:true});
 window.addEventListener("resize", проверитьВлезаниеПотом);
 // ── Единый поиск по всей базе ─────────────────────────────────────────

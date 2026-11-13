@@ -53,14 +53,12 @@ function панельМетодНабор(m){
   const si=методСортировка(live(S), m), nd=методСортировка(live(НД), m);
   return `
     <div class="grp" style="padding-left:0">Приборы (СИ) — ${esc(m)}</div>
-    <input placeholder="Фильтр…" oninput="фильтрСписка(this,'mset_${m}_си')" style="margin-bottom:4px">
-    <div id="mset_${m}_си" class="сд-список" style="max-height:180px">
+    <div id="mset_${m}_си" class="сд-список">
       ${списокМетодЧекбоксы(si, н.приборы, "мчб_си_"+m, x=>esc(x.наименование)+(x.зав?(" · зав. № "+esc(x.зав)):"")+
         (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
     </div>
     <div class="grp" style="padding-left:0;margin-top:8px">Нормативные документы — ${esc(m)}</div>
-    <input placeholder="Фильтр…" oninput="фильтрСписка(this,'mset_${m}_нд')" style="margin-bottom:4px">
-    <div id="mset_${m}_нд" class="сд-список" style="max-height:180px">
+    <div id="mset_${m}_нд" class="сд-список">
       ${списокМетодЧекбоксы(nd, н.нд, "мчб_нд_"+m, x=>ссылкаНД(x,esc(x.наименование))+(x.обозначение?(" · "+esc(x.обозначение)):"")+
         (x.метод?` <span class="muted">— ${esc(x.метод)}</span>`:""))}
     </div>

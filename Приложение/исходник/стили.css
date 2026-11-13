@@ -871,7 +871,9 @@ body.входзакрыт .app{visibility:hidden}
 .зв-способ{margin-top:12px}
 /* 3.90: типы дел календаря — цвет метки, легенда-отбор, перенос перетаскиванием */
 .т-заметки{--тц:#8e6bbf} .т-мои{--тц:#1f7ae0} .т-общие{--тц:#6f8ba6}
-.т-план{--тц:#2e9e5b} .т-внеплан{--тц:#e07b1f} .т-сроки{--тц:#b8860b}
+.т-план{--тц:#2e9e5b} .т-внеплан{--тц:#e07b1f} .т-сроки{--тц:#b8860b} .т-др{--тц:#d0558f}
+.плашкадр{margin:0 0 12px;padding:10px 14px;border-radius:10px;border:1px solid #d0558f;border-left-width:5px;
+  background:var(--panel);color:var(--ink);cursor:pointer}
 .калметка{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--тц,#999);flex:0 0 10px}
 .кал .сб[class*="т-"]{border-left-color:var(--тц)}
 .кал .сб.прос{color:var(--danger)} .кал .сб.сдел{text-decoration:line-through}

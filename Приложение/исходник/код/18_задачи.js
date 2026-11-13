@@ -508,7 +508,10 @@ function renderTasks(){
         ${(з.переносы||[]).length?`<br><span class="muted" style="font-size:11.5px">переносов: ${з.переносы.length}</span>`:""}</td>
     </tr>`;}).join(""):`<tr><td colspan="5" class="empty">На этот период задач нет.</td></tr>`;
 
+  const проектов=наУтверждение().length+моиПроекты().length, заметок=видимыеЗаметки().filter(з=>!з.сделано).length;
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("tasks", вкладкиЗадач(проектов, заметок, произв.length))}
+    <div data-вклр="задачи">
     ${printHead("Задачи", имяПериода(зф.период,зф.база)+" · всего "+и.всего)}
     <div class="head"><h2>Задачи</h2>
       <span class="sub">${esc(имяПериода(зф.период,зф.база))}</span>
@@ -516,7 +519,6 @@ function renderTasks(){
       <div class="spring"></div>
       <button class="btn primary" onclick="editTask('')" title="${яНачальник()?"Поставить задачу":"Предложить задачу — её утвердят начальник или заместитель"}">${яНачальник()?"+ Задача":"+ Проект задачи"}</button>
       <button class="btn" onclick="editЗаметка('')" title="Заметка себе или всем; со сроком — в календаре">＋ Заметка</button>
-      <button class="btn" onclick="renderОтчёт()">▤ Отчёт</button>
       <button class="btn" onclick="exportЗадачиXlsx()">⤓ Excel</button>
       ${яНачальник()?`<button class="btn" onclick="выгрузкаЗадачДляПравки()" title="Выгрузить задачи текущего периода в Excel, поправить и загрузить обратно">⤓ Выгрузить для правки</button>
       <button class="btn" onclick="document.getElementById('imp_tasks').click()">⬆ Импорт из Excel</button>
@@ -558,17 +560,21 @@ function renderTasks(){
         <div class="n">${ип.сделано}/${ип.всего}</div><div class="l">из плана и сроков</div></div>`:""}
     </div>
 
-    ${блокПроектов()}
-    ${блокЗаметокСписок()}
     <div class="card"><div class="tblwrap"><table data-отбор="нет">
       <thead><tr>${тth("срок","Срок",' style="width:110px"')}${тth("что","Задача")}
         ${тth("исполнитель","Исполнитель",' style="width:160px"')}${тth("горизонт","Горизонт",' style="width:100px"')}
         ${тth("состояние","Состояние",' style="width:190px"')}</tr></thead>
       <tbody>${строки}</tbody></table></div></div>
-
+    </div>
+    <div data-вклр="проекты">${блокПроектов()||`<div class="note">Проектов задач нет. Проект предлагает тот, кто не ставит задачи сам, — кнопкой «+ Проект задачи»; утверждают начальник и заместитель.</div>`}</div>
+    <div data-вклр="заметки">
+      <div class="head"><h2 style="font-size:16px">Заметки</h2><div class="spring"></div>
+        <button class="btn" onclick="editЗаметка('')">＋ Заметка</button></div>
+      ${блокЗаметокСписок()||`<div class="note">Несделанных заметок нет.</div>`}</div>
+    <div data-вклр="план">
     ${произв.length?`
-    <div class="head" style="margin-top:18px"><h2 style="font-size:16px">Из плана и сроков</h2>
-      <span class="sub">${произв.length} — программа знает их сама</span></div>
+    <div class="head"><h2 style="font-size:16px">Из плана и сроков</h2>
+      <span class="sub">${esc(имяПериода(зф.период,зф.база))} · ${произв.length} — программа знает их сама</span></div>
     <div class="note noprint">Эти задачи не заводятся руками и не хранятся: они посчитаны
       из плана ППР, дат поверки и сроков лаборатории. Отмечаются там, где им место —
       нажмите на строку, откроется нужный раздел.</div>
@@ -583,12 +589,21 @@ function renderTasks(){
           <td><span class="pill">${esc(x.источник)}</span></td>
           <td>${x.сделано?`<span class="st ok">выполнено${x.когда?" "+ru(x.когда):""}</span>`
              :(прош?`<span class="st bad">просрочено</span>`:`<span class="st work">по плану</span>`)}</td>
-        </tr>`;}).join("")}</tbody></table></div></div>`:""}
+        </tr>`;}).join("")}</tbody></table></div></div>`:`<div class="note">В этом периоде задач из плана и сроков нет.</div>`}
+    </div>
 
     <div class="note noprint">Периоды — это шесть способов посмотреть на один список задач,
       а не шесть разных списков: перенесённая задача не теряется и попадает в отчёт того
       периода, в котором её выполнили.</div>`;
+  показатьВкладкиРаздела("tasks");
   wireSearch(renderTasks);
+}
+// Вкладки «Задач»: задачи периода · проекты · заметки · из плана и сроков ·
+// отчёт (отдельный вид). Число в подписи — чтобы было видно, что там есть.
+function вкладкиЗадач(проектов, заметок, плана){
+  const сч=(т,n)=>n?т+" ("+n+")":т;
+  return [["задачи","Задачи"],["проекты",сч(яНачальник()?"Проекты на утверждение":"Проекты задач",проектов)],
+    ["заметки",сч("Заметки",заметок)],["план",сч("Из плана и сроков",плана)],["taskreport","Отчёт","renderОтчёт()"]];
 }
 
 let _заготовкаЗадачи=null;   // {что, подробно, отп} — «Поручить» из «Проверки данных»
@@ -840,13 +855,13 @@ function renderОтчёт(){
   const невып=невыпСвои.concat(невыпПрозв)
     .sort((a,b)=>b.дней-a.дней || String(a.срок||"").localeCompare(String(b.срок||"")));
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("tasks", вкладкиЗадач(наУтверждение().length+моиПроекты().length, видимыеЗаметки().filter(з=>!з.сделано).length, произв.length))}
     ${printHead("Отчёт по задачам", имяПериода(зф.период,зф.база))}
     <div class="head"><h2>Отчёт по задачам</h2>
       <span class="sub">${esc(имяПериода(зф.период,зф.база))}</span>
       <div class="spring"></div>
       <button class="btn" onclick="exportОтчётXlsx()">▤ Excel</button>
-      <button class="btn" onclick="window.print()">⎙ PDF</button>
-      <button class="btn" onclick="switchView('tasks')">← К задачам</button></div>
+      <button class="btn" onclick="window.print()">⎙ PDF</button></div>
     <div class="draftnote noprint">Форму отчёта вы пришлёте — тогда сделаю по ней, как акт.
       Пока это внутренний вид: числа, разбивка по исполнителям и источникам, единый список
       невыполненного (свои задачи и план ППР/поверки/сроки лаборатории — вместе, по просрочке).</div>

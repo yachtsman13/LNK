@@ -66,6 +66,29 @@ function вкладкиHTML(список, активная, обработчик
     `<button type="button" role="tab" class="вкл${к===активная?" on":""}" data-вкл="${esc(к)}" onclick="${свой||`${обработчик}('${к}')`}">${esc(т)}</button>`).join("")}</div>`;
 }
 // Подразделы, у которых нет своего пункта меню, подсвечивают родителя.
+// 3.93: вкладки длинных разделов. Раздел рисует всё, как раньше, но
+// части в обёртках data-вклр="ключ" — видна одна; переключение только
+// прячет (не перерисовывает), поэтому поиск, отбор и прокрутка списка не
+// сбрасываются. Вкладка может вести и в отдельный вид (бирки, нормы
+// вибрации, отчёт по задачам) — третьим элементом: true — switchView(ключ),
+// строка — своё действие. Выбранная вкладка помнится до перезагрузки.
+const ВКЛ_РАЗДЕЛА={};
+function вкладкиРаздела(вид, список){
+  const акт=список.some(в=>в[2] && в[0]===curView) ? curView : (ВКЛ_РАЗДЕЛА[вид]||список[0][0]);
+  return вкладкиHTML(список.map(([к,т,др])=>[к,т, typeof др==="string"?др:(др?`switchView('${к}')`:`вклРаздела('${вид}','${к}')`)]), акт);
+}
+function вклРаздела(вид,к){
+  ВКЛ_РАЗДЕЛА[вид]=к;
+  if(curView===вид) показатьВкладкиРаздела(вид); else switchView(вид);
+}
+function показатьВкладкиРаздела(вид){
+  const блоки=[...document.querySelectorAll("#main [data-вклр]")];
+  if(!блоки.length) return;
+  const ключи=блоки.map(б=>б.dataset.вклр);
+  const акт=ключи.indexOf(ВКЛ_РАЗДЕЛА[вид])>=0?ВКЛ_РАЗДЕЛА[вид]:ключи[0];
+  блоки.forEach(б=>{ б.hidden=б.dataset.вклр!==акт; });
+  document.querySelectorAll("#main .вкладки .вкл").forEach(x=>{ if(ключи.indexOf(x.dataset.вкл)>=0) x.classList.toggle("on",x.dataset.вкл===акт); });
+}
 const МЕНЮ_РОДИТЕЛЬ={passport:"lab", premises:"lab", smk:"lab", calendar:"dash", siissue:"si", labels:"si",
   certsheet:"people", vibronorm:"vibro", vibrocard:"vibro", vibroprint:"vibro", filesort:"exchange"};
 function подсветитьМеню(вид){
@@ -699,6 +722,8 @@ document.addEventListener("keydown",e=>{
 });
 
 function switchView(v){
+  // «раздел:вкладка» — открыть раздел на нужной вкладке (3.93)
+  if(String(v).indexOf(":")>0){ const ч=String(v).split(":"); if(curView!==ч[0] && !уходСФормы()) return; ВКЛ_РАЗДЕЛА[ч[0]]=ч[1]; v=ч[0]; }
   if(v!==curView && !уходСФормы()) return;
   if(_возвратВПроверку && ВИДЫ_С_ФОРМОЙ.indexOf(curView)>=0) v=typeof _возвратВПроверку==="string"?_возвратВПроверку:"check";
   curView=v;query=""; _актИзЗаписи=null;

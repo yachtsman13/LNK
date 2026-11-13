@@ -324,7 +324,7 @@ function renderDash(){
     ${(()=>{ const п=предупрежденияОбмена(); return п.length?`<div class="draftnote" style="cursor:pointer"
       onclick="switchView('exchange')">⇄ Обмен: ${esc(п.join("; ").replace(/\.$/,""))}. Нажмите — открою «Обмен».</div>`:""; })()}
     ${об.доля>0.8?`<div class="draftnote" style="cursor:pointer;border-color:var(--danger);color:var(--danger)"
-      onclick="switchView('exchange')">▲ Память браузера заполнена на ${(об.доля*100).toFixed(0)}%.
+      onclick="switchView('exchange:копии')">▲ Память браузера заполнена на ${(об.доля*100).toFixed(0)}%.
       Скоро правки перестанут сохраняться — откройте «Обмен».</div>`:""}
     ${плитки?`<div class="tiles пультплитки">${плитки}</div>`:`<div class="note">Сейчас ничего не требует действия.</div>`}
 

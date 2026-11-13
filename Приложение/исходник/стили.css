@@ -900,3 +900,5 @@ body.входзакрыт .app{visibility:hidden}
 [data-лабвкл][hidden],#лабФорма[hidden]{display:none!important}
 #лабФорма[data-форма="нет"] .formbtns.закреп{display:none}
 @media print{ [data-лабвкл][hidden]{display:block!important} [data-лабвкл="вход"],[data-лабвкл="история"]{display:none!important} }
+[data-вклр][hidden]{display:none!important}
+.вкл .чсл{display:inline-block;margin-left:5px;padding:0 6px;border-radius:9px;background:var(--brand-soft);font-size:11.5px;font-weight:600}

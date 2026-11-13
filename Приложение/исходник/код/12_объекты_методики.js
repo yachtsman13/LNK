@@ -18,6 +18,8 @@ function renderPodr(){
           :"<span class='st new'>контрактов нет</span>"}</td>
     </tr>`;}).join(""):`<tr><td colspan="5" class="empty">Подразделений пока нет.</td></tr>`;
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("podr", [["список","Подразделения"],["сводка","Сводка работ"]])}
+    <div data-вклр="список">
     ${printHead("Заказывающие подразделения","карточек "+rows.length)}
     <div class="head"><h2>Подразделения</h2><span class="sub">${rows.length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск по названию…" value="${esc(query)}"></div>
@@ -36,8 +38,9 @@ function renderPodr(){
       <thead><tr><th>Подразделение</th><th style="width:180px">Тип контракта</th>
         <th style="width:220px">Экспертная организация</th><th style="width:150px">Руководитель</th>
         <th style="width:150px">Контракты</th></tr></thead>
-      <tbody>${body}</tbody></table></div></div>
-    ${блокСводкиПодр()}`;
+      <tbody>${body}</tbody></table></div></div></div>
+    <div data-вклр="сводка">${блокСводкиПодр()}</div>`;
+  показатьВкладкиРаздела("podr");
   wireSearch(renderPodr);
 }
 // Сводка работ по заказывающим подразделениям за период — для сверки с

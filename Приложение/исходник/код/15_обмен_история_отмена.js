@@ -820,9 +820,8 @@ function сменитьКодМеста(новый, переписать){
 }
 // «Место: М1» в шапке — к полю кода места в «Обмене».
 function открытьКодМеста(){
-  switchView("exchange");
+  switchView("exchange:место");
   if(curView!=="exchange") return;
-  const д=document.querySelector("details.ещёобмен"); if(д) д.open=true;
   const п=document.getElementById("wsCode");
   if(п){ п.scrollIntoView({block:"center"}); п.focus(); п.select(); }
 }

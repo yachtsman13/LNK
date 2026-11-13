@@ -580,11 +580,12 @@ function renderРаскладка(){
       <ul class="файлсписок">${р.непонятные.map(x=>`<li><code>${esc(x.путь)}</code> — ${esc(x.почему)}</li>`).join("")}</ul></details>`:""}`;
   const пр=(т)=>`<code>${esc(т)}</code>`;
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("exchange", ВКЛ_ОБМЕН)}
     <div class="head"><h2>Файлы по папкам</h2><span class="sub">свидетельства, документы приборов, норм. документы, система менеджмента</span>
       <div class="spring"></div>
       <button class="btn primary" onclick="разложитьФайлы()">🔍 Найти и разложить</button>
       <button class="btn" onclick="создатьПапкиРаскладки()" title="Создать в папке с документами папки методов, разделов паспорта и архивов">📁 Создать папки</button>
-      <button class="btn" onclick="switchView('exchange')">← Обмен файлами</button></div>
+</div>
     <div class="card" style="padding:16px 20px">${отчёт}</div>
     <div class="card" style="padding:16px 20px;margin-top:14px">
       <h3 class="раскз" style="margin-top:0">Как называть файлы и куда класть</h3>

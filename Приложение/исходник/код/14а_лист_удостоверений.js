@@ -261,9 +261,9 @@ async function renderЛистУдостоверений(){
   const группы=составЛистаУдостоверений(опц);
   const main=document.getElementById("main");
   const шапка=(подзаг)=>`
+    ${опц.акт?"":вкладкиРаздела("people", ВКЛ_СПЕЦ)}
     <div class="head noprint">
-      ${опц.акт?`<button class="btn" onclick="renderAkt(${esc(JSON.stringify(опц.акт))})">← К акту</button>`
-        :`<button class="btn" onclick="switchView('people')">← К специалистам</button>`}
+      ${опц.акт?`<button class="btn" onclick="renderAkt(${esc(JSON.stringify(опц.акт))})">← К акту</button>`:""}
       <h2 style="font-size:16px">Лист удостоверений</h2><span class="sub">${esc(подзаг)}</span>
       <div class="spring"></div>
       <span class="muted" style="font-size:12.5px">размер полосок:</span>

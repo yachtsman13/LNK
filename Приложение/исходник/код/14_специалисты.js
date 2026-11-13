@@ -90,6 +90,8 @@ function прогнозРяды(год){
     return A.localeCompare(B,"ru",{numeric:true})*прогСорт.d;
   });
 }
+const ВКЛ_СПЕЦ=[["список","Специалисты"],["допуски","Допуски по методам"],["прогноз","Прогноз аттестации"],
+  ["нагрузка","Нагрузка"],["certsheet","Лист удостоверений","листУдостоверений({})"]];
 function renderPeople(){
   const строки=peopleRows();
   const шФИО=ширинаФИОКолонки(строки.map(p=>p.вдок||p.фио));
@@ -127,12 +129,13 @@ function renderPeople(){
       <td>${esc(з.действие)}</td></tr>`).join("")
     : `<tr><td colspan="6" class="empty">На ${аттПрогноз.год} год ничего не истекает.</td></tr>`;
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("people", ВКЛ_СПЕЦ)}
+    <div data-вклр="список">
     ${printHead("Специалисты ЛНК", "всего "+live(P).length)}
     <div class="head"><h2>Специалисты</h2><span class="sub">${live(P).length}</span>
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('ppl',null)">＋ Добавить</button>
       <button class="btn" onclick="exportXlsx()">▤ Excel</button>
-      <button class="btn" onclick="листУдостоверений({})" title="Полоски удостоверений и ПБ на листах A4">🪪 Лист удостоверений</button>
       <button class="btn" onclick="выгрузкаДляПравки('ppl')" title="Выгрузить текущие карточки в Excel, поправить и загрузить обратно тем же импортом">⤓ Выгрузить для правки</button>
       <button class="btn" onclick="шаблонИмпортаXlsx('ppl')">⤓ Шаблон для импорта</button>
       <button class="btn" onclick="document.getElementById('imp_ppl').click()">⬆ Импорт из Excel</button>
@@ -142,8 +145,8 @@ function renderPeople(){
       <thead><tr>${th("фио","ФИО",` style="width:${шФИО}px"`)}${th("должность","Должность")}${th("место","Место")}${th("функции","Функции в ЛНК")}${th("стаж","Стаж с")}${th("инструктаж","Инструктаж ОТ")}
         ${th("огрпр","Огр. пространства")}${th("электробез","Электробезопасность")}${th("пожбез","Пожарная безопасность")}${th("пб","Проверка знаний ПБ")}${th("а1","Аттестация А.1")}
         ${th("аттестация","Ближайшая аттестация")}${th("классность","Классность")}</tr></thead>
-      <tbody>${body}</tbody></table></div></div>
-    <div class="card">
+      <tbody>${body}</tbody></table></div></div></div>
+    <div class="card" data-вклр="прогноз">
       <div class="head"><h2>Прогноз аттестации</h2><span class="sub">на ${аттПрогноз.год} год, ${прогноз.length}</span>
         <div class="spring"></div>
         ${годы.map(г=>`<button class="btn ${г===аттПрогноз.год?"on":""}" onclick="setАттПрогнозГод(${г})">${г}</button>`).join("")}
@@ -168,8 +171,9 @@ function renderPeople(){
         «новый метод» — из блока «Планируемое обучение по новым методам» в карточке специалиста; уходят сами,
         когда по этому методу внесена аттестация с датой в году плана или позже.</div>
     </div>
-    ${блокДопусковМетодов()}
-    ${блокНагрузки()}`;
+    <div data-вклр="допуски">${блокДопусковМетодов()}</div>
+    <div data-вклр="нагрузка">${блокНагрузки()}</div>`;
+  показатьВкладкиРаздела("people");
 }
 // ── Кто к какому методу допущен ───────────────────────────
 // Сводка по всем специалистам и методам журнала на выбранную дату: те же

@@ -135,7 +135,8 @@ function renderБирки(){
   const пробелы=выбр.filter(п=>пробелыБирки(п).length);
   const спец=live(P).slice().sort((a,b)=>String(a.фио||"").localeCompare(String(b.фио||""),"ru"));
   document.getElementById("main").innerHTML=`
-    <div class="head noprint"><button class="btn" onclick="switchView('si')">← К приборам</button>
+    ${вкладкиРаздела("si", ВКЛ_СИ)}
+    <div class="head noprint">
       <h2>Бирки по результатам поверки</h2><span class="sub">выбрано ${выбр.length} из ${все.length}</span>
       <div class="spring"></div>
       <button class="btn" onclick="биркиWord()">⤓ Word</button>

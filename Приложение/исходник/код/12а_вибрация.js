@@ -184,6 +184,8 @@ function рядыКартВибр(){
 function заголовокКарты(к){
   return [к.вид, к.наименование, к.зав?("зав. № "+к.зав):""].filter(Boolean).join(" ");
 }
+const ВКЛ_ВИБР=[["vibro","Карточки",true],["vibronorm","Нормы вибрации",true],
+  ["vibroprint","Печать карточек","печатьКартВибрации(какНаЭкране('vk',рядыКартВибр()).map(к=>к.id))"]];
 function renderВибрация(){
   curView="vibro"; setChrome();
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view==="vibro"));
@@ -203,6 +205,7 @@ function renderВибрация(){
       <td><span class="st ${ВИБ_КЛАСС[с.ур]}">${esc(с.т)}</span></td></tr>`; }).join("")
     : `<tr><td colspan="7" class="empty">${live(ВИБК).length?"По отбору карточек нет.":"Карточек пока нет — «+ Карточка»."}</td></tr>`;
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("vibro", ВКЛ_ВИБР)}
     ${printHead("Карточки учёта вибрации","карточек "+ряды.length)}
     <div class="head"><h2>Вибрация</h2><span class="sub">карточек: ${ряды.length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск по номеру, наименованию, двигателю…" value="${esc(query)}"></div>
@@ -210,7 +213,6 @@ function renderВибрация(){
         <option value="">Все группы</option>${группы.map(г=>`<option ${г===вибрГруппа?"selected":""}>${esc(г)}</option>`).join("")}</select>
       <div class="spring"></div>
       <button class="btn primary" onclick="editReg('vk','')">+ Карточка</button>
-      <button class="btn" onclick="switchView('vibronorm')">Нормы вибрации</button>
       <button class="btn" onclick="печатьКартВибрации(какНаЭкране('vk',рядыКартВибр()).map(к=>к.id))" title="Все показанные карточки, каждая на своём листе">⎙ Печать карточек</button>
       <button class="btn" onclick="exportКартыВибрации(какНаЭкране('vk',рядыКартВибр()).map(к=>к.id))" title="Каждая карточка — свой лист книги">▤ Карточки в Excel</button>
       <button class="btn" onclick="выгрузкаДляПравки('vk')" title="Основные данные карточек — выгрузить, поправить в Excel и загрузить обратно">⤓ Выгрузить для правки</button>
@@ -424,8 +426,8 @@ function печатьКартВибрации(ids){
   if(!уходСФормы()) return;
   _печатьВибр=к.map(x=>x.id); curView="vibroprint";
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("vibro", ВКЛ_ВИБР)}
     <div class="head noprint"><h2>Печать карточек учёта вибрации</h2><span class="sub">${к.length}</span><div class="spring"></div>
-      <button class="btn" onclick="switchView('vibro')">← К картотеке</button>
       <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="note noprint">Каждая карточка — на своём альбомном листе; ниже замеров — пустые строки для записи от руки.</div>
     ${к.map(x=>листКартыВибрации(x,true)).join("")}`;
@@ -474,11 +476,11 @@ function renderНормыВибр(){
   const ряды=рядыНормВибр();
   const исп=н=>live(ВИБК).filter(к=>тотЖеИд(к.норма_ид,н.id)).length;
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("vibro", ВКЛ_ВИБР)}
     ${printHead("Нормы вибрации","норм "+ряды.length)}
     <div class="head"><h2>Нормы вибрации</h2><span class="sub">${ряды.length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск по оборудованию, документу…" value="${esc(query)}"></div>
       <div class="spring"></div>
-      <button class="btn" onclick="switchView('vibro')">← К картотеке</button>
       <button class="btn primary" onclick="editReg('vn','')">+ Норма</button>
       <button class="btn" onclick="выгрузкаДляПравки('vn')">⤓ Выгрузить для правки</button>
       <button class="btn" onclick="шаблонИмпортаXlsx('vn')">⤓ Шаблон для импорта</button>

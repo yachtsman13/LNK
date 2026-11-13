@@ -506,6 +506,6 @@ function плиткаФайлов(){
   const и=итогФайлов(); if(!и.проверено) return "";
   const плохо=и.нет.length+и.нетот.length;
   if(!плохо && !и.споры.length) return "";
-  return `<div class="tile ${плохо?"bad":"warn"} click" onclick="switchView('exchange')">
+  return `<div class="tile ${плохо?"bad":"warn"} click" onclick="switchView('exchange:файлы')">
     <div class="n">${плохо||и.споры.length}</div><div class="l">${плохо?"файлов документов нет в папке или не те":"файлы: разные версии на местах"}</div></div>`;
 }

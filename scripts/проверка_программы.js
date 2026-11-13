@@ -41,6 +41,7 @@
 //  28. закрытый год журнала (закрывает, открывает и разрешает правку только начальник): правка только с подтверждением, во всех путях; обмен и копия.
 //  27. дата в фильтре журнала вводится с клавиатуры целиком, журнал выдачи СИ.
 //  26. лист ознакомления — сокращённая должность, прогноз: позиции прошлых лет, подсветка года, тёмная тема.
+//  60. вкладки длинных разделов (приборы, специалисты, подразделения, задачи, обмен, вибрация), «раздел:вкладка».
 //  59. меню по группам, «Лаборатория» вкладками (паспорт, помещения, СМ — вкладки), списки без своей прокрутки.
 //  58. пульт: плитки только с делом, календарь на неделю с «Моими задачами» и заметками без срока, «Сводка», вид «Список».
 //  57. календарь: типы дел с цветом и отбором, «только моё», просрочено ранее, отметка и добавление из календаря, перенос перетаскиванием.
@@ -2950,12 +2951,12 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
         const пол = !!document.getElementById("rf_полоска_пб") && !!document.getElementById("аттПол0");
         const кн = !!document.querySelector("#аттПол0 + .файлкн") || [...document.querySelectorAll(".астрфайл")].some(x => x.querySelector("#аттПол0") && x.querySelector(".файлкн"));
         формаСохранена(); switchView("people");
-        const кнСпец = [...document.querySelectorAll("#main .head button")].some(x => /Лист удостоверений/.test(x.textContent));
+        const кнСпец = [...document.querySelectorAll("#main .head button, #main .вкладки .вкл")].some(x => /Лист удостоверений/.test(x.textContent));
         return { пр, сс, пол, кн, кнСпец, мимо: реестрыМимоКопии().length };
       });
       да(р6.пр.some(x => /^внимание:.*не картинка.*: 1$/.test(x)), "«Проверка данных»: полоска не картинкой — «внимание»", JSON.stringify(р6.пр));
       да(р6.сс >= 6 && р6.пол && р6.кн && р6.кнСпец && р6.мимо === 0,
-        "полоски — в файлах документов (обмен с флешкой, проверка); в карточке поля с «📎», в «Специалистах» кнопка; мимо копии ничего", JSON.stringify(р6));
+        "полоски — в файлах документов (обмен с флешкой, проверка); в карточке поля с «📎», в «Специалистах» кнопка (с 3.93 — вкладка); мимо копии ничего", JSON.stringify(р6));
       // Один номер — разные удостоверения: различает дата выдачи (слово заказчика)
       const р7 = await q.evaluate(() => {
         const сп = live(P)[2], до = "2099-01-01";
@@ -3303,7 +3304,7 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
         // запись, правленная на этом месте под старым кодом
         const пр = live(S)[0]; пр.тип = "до смены кода"; пр.изменено = t; пр.место = "М1"; пр.база = "исходная"; saveReg(REG_SI, S);
         открытьКодМеста();
-        const поле = document.getElementById("wsCode"), раскрыто = document.querySelector("details.ещёобмен").open;
+        const поле = document.getElementById("wsCode"), раскрыто = !document.querySelector('[data-вклр="место"]').hidden;
         const фокус = document.activeElement === поле;
         поле.value = "М3"; saveWSfromForm();
         const з = ЗАД.find(x => x.id === "ЗД-ТЕСТ-49");
@@ -4281,6 +4282,47 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
         const th = о.querySelector("th").getBoundingClientRect(), mm = м.getBoundingClientRect();
         return { влезает: о.classList.contains("влезает"), своя, листается: м.scrollTop > 1000, шапка: Math.abs(th.top - mm.top) < 3 }; });
       да(р4.влезает && !р4.своя && р4.листается && р4.шапка, "список объектов без своей прокрутки: листается страница, шапка таблицы прилипает к верху окна", JSON.stringify(р4));
+      await m1.c.close();
+    }
+
+    раздел("60. Вкладки длинных разделов: Приборы, Специалисты, Подразделения, Задачи, Обмен, Вибрация");
+    {
+      const m1 = await место(b, "М1"); все.push(m1.p);
+      const q = m1.p;
+      const р1 = await q.evaluate(() => { saveWS({ код: "М1", мастер: false, начальник: true });
+        const видно = к => { const e = document.querySelector('#main [data-вклр="' + к + '"]'); return !!e && !e.hidden; };
+        const акт = () => (document.querySelector("#main .вкладки .вкл.on") || {}).dataset?.вкл;
+        const р = {};
+        switchView("si"); р.si0 = [видно("список"), видно("поверка"), акт()];
+        вклРаздела("si", "поверка"); р.si1 = [видно("список"), видно("поверка"), акт(), curView];
+        document.querySelector('#main .вкладки .вкл[data-вкл="labels"]').click(); р.si2 = [curView, акт(), document.querySelector("#side .nav.on").dataset.view];
+        switchView("si"); р.si3 = [видно("поверка"), акт()];
+        вклРаздела("si", "список");
+        switchView("people"); вклРаздела("people", "прогноз"); setАттПрогнозГод(new Date().getFullYear() + 2);
+        р.ppl = [видно("прогноз"), видно("список"), акт()];
+        вклРаздела("people", "допуски"); р.ppl2 = [видно("допуски"), !!document.querySelector('#main [data-вклр="допуски"] table')];
+        switchView("podr"); вклРаздела("podr", "сводка"); р.podr = [видно("сводка"), видно("список")];
+        switchView("tasks"); р.t0 = [акт(), видно("задачи"), document.querySelectorAll("#main .вкладки .вкл").length];
+        вклРаздела("tasks", "заметки"); р.t1 = [видно("заметки"), /Заметки/.test(document.querySelector('#main [data-вклр="заметки"]').textContent)];
+        document.querySelector('#main .вкладки .вкл[data-вкл="taskreport"]').click(); р.t2 = [curView, акт()];
+        switchView("exchange:копии"); р.ex = [curView, видно("копии"), видно("обмен"), акт()];
+        открытьКодМеста(); р.ex2 = [видно("место"), document.activeElement && document.activeElement.id];
+        switchView("vibro"); р.v0 = акт(); switchView("vibronorm"); р.v1 = [акт(), document.querySelector("#side .nav.on").dataset.view];
+        switchView("lab:история"); р.lab = [curView, лабВкладка];
+        лабВкладка = "карточка";
+        return р; });
+      да(р1.si0.join() === "true,false,список" && р1.si1.join() === "false,true,поверка,si" && р1.si2.join() === "labels,labels,si" && р1.si3.join() === "true,поверка",
+        "«Приборы»: вкладки Приборы · Документы по поверке · Бирки · Журнал выдачи; бирки — свой вид с той же строкой вкладок; вкладка помнится", JSON.stringify(р1));
+      да(р1.ppl.join() === "true,false,прогноз" && р1.ppl2.join() === "true,true" && р1.podr.join() === "true,false",
+        "«Специалисты» и «Подразделения»: прогноз, допуски, сводка — своими вкладками; смена года прогноза оставляет на вкладке", JSON.stringify(р1));
+      да(р1.t0[0] === "задачи" && р1.t0[1] && р1.t0[2] === 5 && р1.t1.join() === "true,true" && р1.t2.join() === "taskreport,taskreport",
+        "«Задачи»: Задачи · Проекты · Заметки · Из плана и сроков · Отчёт", JSON.stringify(р1));
+      да(р1.ex.join() === "exchange,true,false,копии" && р1.ex2.join() === "true,wsCode" && р1.v0 === "vibro" && р1.v1.join() === "vibronorm,vibro" && р1.lab.join() === "lab,история",
+        "«Обмен» вкладками, «раздел:вкладка» открывает нужную; «Место: …» — вкладка «Это место»; «Вибрация» — Карточки · Нормы · Печать", JSON.stringify(р1));
+      // Ссылка из «Проверки данных» на файлы — вкладка «Файлы документов»
+      const р2 = await q.evaluate(() => { открытьИзПроверки("exchange:файлы", "");
+        return [curView, !document.querySelector('#main [data-вклр="файлы"]').hidden]; });
+      да(р2.join() === "exchange,true", "переход из «Проверки данных» открывает нужную вкладку «Обмена»", JSON.stringify(р2));
       await m1.c.close();
     }
 

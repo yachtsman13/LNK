@@ -13,6 +13,8 @@ function рядыПриборов(){
   const q=(query||"").toLowerCase();
   return live(S).filter(s=>!q||(s.наименование+s.тип+s.зав+s.метод).toLowerCase().includes(q));
 }
+const ВКЛ_СИ=[["список","Приборы"],["поверка","Документы по поверке"],
+  ["labels","Бирки","renderБирки()"],["siissue","Журнал выдачи СИ","renderВыдачаСИ()"]];
 function renderSi(){
   const rows=рядыПриборов();
   const body=rows.length?rows.map(s=>{const[c,l]=siStatus(s);return`
@@ -25,6 +27,8 @@ function renderSi(){
       <td><span class="st ${c}">${l}</span></td>
     </tr>`;}).join(""):`<tr><td colspan="5" class="empty">Ничего не найдено.</td></tr>`;
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("si", ВКЛ_СИ)}
+    <div data-вклр="список">
     ${printHead("Реестр средств измерений (СИ)", (query?("поиск: «"+query+"» · "):"")+"приборов "+rows.length)}
     <div class="head"><h2>Приборы (СИ)</h2><span class="sub">${rows.length} из ${live(S).length}</span>
       <div class="search"><span class="ic">⌕</span><input id="q" placeholder="Поиск: наименование, тип, метод…" value="${esc(query)}"></div>
@@ -35,13 +39,12 @@ function renderSi(){
       <button class="btn" onclick="шаблонИмпортаXlsx('si')">⤓ Шаблон для импорта</button>
       <button class="btn" onclick="document.getElementById('imp_si').click()">⬆ Импорт из Excel</button>
       <input type="file" id="imp_si" accept=".xlsx" style="display:none" onchange="импортФайлВыбран('si',this)">
-      <button class="btn" onclick="window.print()">⎙ Печать / PDF</button>
-      <button class="btn" onclick="renderВыдачаСИ()" title="Ведётся сам: какие приборы применены в записях журнала и когда">▤ Журнал выдачи СИ</button>
-      <button class="btn" onclick="renderБирки()" title="Бирки по результатам поверки — печать и Word">🏷 Бирки</button></div>
+      <button class="btn" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="card"><div class="tblwrap"><table data-список="si">
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Метод</th><th>Поверка до</th><th>Статус</th></tr></thead>
-      <tbody>${body}</tbody></table></div></div>
-    ${панельПоверки()}`;
+      <tbody>${body}</tbody></table></div></div></div>
+    <div data-вклр="поверка">${панельПоверки()}</div>`;
+  показатьВкладкиРаздела("si");
   wireSearch(renderSi);
 }
 
@@ -807,6 +810,7 @@ function renderВыдачаСИ(){
   const подзаг=выдачаСИ.год+" год"+(п?" · "+имяП(п):"")+" · записей "+ряды.length;
   const поНабору=ряды.filter(r=>!r.свои).length, истекло=ряды.filter(r=>r.истекла).length;
   document.getElementById("main").innerHTML=`
+    ${вкладкиРаздела("si", ВКЛ_СИ)}
     ${printHead("Журнал выдачи средств измерений", подзаг)}
     <div class="head"><h2>Журнал выдачи СИ</h2><span class="sub">${esc(подзаг)}</span>
       <div class="spring"></div>
@@ -815,8 +819,7 @@ function renderВыдачаСИ(){
         live(S).slice().sort((a,b)=>String(a.наименование||"").localeCompare(String(b.наименование||""),"ru"))
           .map(x=>`<option value="${esc(x.id)}" ${String(x.id)===String(выдачаСИ.прибор)?"selected":""}>${esc(имяП(x))}</option>`).join("")}</select>
       <button class="btn" onclick="exportВыдачаСИ()">▤ Excel</button>
-      <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button>
-      <button class="btn" onclick="switchView('si')">← К приборам</button></div>
+      <button class="btn primary" onclick="window.print()">⎙ Печать / PDF</button></div>
     <div class="note noprint" style="margin:0 0 10px">Ведётся сам — из журнала контроля: на каждую запись и метод — приборы,
       отмеченные в записи («⚙ Приборы и НД»), а если запись их не отмечала — стандартный набор метода из «Методик
       контроля» (такие строки помечены «по набору методики»). Дата выдачи — дата контроля, кому выдан — исполнитель

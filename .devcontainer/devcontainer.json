@@ -1,0 +1,4 @@
+{
+  "name": "kimi-dev",
+  "postCreateCommand": "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash"
+}

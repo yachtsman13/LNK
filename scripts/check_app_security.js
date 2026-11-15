@@ -18,7 +18,7 @@ function контекст(доп={}){
     setTimeout,clearTimeout,setInterval:()=>0,clearInterval(){},URL,Blob:class Blob{constructor(parts){this.parts=parts;}},
     ХР:хранилище(),getWS:()=>({код:"М1"}),curView:"",renderExchange(){},renderLab(){},
     входВкл:()=>false,яНачальник:()=>true,confirm:()=>true,prompt:()=>"",alert(){},toast(){},
-    esc:s=>String(s==null?"":s),dl(){},DB:{версия:"4.01"},P:[],live:a=>a,найтиПоИд:(a,id)=>a.find(x=>String(x.id)===String(id)),
+    esc:s=>String(s==null?"":s),dl(){},DB:{версия:"4.02"},P:[],live:a=>a,найтиПоИд:(a,id)=>a.find(x=>String(x.id)===String(id)),
     ПРАВА_ПО_УМОЛЧАНИЮ:()=>({}),ктоЯ:()=>"",переполнение:e=>{throw e;},фамилияИО:()=>"",ru:s=>s,
     обновитьШапкуВхода(){},setChrome(){},switchView(){},renderМастер(){},
     document:{addEventListener(){},body:{classList:{add(){},remove(){}}},createElement:()=>({classList:{add(){}},querySelector:()=>null})}},доп);
@@ -138,7 +138,7 @@ function собранныйHTMLТест(){
   ок(скрипты.length>0,"в собранном HTML найден исполняемый скрипт");
   скрипты.forEach((m,i)=>{ new Function(m[2]); проверок++; });
   ок(true,"полный скрипт собранного HTML синтаксически корректен");
-  ок(html.includes('content="4.01"'),"готовый HTML имеет версию 4.01");
+  ок(html.includes('content="4.02"'),"готовый HTML имеет версию 4.02");
   ок(html.includes("const ПОДПИСЬ_ФОРМАТ=3"),"подпись пакетов включена в готовый HTML");
   const хеш=require("crypto").createHash("sha256").update(fs.readFileSync(файл)).digest("hex");
   const эталон=fs.readFileSync(файл+".sha256","utf8").trim();

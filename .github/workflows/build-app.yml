@@ -1,0 +1,118 @@
+name: Сборка браузерного приложения
+
+on:
+  push:
+    paths:
+      - ".github/workflows/build-app.yml"
+      - "Приложение/исходник/**"
+      - "scripts/build_app.py"
+      - "scripts/check_app_security.js"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-app-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить репозиторий
+        uses: actions/checkout@v4
+
+      - name: Проверить исходники
+        run: |
+          node --check "Приложение/исходник/код/23в_вход.js"
+          node --check "Приложение/исходник/код/23д_подпись_пакетов.js"
+          node --check scripts/check_app_security.js
+          python3 -m py_compile scripts/build_app.py scripts/export_json.py
+          node scripts/check_app_security.js
+
+      - name: Обновить версию и историю 4.01
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import datetime, io, json, re
+
+          путь = "scripts/export_json.py"
+          текст = io.open(путь, encoding="utf-8").read()
+          найдено = re.search(r'"версия":\s*"([^"]+)"', текст)
+          if not найдено:
+              raise SystemExit("В scripts/export_json.py не найдена версия")
+          версия = найдено.group(1)
+          if версия == "4.0":
+              текст, число = re.subn(r'("версия":\s*)"4\.0"', r'\g<1>"4.01"', текст, count=1)
+              if число != 1:
+                  raise SystemExit("Не удалось обновить версию экспорта")
+              io.open(путь, "w", encoding="utf-8", newline="").write(текст)
+              версия = "4.01"
+
+          путь = "Приложение/данные.json"
+          данные = json.load(io.open(путь, encoding="utf-8"))
+          данные["версия"] = версия
+          данные["собрано"] = datetime.date.today().isoformat()
+          with io.open(путь, "w", encoding="utf-8") as f:
+              json.dump(данные, f, ensure_ascii=False, separators=(",", ":"))
+
+          путь = "ИЗМЕНЕНИЯ.md"
+          история = io.open(путь, encoding="utf-8").read()
+          if версия == "4.01" and "\n## 4.01 " not in история:
+              запись = """
+## 4.01 — 2026-11-15
+
+**Подпись пакетов.** Обмен, резервные копии и переезд подписываются ECDSA P-256
+с SHA-256. У каждого рабочего места свой ключ; закрытый ключ остаётся только в
+хранилище браузера и не входит в пакеты или переезд. Первый открытый ключ места
+подтверждается после сверки отпечатка, смена ключа — отдельным решением
+руководителя. Изменённый или неправильно подписанный файл отклоняется до выбора
+свежего пакета и до изменения базы. Старые файлы без подписи принимаются только
+после явного предупреждения.
+
+**Вход и восстановление.** Новые пароли — 12–128 знаков; длинная фраза разрешена,
+явно предсказуемые значения и повторы одного знака запрещены. Для новых хешей
+PBKDF2-SHA-256 использует 310000 итераций; число итераций сохраняется в записи,
+поэтому старые пароли продолжают работать и заменяются при первом входе. Пять
+ошибок за 15 минут блокируют вход специалиста на этом компьютере на 15 минут,
+состояние блокировки переживает перезагрузку. Вместо аварийного отключения входа
+— одноразовый код восстановления: он выдаёт временный пароль руководителю,
+заменяется новым и записывает событие восстановления.
+
+**Проверки и сборка.** Добавлен `scripts/check_app_security.js`: подпись и подмена
+содержимого, доверие и смена ключа, старый формат, политика и совместимость
+паролей, ограничение перебора и ротация кода восстановления. Готовый HTML и его
+SHA-256 собираются из исходников облачной проверкой; рабочая Excel-книга не
+изменяется.
+
+---
+
+"""
+              метка = "\n## 1.0 — 2026-09-03"
+              if метка not in история:
+                  raise SystemExit("Не найдено начало записей в ИЗМЕНЕНИЯ.md")
+              история = история.replace(метка, запись + "## 1.0 — 2026-09-03", 1)
+              io.open(путь, "w", encoding="utf-8", newline="").write(история)
+          PY
+
+      - name: Собрать однофайловое приложение
+        run: python3 scripts/build_app.py
+
+      - name: Проверить готовый HTML и контрольную сумму
+        run: |
+          node scripts/check_app_security.js --html
+          git diff --check HEAD
+
+      - name: Зафиксировать производные файлы
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "Приложение/данные.json" "Приложение/ЛНК.html" "Приложение/ЛНК.html.sha256" "scripts/export_json.py" "ИЗМЕНЕНИЯ.md"
+          if git diff --cached --quiet; then
+            echo "Изменений для коммита нет"
+            exit 0
+          fi
+          версия=$(python3 -c 'import json; print(json.load(open("Приложение/данные.json", encoding="utf-8"))["версия"])')
+          git commit -m "Собрать приложение $версия"
+          git push origin main

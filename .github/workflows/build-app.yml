@@ -113,6 +113,6 @@ jobs:
             echo "Изменений для коммита нет"
             exit 0
           fi
-          версия=$(python3 -c 'import json; print(json.load(open("Приложение/данные.json", encoding="utf-8"))["версия"])')
-          git commit -m "Собрать приложение $версия"
+          version=$(python3 -c 'import json; print(json.load(open("Приложение/данные.json", encoding="utf-8"))["версия"])')
+          git commit -m "Собрать приложение $version"
           git push origin main

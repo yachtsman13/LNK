@@ -22,3 +22,4 @@ jobs:
           anthropic_api_key: ${{ secrets.NEUROAPI_KEY }}
         env:
           ANTHROPIC_BASE_URL: https://claude.neuroapi.host
+          ANTHROPIC_MODEL: claude-sonnet-5-5

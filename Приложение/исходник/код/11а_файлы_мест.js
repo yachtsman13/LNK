@@ -17,8 +17,8 @@
 const REG_ФАЙЛЫ="lnk_files";
 const КЛ_ФАЙЛЫ_МЕСТА="lnk_files_local";
 const КЛ_ФАЙЛЫ_ДРУГИХ="lnk_files_places";
-const ПАПКА_ФАЙЛОВ_ОБМЕНА="Файлы ЛНК";
-const ПАПКА_ЗАМЕНЁННЫХ="Заменённые";
+const ПАПКА_ФАЙЛОВ_ОБМЕНА="ЛНК";
+const ПАПКА_ЗАМЕНЁННЫХ="Старые";
 let ФАЙЛЫ=[];
 
 function idФайла(путь){ const ч=путьФайлаДок(путь); return ч?"Ф:"+ч.join("/").toLowerCase():null; }

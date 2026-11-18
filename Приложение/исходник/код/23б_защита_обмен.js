@@ -328,12 +328,29 @@ async function обновитьПрограмму(новый){
   let п=await идбЧтение("папкаПрограммы");
   let право="нет";
   if(п){ try{ право=await п.queryPermission({mode:"readwrite"}); if(право!=="granted") право=await п.requestPermission({mode:"readwrite"}); }catch(e){ право="нет"; } }
+  // Папка программы не запомнена — пробуем уже выбранную папку с документами
+  // (обычно это корень флешки, где лежит и программа).
   if(!п || право!=="granted" || !(await естьФайлВ(п,имя))){
-    alert("Выберите папку на этом компьютере, где лежит файл программы «"+имя+"».\n\nСейчас программа открыта отсюда:\n"+путьПрограммы());
-    try{ п=await window.showDirectoryPicker({mode:"readwrite", id:"lnk-programma"}); }
-    catch(e){ if(e.name!=="AbortError") toast("Не удалось выбрать папку: "+e.name); return false; }
-    if(!(await естьФайлВ(п,имя))){ alert("В папке «"+п.name+"» нет файла «"+имя+"». Выберите папку, где он лежит."); return false; }
-    await идбЗапись("папкаПрограммы",п);
+    if(typeof _папкаДок!=="undefined" && _папкаДок){
+      try{
+        if(await естьФайлВ(_папкаДок,имя)){
+          let правоДок="denied";
+          try{ правоДок=await _папкаДок.queryPermission({mode:"readwrite"}); }catch(e){}
+          if(правоДок==="granted"){ п=_папкаДок; }
+          else {
+            try{ правоДок=await _папкаДок.requestPermission({mode:"readwrite"}); }catch(e){}
+            if(правоДок==="granted"){ п=_папкаДок; }
+          }
+        }
+      }catch(e){}
+    }
+    if(!п || !(await естьФайлВ(п,имя))){
+      alert("Выберите папку на этом компьютере, где лежит файл программы «"+имя+"».\n\nСейчас программа открыта отсюда:\n"+путьПрограммы());
+      try{ п=await window.showDirectoryPicker({mode:"readwrite", id:"lnk-programma"}); }
+      catch(e){ if(e.name!=="AbortError") toast("Не удалось выбрать папку: "+e.name); return false; }
+      if(!(await естьФайлВ(п,имя))){ alert("В папке «"+п.name+"» нет файла «"+имя+"». Выберите папку, где он лежит."); return false; }
+      await идбЗапись("папкаПрограммы",п);
+    }
   }
   if(!уходСФормы()) return false;
   try{ await ХР.дождаться(); }catch(e){}

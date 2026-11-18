@@ -403,7 +403,7 @@ function забытьПоиски(){
   renderНайти();
 }
 function блокНедавнихПоисков(){
-  const сп=недавниеПоиски(); if(!сп.length) return "";
+  const сп=недавниеПоиски().slice(0,5); if(!сп.length) return "";
   return `<div class="недавние"><span class="muted" style="font-size:12px">Недавние:</span>
     ${сп.map((q,i)=>`<button class="btn small" onclick="повторитьПоиск(${i})" title="Повторить поиск">${esc(q)}</button>`).join("")}
     <button class="btn small" style="opacity:.7" onclick="забытьПоиски()" title="Очистить список недавних запросов">✕ очистить</button></div>`;
@@ -841,10 +841,10 @@ function renderНайти(толькоРезультат){
     : (всего
       ? гр.map(г=>`<div style="margin-top:10px">
           <div class="grp" style="padding-left:0">${esc(г.раздел.н)} — ${г.записи.length}</div>
-          ${г.записи.slice(0,20).map(x=>`<div class="pr"
-            onclick="${г.раздел.открыть?г.раздел.открыть(x):("открытьИзПоиска('"+г.раздел.вид+"','"+(г.раздел.kind||"")+"','"+esc(String(x.id))+"')")}">
+          ${г.записи.slice(0,20).map(x=>`<a class="pr" href="#" onclick="event.preventDefault();${г.раздел.открыть?г.раздел.открыть(x):("открытьИзПоиска('"+г.раздел.вид+"','"+(г.раздел.kind||"")+"','"+esc(String(x.id))+"')")}"
+            title="Открыть ${г.раздел.н.toLowerCase()}">
             <span class="g" style="white-space:normal">${esc(г.раздел.п(x)||"(без названия)")}</span>
-            <span class="st">открыть</span></div>`).join("")}
+            <span class="st" style="color:var(--brand)">открыть →</span></a>`).join("")}
           ${г.записи.length>20?`<div class="note" style="margin:2px 0 0">… и ещё ${г.записи.length-20};
             уточните запрос</div>`:""}
         </div>`).join("")
@@ -860,7 +860,11 @@ function renderНайти(толькоРезультат){
       <div class="search"><span class="ic">⌕</span>
         <input id="поискQ" placeholder="Заводской номер, фамилия, ГОСТ, № акта, объект…"
           value="${esc(_поиск)}" oninput="поискВвод(this.value)"
-          onkeydown="if(event.key==='Enter'){ запомнитьПоиск(this.value); }"></div>
+          onkeydown="if(event.key==='Enter'){ запомнитьПоиск(this.value); }">
+        <span class="searchX" onclick="очиститьПоиск()" style="display:${_поиск?"block":"none"}" title="Очистить поиск">✕</span>
+        <span class="searchRec" onclick="показатьНедавние()" title="Недавние поиски">⌄</span>
+        <div class="недавние-дроп" id="недавниеДроп" style="display:none">${блокНедавнихПоисков()}</div>
+      </div>
       <div id="поискРез">${тело}</div>
     </div>`;
   // Открыли найденное — запрос себя оправдал. Перехват в фазе захвата:
@@ -871,7 +875,26 @@ function renderНайти(толькоРезультат){
   },true);
   const q=document.getElementById("поискQ");
   if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
+<<<<<<< HEAD
   инициализироватьКрестикиПоиска();
+=======
+  // Закрыть дроп при клике вне его
+  document.addEventListener("click",очитьНедавниеДроп,true);
+}
+function очиститьПоиск(){
+  _поиск=""; renderНайти();
+}
+function показатьНедавние(){
+  const др=document.getElementById("недавниеДроп");
+  if(!др) return;
+  др.style.display=др.style.display==="none"?"block":"none";
+}
+function очитьНедавниеДроп(e){
+  const др=document.getElementById("недавниеДроп");
+  if(др && др.style.display==="block" && !др.contains(e.target) && !e.target.classList.contains("searchRec")){
+    др.style.display="none";
+  }
+>>>>>>> origin/main
 }
 // Ctrl+K — открыть поиск с клавиатуры (в Chrome страница это сочетание
 // получает, поэтому preventDefault работает; F3 и Ctrl+F не трогаю —

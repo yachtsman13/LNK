@@ -659,6 +659,10 @@ function ждётКнопки(план){
 }
 
 // ── Применение ────────────────────────────────────────────────
+// Лимит пути Windows — 260 знаков (по умолчанию), расширенный — 32767.
+// File System Access API из file:// может не поддерживать move/createWritable,
+// поэтому пробуем несколько стратегий и возвращаем ошибку, если ничего не вышло.
+const ПУТЬ_ЛИМИТ=240;
 async function переместитьФайлДок(h, из, в){
   const чИз=путьФайлаДок(из), чВ=путьФайлаДок(в);
   const родИз=await папкаПоПути(h, чИз.slice(0,-1), false);
@@ -674,11 +678,34 @@ async function переместитьФайлДок(h, из, в){
     for(let i=2;i<200;i++){ const n=м[1]+" ("+i+")"+(м[2]||""); try{ await родВ.getFileHandle(n); }catch(e){ имя=n; break; } }
   }
   const куда=чВ.slice(0,-1).concat(имя).join("/");
-  if(typeof ф.move==="function"){ try{ await ф.move(родВ, имя); return куда; }catch(e){} }
-  const w=await (await родВ.getFileHandle(имя,{create:true})).createWritable();
-  await w.write(await файл.arrayBuffer()); await w.close();
-  await родИз.removeEntry(чИз[чИз.length-1]);
-  return куда;
+  // Предупреждение о длинном пути: Windows по умолчанию режет на 260 знаках.
+  if(куда.length>ПУТЬ_ЛИМИТ) throw new Error("путь слишком длинный: "+куда.length+" знаков (лимит "+ПУТЬ_ЛИМИТ+"): "+куда);
+  // Стратегия 1: нативный move.
+  if(typeof ф.move==="function"){
+    try{ await ф.move(родВ, имя); return куда; }catch(e){}
+  }
+  // Стратегия 2: read → createWritable → close → удалить.
+  try{
+    const буфер=await файл.arrayBuffer();
+    const w=await (await родВ.getFileHandle(имя,{create:true})).createWritable();
+    await w.write(буфер); await w.close();
+    await родИз.removeEntry(чИз[чИз.length-1]);
+    return куда;
+  }catch(e){}
+  // Стратегия 3: stream (для больших файлов, когда arrayBuffer не влезает).
+  try{
+    const читатель=файл.stream().getReader();
+    const писатель=await (await родВ.getFileHandle(имя,{create:true})).createWritable();
+    for(;;){
+      const {done,value}=await читатель.read();
+      if(done) break;
+      await писатель.write(value);
+    }
+    await писатель.close();
+    await родИз.removeEntry(чИз[чИз.length-1]);
+    return куда;
+  }catch(e){}
+  throw new Error("не удалось переместить: "+(e&&e.name||e)+", путь: "+куда);
 }
 // Пути в карточках после переноса: всё, что ссылалось на старый путь
 // (или на задуманный в плане), — на новый.
@@ -734,6 +761,15 @@ async function применитьРаскладку(h, план, режим){
       карта[п.из.toLowerCase()]=куда; карта[п.в.toLowerCase()]=куда; перенесено.push(Object.assign({}, п, {в:куда}));
       const з=записьФайла(п.из); if(з) записатьВерсиюФайла(куда, {размер:з.размер, отп:з.отп});
     }catch(e){ ошибки.push({путь:п.из, почему:"не перенесён: "+(e&&e.name||e)}); }
+  }
+  // Карточки обновляем ТОЛЬКО если все переносы успешны: иначе карточка
+  // укажет на путь, куда файл не дошёл — и он станет «невидимым».
+  if(ошибки.length && !сам){
+    отменаЗавершить();
+    toast("Не удалось переместить "+ошибки.length+" файлов — карточки не изменены. Проверьте имена файлов и длину путей.");
+    try{ await сверитьФайлы(h); }catch(e){}
+    return {когда:new Date().toISOString(), режим, карточек:0, прикреплено:0, перенесено, ошибки,
+      непонятные:план.непонятные, заметки:план.заметки, корни:план.корни, найдено:план.найдено, изменения:[]};
   }
   const тронуты=new Set(), ts=new Date().toISOString(), я=getWS().код;
   let прикреплено=0, изменено=0;

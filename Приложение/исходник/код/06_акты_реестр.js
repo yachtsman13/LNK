@@ -137,6 +137,6 @@ function renderDocs(){
       <thead><tr><th style="width:90px">№ акта</th><th style="width:110px">Дата</th><th style="width:70px">Объектов</th><th>Объект контроля</th><th>Документы</th></tr></thead>
       <tbody>${bodyА}</tbody>
     </table></div></div>`;
-  wireSearch(renderDocs);
+  wireSearch(renderDocs); инициализироватьКрестикиПоиска();
 }
 

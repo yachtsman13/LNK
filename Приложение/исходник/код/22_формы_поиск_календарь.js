@@ -234,6 +234,14 @@ function флИнициализировать(){
     п.innerHTML=`<input type="search" placeholder="Найти в списке…" oninput="флОбновить('${сп.id}')">
       <button type="button" class="btn small" onclick="флВсе('${сп.id}')"></button><span class="fnote"></span>`;
     сп.parentNode.insertBefore(п, сп);
+    const inp=п.querySelector("input");
+    const x=document.createElement("button"); x.type="button"; x.className="x"; x.textContent="×";
+    x.style.position="absolute"; x.style.right="4px"; x.style.top="50%"; x.style.transform="translateY(-50%)";
+    x.style.background="transparent"; x.style.border="0"; x.style.color="var(--faint)"; x.style.fontSize="15px";
+    x.style.cursor="pointer"; x.style.padding="2px 4px"; x.style.lineHeight="1"; x.style.opacity="0";
+    x.addEventListener("click",()=>{ inp.value=""; inp.dispatchEvent(new Event("input",{bubbles:true})); inp.focus(); });
+    inp.addEventListener("input",()=>{ x.style.display=inp.value?"":"none"; x.style.opacity=inp.value?"1":"0"; });
+    п.style.position="relative"; п.appendChild(x); x.style.display="none";
     флОбновить(сп.id);
   });
 }
@@ -260,9 +268,56 @@ function флОбновить(id){
 }
 document.getElementById("main").addEventListener("change",e=>{
   const сп=e.target.closest&&e.target.closest(".сд-список[data-фл]"); if(сп) флОбновить(сп.id); });
-new MutationObserver(()=>флИнициализировать()).observe(document.getElementById("main"),{childList:true,subtree:true});
+new MutationObserver(()=>{ флИнициализировать(); инициализироватьКрестикиПоиска(); }).observe(document.getElementById("main"),{childList:true,subtree:true});
 new MutationObserver(проверитьВлезаниеПотом).observe(document.getElementById("main"),{childList:true,subtree:true});
 window.addEventListener("resize", проверитьВлезаниеПотом);
+// ── Крестик очистки поисковых полей ────────────────────────────
+// Появляется справа от поля, когда в нём есть текст; кликом очищает.
+function инициализироватьКрестикиПоиска(){
+  document.querySelectorAll("#main .search input").forEach(inp=>{
+    if(inp.dataset.крестик) return; inp.dataset.крестик="1";
+    const род=inp.parentElement; if(!род||род.classList.contains("search-упр")) return;
+    род.classList.add("search-упр");
+    const x=document.createElement("button"); x.type="button"; x.className="x"; x.textContent="×";
+    x.addEventListener("click",()=>{ inp.value=""; inp.dispatchEvent(new Event("input",{bubbles:true})); inp.focus(); });
+    inp.addEventListener("input",()=>{ x.disabled=inp.value.length===0; x.style.display=inp.value?"":"none"; });
+    род.appendChild(x); x.disabled=true; x.style.display="none";
+  });
+}
+// ── Верхнее поисковое поле ──────────────────────────────────────
+// Показывается в шапке рядом с кнопкой «Назад» на страницах с поиском.
+// Синхронизируется с локальным поиском страницы: ввод в верхнем поле
+// обновляет query и перерисовывает страницу; ввод в локальном — тоже.
+const ТОП_ПОИСК_ВИДЫ=["journal","objects","si","people","check","find","tasks","vibro","nd","premises","metod","pg","podr","contacts","ideas","requests","abs"];
+let _топПоиск="";
+function топПоискВвод(v){
+  _топПоиск=v;
+  // Синхронизируем: если мы на странице с поиском — обновляем query и перерисовываем.
+  if(curView==="journal"){ query=v; renderJournal(); }
+  else if(curView==="objects"){ query=v; renderObjects(); }
+  else if(curView==="si"){ query=v; renderSi(); }
+  else if(curView==="tasks"){ query=v; renderTasks(); }
+  else if(curView==="vibro"){ query=v; renderВибрация(); }
+  else if(curView==="nd"){ query=v; renderNd(); }
+  else if(curView==="premises"){ query=v; renderPremises(); }
+  else if(curView==="pg"){ пгСост.поиск=v; renderПГ(); }
+  else if(curView==="podr"){ query=v; renderPodr(); }
+  else if(curView==="contacts"){ query=v; renderКонтакты(); }
+  else if(curView==="ideas"){ query=v; renderПредложения(); }
+  else if(curView==="requests"){ query=v; renderЗаявки(); }
+  else if(curView==="check"){ query=v; renderCheck(); }
+  else if(curView==="abs"){ query=v; renderОтсутствия(); }
+}
+function показатьТопПоиск(вид,placeholder){
+  const с=document.getElementById("topSearch"); if(!с) return;
+  с.style.display="flex"; с.dataset.вид=вид;
+  const inp=document.getElementById("topSearchQ"); if(inp){
+    inp.placeholder=placeholder||"Поиск…"; inp.value=_топПоиск; }
+}
+function скрытьТопПоиск(){
+  const с=document.getElementById("topSearch"); if(!с) return;
+  с.style.display="none";
+}
 // ── Единый поиск по всей базе ─────────────────────────────────────────
 // Поиск в программе был в каждом разделе свой (одна переменная query на
 // всех, но искала она только внутри открытого списка). Чтобы найти, где
@@ -816,6 +871,7 @@ function renderНайти(толькоРезультат){
   },true);
   const q=document.getElementById("поискQ");
   if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
+  инициализироватьКрестикиПоиска();
 }
 // Ctrl+K — открыть поиск с клавиатуры (в Chrome страница это сочетание
 // получает, поэтому preventDefault работает; F3 и Ctrl+F не трогаю —
@@ -881,11 +937,15 @@ function switchView(v){
   delete ВКЛ_ДЕЙСТВИЕ[v];
   curView=v; query=_навЗапрос!=null?_навЗапрос:""; _актИзЗаписи=null;
   document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("on",n.dataset.view===v));
+  скрытьТопПоиск();
   ({dash:renderDash,find:renderНайти,journal:renderJournal,objects:renderObjects,si:renderSi,people:renderPeople,docs:renderDocs,exchange:renderExchange,plan:renderPlan,check:renderCheck,podr:renderPodr,nd:renderNd,premises:renderPremises,lab:renderLab,tasks:renderTasks,passport:renderПаспорт,metod:renderMetod,calendar:renderКалендарь,setup:renderМастер,siissue:renderВыдачаСИ,vibro:renderВибрация,vibronorm:renderНормыВибр,smk:renderСМК,ideas:renderПредложения,requests:renderЗаявки,reqedit:renderЗаявки,filesort:renderРаскладка,pg:renderПГ,pgedit:renderПГ,prot:()=>_прот?открытьПротокол(_прот.zid,_прот.м,_прот.ф):renderJournal(),
     vibrocard:()=>открытьКартуВибрации(_картаВибр),vibroizm:()=>открытьКартуВибрации(_картаВибр),
     vibroprint:()=>печатьКартВибрации(_печатьВибр),certsheet:renderЛистУдостоверений,guide:renderРуководство,labels:renderБирки,prep:renderПодготовка,contacts:renderКонтакты,absence:renderОтсутствия}[v]
     ||(()=>renderPlaceholder(v==="docs"?"Акты и протоколы":"ППР",
        v==="docs"?"Формирование документов по записям журнала — следующий шаг.":"Плановые и внеплановые работы — следующий шаг.")))();
+  // Показать верхнее поле поиска для разделов, где он нужен.
+  const топНазвания={journal:"Поиск: объект, № акта, зав. №, метод…",objects:"Поиск: наименование, зав. №, тип…",si:"Поиск: наименование, тип, метод…",tasks:"Поиск по задаче или исполнителю…",vibro:"Поиск по номеру, наименованию, двигателю…",nd:"Поиск: номер, наименование…",premises:"Поиск по номеру, наименованию…",podr:"Поиск по названию…",contacts:"ФИО, телефон, подразделение…",ideas:"Поиск…",requests:"Номер, подразделение, объект…",pg:"Поиск по наименованию, методам…",find:"Заводской номер, фамилия, ГОСТ, № акта, объект…"};
+  if(топНазвания[v]) показатьТопПоиск(v,топНазвания[v]);
   if(МЕНЮ_РОДИТЕЛЬ[v]) подсветитьМеню(v);
   _инфоЗакреп=null; инфоСкрыть(); справВИконки();
 }

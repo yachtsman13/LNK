@@ -82,6 +82,13 @@
     color:inherit;font:inherit;font-size:13px;cursor:pointer;opacity:.9}
   .top .назадкн:hover:not(:disabled){opacity:1;background:var(--top-tag)}
   .top .назадкн:disabled{opacity:.35;cursor:default}
+  .top .top-search{display:flex;align-items:center;gap:0;height:26px;min-width:180px;max-width:320px;flex:1}
+  .top .top-search .ic{color:rgba(255,255,255,.5);margin-right:4px;pointer-events:none}
+  .top .top-search input{width:100%;height:100%;border:1px solid rgba(255,255,255,.3);border-radius:6px;
+    background:rgba(255,255,255,.12);color:#fff;padding:0 8px 0 24px;font:12.5px/26px inherit;
+    outline:0;transition:background .15s}
+  .top .top-search input::placeholder{color:rgba(255,255,255,.55)}
+  .top .top-search input:focus{background:rgba(255,255,255,.22)}
   .top .справкакн{width:26px;height:26px;border-radius:50%;border:1px solid currentColor;background:transparent;
     color:var(--top-ink);font:inherit;font-weight:700;font-size:13px;cursor:pointer;opacity:.85;padding:0;flex:none}
   .top .справкакн:hover{opacity:1;background:var(--top-tag)}
@@ -124,9 +131,14 @@
   .btn.primary:hover{background:var(--brand-d)}
 
   .search{flex:1;min-width:200px;max-width:380px;position:relative}
-  .search input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--line);border-radius:8px;
+  .search input{width:100%;padding:8px 28px 8px 32px;border:1px solid var(--line);border-radius:8px;
     background:var(--input-bg);font:inherit}
-  .search .ic{position:absolute;left:11px;top:8px;color:var(--faint)}
+  .search .ic{position:absolute;left:11px;top:8px;color:var(--faint);pointer-events:none}
+  .search .x{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;
+    border:0;color:var(--faint);font-size:16px;cursor:pointer;padding:2px 4px;line-height:1;
+    opacity:0;border-radius:4px;display:none}
+  .search .x:disabled{display:none!important}
+  .search .x:enabled:hover{color:var(--ink);background:var(--row)}
 
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--card-radius);
     box-shadow:var(--shadow);overflow:hidden}

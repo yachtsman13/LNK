@@ -18,7 +18,7 @@ function контекст(доп={}){
     setTimeout,clearTimeout,setInterval:()=>0,clearInterval(){},URL,Blob:class Blob{constructor(parts){this.parts=parts;}},
     ХР:хранилище(),getWS:()=>({код:"М1"}),curView:"",renderExchange(){},renderLab(){},
     входВкл:()=>false,яНачальник:()=>true,confirm:()=>true,prompt:()=>"",alert(){},toast(){},
-    esc:s=>String(s==null?"":s),dl(){},DB:{версия:"4.02"},P:[],live:a=>a,найтиПоИд:(a,id)=>a.find(x=>String(x.id)===String(id)),
+    esc:s=>String(s==null?"":s),dl(){},DB:{версия:"4.03"},P:[],live:a=>a,найтиПоИд:(a,id)=>a.find(x=>String(x.id)===String(id)),
     ПРАВА_ПО_УМОЛЧАНИЮ:()=>({}),ктоЯ:()=>"",переполнение:e=>{throw e;},фамилияИО:()=>"",ru:s=>s,
     обновитьШапкуВхода(){},setChrome(){},switchView(){},renderМастер(){},
     document:{addEventListener(){},body:{classList:{add(){},remove(){}}},createElement:()=>({classList:{add(){}},querySelector:()=>null})}},доп);

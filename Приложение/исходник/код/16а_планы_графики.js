@@ -295,6 +295,7 @@ function renderПГ(){
       уходит на поверку (по месяцу представления или окончанию поверки).</div>`;
   const q=document.getElementById("q");
   if(q) q.oninput=()=>{ пгСост.поиск=q.value; const п=q.selectionStart; renderПГ(); const q2=document.getElementById("q"); q2.focus(); try{ q2.setSelectionRange(п,п); }catch(e){} };
+  инициализироватьКрестикиПоиска();
 }
 function пгЯчейка(позИд, ym){
   const п=найтиПоИд(live(ПГП),позИд); if(!п) return;

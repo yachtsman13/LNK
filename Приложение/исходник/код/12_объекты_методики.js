@@ -41,7 +41,7 @@ function renderPodr(){
       <tbody>${body}</tbody></table></div></div></div>
     <div data-вклр="сводка">${блокСводкиПодр()}</div>`;
   показатьВкладкиРаздела("podr");
-  wireSearch(renderPodr);
+  wireSearch(renderPodr); инициализироватьКрестикиПоиска();
 }
 // Сводка работ по заказывающим подразделениям за период — для сверки с
 // контрактами. Подразделение записи — поле записи журнала, как оно
@@ -224,7 +224,7 @@ function renderPremises(){
       <thead><tr><th>Идентификация</th><th style="width:220px">Назначение</th>
         <th style="width:90px">Площадь</th><th style="width:220px">Инженерные сети</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
-  wireSearch(renderPremises);
+  wireSearch(renderPremises); инициализироватьКрестикиПоиска();
 }
 // ── Методики контроля: стандартный набор приборов и норм. документов
 // по методу ──────────────────────────────────────────────────────
@@ -378,7 +378,7 @@ function renderObjects(){
     <div class="card"><div class="tblwrap"><table data-список="obj">
       <thead><tr><th>Наименование</th><th>Заводской №</th><th>Рег. / уч. №</th><th>Тип / группа</th><th>Расположение</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
-  wireSearch(renderObjects);
+  wireSearch(renderObjects); инициализироватьКрестикиПоиска(); показатьТопПоиск("objects","Поиск: наименование, зав. №, тип…");
 }
 function showObject(id){
   const o=objById[id]||O.find(x=>String(x.id)===String(id)); if(!o) return;

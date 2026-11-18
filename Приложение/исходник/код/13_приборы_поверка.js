@@ -45,7 +45,7 @@ function renderSi(){
       <tbody>${body}</tbody></table></div></div></div>
     <div data-вклр="поверка">${панельПоверки()}</div>`;
   показатьВкладкиРаздела("si");
-  wireSearch(renderSi);
+  wireSearch(renderSi); инициализироватьКрестикиПоиска();
 }
 
 // ── Заявка на поверку и план-график представления на поверку ──────

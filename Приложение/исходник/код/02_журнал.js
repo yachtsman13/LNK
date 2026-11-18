@@ -274,6 +274,7 @@ function renderJournal(){
   const qb=document.getElementById("q");
   qb.addEventListener("input",()=>{query=qb.value;const p=qb.selectionStart;renderJournal();
     const n=document.getElementById("q");n.focus();n.setSelectionRange(p,p);});
+  инициализироватьКрестикиПоиска();
 }
 
 // ── Массовая правка журнала ───────────────────────────────

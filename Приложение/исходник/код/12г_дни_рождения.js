@@ -282,5 +282,5 @@ function renderКонтакты(){
           <thead><tr><th>ФИО, должность</th><th>Подразделение</th><th style="width:170px">Телефоны</th><th>Эл. почта</th><th>Адреса</th>
             <th style="width:170px">День рождения</th></tr></thead>
           <tbody>${body}</tbody></table></div></div></div></div>`;
-  wireSearch(renderКонтакты); setChrome();
+  wireSearch(renderКонтакты); setChrome(); инициализироватьКрестикиПоиска();
 }

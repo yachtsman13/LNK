@@ -88,9 +88,11 @@
   .top .spring{flex:1}
   .top .who{font-size:12px;opacity:.92}
   .top .назадкн{margin-left:14px;height:28px;padding:0 12px;border-radius:6px;border:1px solid currentColor;background:transparent;
-    color:inherit;font:inherit;font-size:13px;cursor:pointer;opacity:.9}
-  .top .назадкн:hover:not(:disabled){opacity:1;background:var(--top-tag)}
-  .top .назадкн:disabled{opacity:.35;cursor:default}
+    font:inherit;cursor:pointer;opacity:.6}
+  .top .вперёдкн{height:28px;padding:0 12px;border-radius:6px;border:1px solid currentColor;background:transparent;
+    font:inherit;cursor:pointer;opacity:.6}
+  .top .назадкн:hover:not(:disabled),.top .вперёдкн:hover:not(:disabled){opacity:1;background:var(--top-tag)}
+  .top .назадкн:disabled,.top .вперёдкн:disabled{opacity:.35;cursor:default}
   .top .справкакн{width:26px;height:26px;border-radius:50%;border:1px solid currentColor;background:transparent;
     color:var(--top-ink);font:inherit;font-weight:700;font-size:13px;cursor:pointer;opacity:.85;padding:0;flex:none}
   .top .справкакн:hover{opacity:1;background:var(--top-tag)}
@@ -133,9 +135,21 @@
   .btn.primary:hover{background:var(--brand-d)}
 
   .search{flex:1;min-width:200px;max-width:380px;position:relative}
-  .search input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--line);border-radius:8px;
+  .search input{width:100%;padding:8px 52px 8px 32px;border:1px solid var(--line);border-radius:8px;
     background:var(--input-bg);font:inherit}
   .search .ic{position:absolute;left:11px;top:8px;color:var(--faint)}
+  .searchX{position:absolute;right:28px;top:8px;cursor:pointer;color:var(--faint);font-size:14px;
+    padding:2px 4px;border-radius:4px;line-height:1}
+  .searchX:hover{color:var(--ink);background:var(--row)}
+  .searchRec{position:absolute;right:8px;top:8px;cursor:pointer;color:var(--faint);font-size:12px;
+    padding:2px 4px;border-radius:4px;line-height:1}
+  .searchRec:hover{color:var(--ink);background:var(--row)}
+  .недавние-дроп{position:absolute;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--line);
+    border-radius:0 0 8px 8px;padding:8px 12px;z-index:100;box-shadow:var(--shadow);margin-top:2px}
+  .card .pr{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);
+    cursor:pointer;text-decoration:none;color:inherit}
+  .card .pr:last-child{border-bottom:0} .card .pr:hover{background:var(--brand-soft)}
+  .card .pr .g{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--card-radius);
     box-shadow:var(--shadow);overflow:hidden}
@@ -1005,7 +1019,8 @@ body.входзакрыт .app{visibility:hidden}
     <div class="logo" title="Система ЛНК — неразрушающий контроль"><svg viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6" stroke-width="2.2"/><path d="M18.4 18.4 25 25" stroke-width="3.2"/><path d="M4.6 13.2h2.6l1.4-5.4 2 9.2 1.6-6.3 1.3 2.5h4" stroke-width="1.6"/></svg></div>
     <h1>Система <span class="лнкзн">ЛНК</span></h1>
     <span class="tag" id="verTag">проба • реальные данные</span>
-    <button class="назадкн" id="назадКн" onclick="навНазад()" disabled title="Назад — некуда">← Назад</button>
+     <button class="назадкн" id="назадКн" onclick="навНазад()" disabled title="Назад — некуда">← Назад</button>
+     <button class="вперёдкн" id="вперёдКн" onclick="навВперёд()" disabled title="Вперёд — некуда">→ Вперёд</button>
     <div class="spring"></div>
     <label class="styleSel">Стиль
       <select id="theme">
@@ -30254,7 +30269,7 @@ function забытьПоиски(){
   renderНайти();
 }
 function блокНедавнихПоисков(){
-  const сп=недавниеПоиски(); if(!сп.length) return "";
+  const сп=недавниеПоиски().slice(0,5); if(!сп.length) return "";
   return `<div class="недавние"><span class="muted" style="font-size:12px">Недавние:</span>
     ${сп.map((q,i)=>`<button class="btn small" onclick="повторитьПоиск(${i})" title="Повторить поиск">${esc(q)}</button>`).join("")}
     <button class="btn small" style="opacity:.7" onclick="забытьПоиски()" title="Очистить список недавних запросов">✕ очистить</button></div>`;
@@ -30692,10 +30707,10 @@ function renderНайти(толькоРезультат){
     : (всего
       ? гр.map(г=>`<div style="margin-top:10px">
           <div class="grp" style="padding-left:0">${esc(г.раздел.н)} — ${г.записи.length}</div>
-          ${г.записи.slice(0,20).map(x=>`<div class="pr"
-            onclick="${г.раздел.открыть?г.раздел.открыть(x):("открытьИзПоиска('"+г.раздел.вид+"','"+(г.раздел.kind||"")+"','"+esc(String(x.id))+"')")}">
+          ${г.записи.slice(0,20).map(x=>`<a class="pr" href="#" onclick="event.preventDefault();${г.раздел.открыть?г.раздел.открыть(x):("открытьИзПоиска('"+г.раздел.вид+"','"+(г.раздел.kind||"")+"','"+esc(String(x.id))+"')")}"
+            title="Открыть ${г.раздел.н.toLowerCase()}">
             <span class="g" style="white-space:normal">${esc(г.раздел.п(x)||"(без названия)")}</span>
-            <span class="st">открыть</span></div>`).join("")}
+            <span class="st" style="color:var(--brand)">открыть →</span></a>`).join("")}
           ${г.записи.length>20?`<div class="note" style="margin:2px 0 0">… и ещё ${г.записи.length-20};
             уточните запрос</div>`:""}
         </div>`).join("")
@@ -30711,7 +30726,11 @@ function renderНайти(толькоРезультат){
       <div class="search"><span class="ic">⌕</span>
         <input id="поискQ" placeholder="Заводской номер, фамилия, ГОСТ, № акта, объект…"
           value="${esc(_поиск)}" oninput="поискВвод(this.value)"
-          onkeydown="if(event.key==='Enter'){ запомнитьПоиск(this.value); }"></div>
+          onkeydown="if(event.key==='Enter'){ запомнитьПоиск(this.value); }">
+        <span class="searchX" onclick="очиститьПоиск()" style="display:${_поиск?"block":"none"}" title="Очистить поиск">✕</span>
+        <span class="searchRec" onclick="показатьНедавние()" title="Недавние поиски">⌄</span>
+        <div class="недавние-дроп" id="недавниеДроп" style="display:none">${блокНедавнихПоисков()}</div>
+      </div>
       <div id="поискРез">${тело}</div>
     </div>`;
   // Открыли найденное — запрос себя оправдал. Перехват в фазе захвата:
@@ -30722,6 +30741,22 @@ function renderНайти(толькоРезультат){
   },true);
   const q=document.getElementById("поискQ");
   if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
+  // Закрыть дроп при клике вне его
+  document.addEventListener("click",очитьНедавниеДроп,true);
+}
+function очиститьПоиск(){
+  _поиск=""; renderНайти();
+}
+function показатьНедавние(){
+  const др=document.getElementById("недавниеДроп");
+  if(!др) return;
+  др.style.display=др.style.display==="none"?"block":"none";
+}
+function очитьНедавниеДроп(e){
+  const др=document.getElementById("недавниеДроп");
+  if(др && др.style.display==="block" && !др.contains(e.target) && !e.target.classList.contains("searchRec")){
+    др.style.display="none";
+  }
 }
 // Ctrl+K — открыть поиск с клавиатуры (в Chrome страница это сочетание
 // получает, поэтому preventDefault работает; F3 и Ctrl+F не трогаю —
@@ -30948,7 +30983,7 @@ function renderРуководство(){
 // Перерисовка той же страницы (поиск по буквам, отбор, вкладка) историей
 // не считается.
 
-let _навСтек=[], _навТек=null, _навГлуб=0, _навЗапрос=null;
+let _навСтек=[], _навТек=null, _навГлуб=0, _навЗапрос=null, _навВперёд=[];
 const НАВ_МАКС=40;
 
 // Подпись страницы для кнопки: пункт меню, иначе заголовок страницы.
@@ -31005,6 +31040,7 @@ function навОбернуть(имя){
         if(верх && верх.ключ===ключ){ _навСтек.pop(); навПрокрутить(верх.прокрутка); }
       } else if(_навТек){
         _навСтек.push(до); if(_навСтек.length>НАВ_МАКС) _навСтек.shift();
+        _навВперёд=[];
       }
       _навТек={ключ, открыть}; навКнопки();
     };
@@ -31043,11 +31079,26 @@ function навНазад(запасной){
   навКнопки();
 }
 function навЕсть(){ return _навСтек.length>0; }
+function навВперёд(){
+  const e=_навВперёд[_навВперёд.length-1]; if(!e) return;
+  const m=document.getElementById("main"), узел=m&&m.firstElementChild;
+  const стек=_навВперёд.slice();
+  _навГлуб++;
+  try{ e.открыть(); } finally{ _навГлуб--; }
+  if(!m || m.firstElementChild===узел) return;
+  _навВперёд=стек; _навВперёд.pop();
+  _навСтек.push({ключ:e.ключ, открыть:e.открыть, прокрутка:e.прокрутка, запрос:e.запрос, подпись:e.подпись});
+  _навТек={ключ:e.ключ, открыть:e.открыть};
+  навПрокрутить(e.прокрутка);
+  навКнопки();
+}
 // Кнопка в шапке и кнопки «← …» форм (кнопкаНазад): подпись — куда ведёт.
 function навКнопки(){
   const e=_навСтек[_навСтек.length-1];
   const к=document.getElementById("назадКн");
   if(к){ к.disabled=!e; к.title=e?"Назад: "+e.подпись+" (Alt+←)":"Назад — некуда"; }
+  const в=document.getElementById("вперёдКн");
+  if(в){ в.disabled=!_навВперёд.length; в.title=_навВперёд.length?"Вперёд: "+_навВперёд[_навВперёд.length-1].подпись:"Вперёд — некуда"; }
   if(!e || навЦельФормы()) return;
   document.querySelectorAll("#main button.назад[data-нав]").forEach(b=>{ b.textContent="← "+e.подпись; });
 }

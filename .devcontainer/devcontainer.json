@@ -1,4 +1,12 @@
 {
-  "name": "kimi-dev",
-  "postCreateCommand": "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash"
+  "name": "ЛНК: проверки (Node.js, Python, Chromium)",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" }
+  },
+  "containerEnv": {
+    "PLAYWRIGHT_BROWSERS_PATH": "/opt/pw-browsers",
+    "CHROME": "/opt/pw-browsers/chromium"
+  },
+  "postCreateCommand": "npm install -g playwright && sudo env PATH=$PATH PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers playwright install --with-deps chromium && sudo ln -sfn $(ls -d /opt/pw-browsers/chromium-*/chrome-linux/chrome | head -1) /opt/pw-browsers/chromium && sudo apt-get install -y unzip fonts-liberation && pip install openpyxl python-docx pymupdf"
 }

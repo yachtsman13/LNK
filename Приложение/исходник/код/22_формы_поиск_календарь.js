@@ -277,6 +277,8 @@ function инициализироватьКрестикиПоиска(){
   document.querySelectorAll("#main .search input").forEach(inp=>{
     if(inp.dataset.крестик) return; inp.dataset.крестик="1";
     const род=inp.parentElement; if(!род||род.classList.contains("search-упр")) return;
+    // На странице «Поиск по базе» уже есть свой крестик и кнопка недавних.
+    if(род.querySelector(".searchX")) return;
     род.classList.add("search-упр");
     const x=document.createElement("button"); x.type="button"; x.className="x"; x.textContent="×";
     x.addEventListener("click",()=>{ inp.value=""; inp.dispatchEvent(new Event("input",{bubbles:true})); inp.focus(); });
@@ -875,9 +877,6 @@ function renderНайти(толькоРезультат){
   },true);
   const q=document.getElementById("поискQ");
   if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
-<<<<<<< HEAD
-  инициализироватьКрестикиПоиска();
-=======
   // Закрыть дроп при клике вне его
   document.addEventListener("click",очитьНедавниеДроп,true);
 }
@@ -894,7 +893,6 @@ function очитьНедавниеДроп(e){
   if(др && др.style.display==="block" && !др.contains(e.target) && !e.target.classList.contains("searchRec")){
     др.style.display="none";
   }
->>>>>>> origin/main
 }
 // Ctrl+K — открыть поиск с клавиатуры (в Chrome страница это сочетание
 // получает, поэтому preventDefault работает; F3 и Ctrl+F не трогаю —

@@ -99,6 +99,8 @@ function навНазад(запасной){
   if(цель && (!e || e.вид!==цель)){ switchView(цель); return; }
   if(!e){ if(запасной) switchView(запасной); return; }
   const m=document.getElementById("main"), узел=m&&m.firstElementChild;
+  // Текущая страница — в историю «Вперёд», чтобы ею можно было вернуться.
+  const текущая=навСнимок();
   if(e.вкл!==undefined && typeof ВКЛ_РАЗДЕЛА!=="undefined") ВКЛ_РАЗДЕЛА[e.вид]=e.вкл;
   if(e.лабвкл!==undefined && e.вид==="lab") лабВкладка=e.лабвкл;
   const стек=_навСтек.slice();
@@ -107,6 +109,7 @@ function навНазад(запасной){
   try{ e.открыть(); } finally{ _навГлуб--; _навЗапрос=null; }
   if(!m || m.firstElementChild===узел) return;
   _навСтек=стек; _навСтек.pop();
+  _навВперёд.push(текущая); if(_навВперёд.length>НАВ_МАКС) _навВперёд.shift();
   _навТек={ключ:e.ключ, открыть:e.открыть};
   if(e.запрос && query!==e.запрос){ query=e.запрос; _навГлуб++; try{ e.открыть(); } finally{ _навГлуб--; } query=e.запрос; }
   навПрокрутить(e.прокрутка);

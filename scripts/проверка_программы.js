@@ -599,7 +599,7 @@ async function главное(){
         document.getElementById("чс_наименование").value = "ТЕСТ-ДАТЧИК ПЭП";
         document.getElementById("чс_тип").value = "П111-2,5";
         const н = document.getElementById("чс_номера");
-        н.value = "7678\n7679; 7680, 7681\t7682\n7679\n\n"; н.dispatchEvent(new Event("input", { bubbles: true }));
+        н.value = "7678\n7679; 7680, 7681	7682\n7679\n\n"; н.dispatchEvent(new Event("input", { bubbles: true }));
         const итог = document.getElementById("чс_итог").textContent;
         const грязная = _несохранено;
         частиСоздать();
@@ -1754,9 +1754,19 @@ wb.save(sys.argv[2])`, фж, правл], { encoding: "utf-8" });
       await перезагрузить(q2);
       const r2 = await q2.evaluate(() => ({ ws: getWS().код, вид: curView, тип: live(S)[0].тип }));
       да(r2.ws === "М1" && r2.вид === "dash" && r2.тип === "ПЕРЕЕЗД-ТЕСТ", "после перезагрузки — место М1, пульт, данные на месте", JSON.stringify(r2));
-      q2.диалоги.length = 0; q2.отказ = true;
+      q2.диалоги.length = 0;
+      // Первый приём подписанного пакета с чужого места спрашивает доверие
+      // ключу. Это защита, а не помеха: на вопрос отвечаем «да», а
+      // предпросмотр обмена по-прежнему отклоняем — база не меняется.
+      q2.removeAllListeners("dialog");
+      q2.on("dialog", d => { q2.диалоги.push(d.message());
+        if(/Доверить этот ключ/.test(d.message())) d.accept();
+        else if(/впишите СМЕНИТЬ/.test(d.message())) d.accept("СМЕНИТЬ");
+        else d.dismiss(); });
       await подать(q2, () => exchangeImport(), обм);
-      q2.отказ = false;
+      q2.removeAllListeners("dialog");
+      q2.on("dialog", d => { q2.диалоги.push(d.message());
+        q2.отказ ? d.dismiss() : d.accept(d.type() === "prompt" ? d.defaultValue() : undefined); });
       const предупр = q2.диалоги.join("\n");
       q2.диалоги.length = 0;
       await подать(q2, () => exchangeImport(), файл);

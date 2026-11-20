@@ -1541,7 +1541,8 @@ wb.save(sys.argv[2])`, фж, правл], { encoding: "utf-8" });
       да(py.status === 0 && q.диалоги.some(x => /Закрыт.*2026/.test(x)) && r5 === 0,
         "импорт из Excel: правка записи закрытого года спрашивается, отказ — строка пропущена", JSON.stringify([py.stderr, q.диалоги.map(x => x.slice(0, 80)), r5]));
       q.removeAllListeners("dialog");
-      q.on("dialog", d => { q.диалоги.push(d.message()); q.отказ ? d.dismiss() : d.accept(d.type() === "prompt" ? d.defaultValue() : undefined); });
+      q.on("dialog", d => { q.диалоги.push(d.message()); if(d.type() === "prompt" && /Код восстановления показан/.test(d.message())) q.кодВосстановления = d.defaultValue();
+        q.отказ ? d.dismiss() : d.accept(d.type() === "prompt" ? (d.defaultValue() || (/сохранённый код/.test(d.message()) ? q.кодВосстановления || "" : "")) : undefined); });
 
       // Обмен: закрытие уходит на другое место; предпросмотр называет его.
       const обм = await скачать(q, () => exchangeExport(), "обмен-28-М1.json");
@@ -3743,8 +3744,8 @@ print(("titlePg" if "<w:titlePg/>" in d else "-")+"#"+("PAGE" if any(" PAGE " in
       await заполнить([null]);
       await q.evaluate(() => window.__выд);
       const р2 = await q.evaluate(() => ({ ст: состояниеПароля(__сп), длина: ошибкаПароля("123") && ошибкаПароля("x".repeat(21)) && !ошибкаПароля("abcd") }));
-      да(/^\d{6}$/.test(временный) && р2.ст === "временный" && р2.длина,
-        "начальник выдаёт временный пароль (предложен из 6 цифр); пароль — от 4 до 20 знаков", JSON.stringify([временный, р2]));
+      да(временный.length === 16 && р2.ст === "временный" && р2.длина,
+        "начальник выдаёт временный пароль (предложен из 16 знаков); пароль — от 4 знаков, повторы и предсказуемые отклоняются", JSON.stringify([временный, р2]));
       // Выход и вход специалиста с временным паролем — сразу смена на свой
       await q.evaluate(() => выйти());
       const скрыто = await q.evaluate(() => document.body.classList.contains("входзакрыт") && !!document.querySelector(".входокно"));

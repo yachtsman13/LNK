@@ -292,7 +292,9 @@ async function главное(){
     раздел("5. Перенос базы из localStorage (первый запуск версии с IndexedDB)");
     {
       const c = await b.newContext(); const q = await c.newPage(); q.ошибки = [];
-      q.on("pageerror", e => q.ошибки.push(e.message)); q.on("dialog", d => d.accept()); все.push(q);
+      q.on("pageerror", e => q.ошибки.push(e.message)); q.on("dialog", d => {
+        if(d.type() === "prompt" && /Код восстановления показан/.test(d.message())) q.кодВосстановления = d.defaultValue();
+        d.accept(d.type() === "prompt" ? (d.defaultValue() || (/сохранённый код/.test(d.message()) ? q.кодВосстановления || "" : "")) : undefined); }); все.push(q);
       // Старая версия держала всё в localStorage. Кладём туда базу, как у
       // заказчика, с чистой страницы того же file:// — без запуска программы.
       const пусто = path.join(ВЫХОД, "пусто.html"); fs.writeFileSync(пусто, "<!doctype html><title>.</title>");

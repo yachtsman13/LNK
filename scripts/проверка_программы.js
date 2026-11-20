@@ -464,8 +464,17 @@ async function главное(){
       const м1 = await скачать(q1, () => exchangeExport(), "обмен-9-М1.json");
 
       // Предпросмотр: отказ — база не меняется, текст называет изменения.
-      q2.отказ = true; q2.диалоги.length = 0;
+      // Первый подписанный пакет с чужого места сначала спрашивает доверие
+      // ключу — это защита, а не помеха: на него отвечаем «да», а сам
+      // предпросмотр обмена отклоняем, чтобы база не изменилась.
+      q2.диалоги.length = 0;
+      q2.removeAllListeners("dialog");
+      q2.on("dialog", d => { q2.диалоги.push(d.message());
+        if(/Доверить этот ключ/.test(d.message())) d.accept(); else d.dismiss(); });
       await подать(q2, () => exchangeImport(), м1);
+      q2.removeAllListeners("dialog");
+      q2.on("dialog", d => { q2.диалоги.push(d.message());
+        q2.отказ ? d.dismiss() : d.accept(d.type() === "prompt" ? d.defaultValue() : undefined); });
       const пр = q2.диалоги.join("\n");
       const после = await q2.evaluate(() => ({ тел: getЛаб().телефон, конфл: конфликтыОткрытые().length }));
       да(/Принять файл обмена\?/.test(пр) && /Приборы: новых 1/.test(пр) && /Специалисты: новых 1/.test(пр) &&
